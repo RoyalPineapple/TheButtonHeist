@@ -199,12 +199,11 @@ extension HeistExecution {
             _ action: HeistActionCommand,
             timeout: HeistTimeout
         ) async throws -> Completion {
-            try await execute(
-                HeistPlan(body: [
-                    .action(ActionStep(command: action)),
-                ]),
-                timeout: timeout
+            let machine = Machine(
+                action: action,
+                failureCaptureMode: brains.failureEvidencePolicy.captureMode
             )
+            return try await execute(machine, timeout: timeout)
         }
 
         private func execute(

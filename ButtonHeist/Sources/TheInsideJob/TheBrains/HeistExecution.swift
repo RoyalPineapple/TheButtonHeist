@@ -271,7 +271,7 @@ extension HeistExecution {
         internal let step: ActionStep
         internal let command: ResolvedHeistActionCommand
         internal let predicate: Predicate?
-        internal let context: StepContext
+        internal let path: HeistExecutionPath
         internal var phase: ActionLeafPhase
 
         internal var expectation: Expectation {

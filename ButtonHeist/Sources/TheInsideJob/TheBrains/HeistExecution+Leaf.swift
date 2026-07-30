@@ -29,12 +29,17 @@ extension HeistExecution.Machine {
         afterCompletedLeaf result: HeistExecutionStepResult
     ) -> HeistExecution.State {
         activeLeaf = nil
-        guard case .sequence(var sequence) = continuations.popLast() else {
-            preconditionFailure("A completed leaf requires an active sequence")
+        if case .sequence(var sequence)? = continuations.last {
+            continuations.removeLast()
+            sequence.children.append(result)
+            continuations.append(.sequence(sequence))
+            return advanceExecution()
         }
-        sequence.children.append(result)
-        continuations.append(.sequence(sequence))
-        return advanceExecution()
+        guard continuations.isEmpty, case .action = root else {
+            preconditionFailure("A completed plan leaf requires an active sequence")
+        }
+        rootChildren.append(result)
+        return finish(children: rootChildren)
     }
 }
 

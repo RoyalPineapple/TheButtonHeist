@@ -7,15 +7,16 @@ import ThePlans
 extension HeistExecution.Machine {
     internal mutating func begin(
         action step: ActionStep,
-        context: HeistExecution.StepContext
+        path: HeistExecutionPath,
+        environment: HeistExecutionEnvironment
     ) -> HeistExecution.State {
         let command: ResolvedHeistActionCommand
         do {
-            command = try step.command.resolve(in: context.environment)
+            command = try step.command.resolve(in: environment)
         } catch {
             return resume(afterCompletedLeaf: HeistExecution.ResultProjector.actionResolutionFailure(
                 step: step,
-                context: context,
+                path: path,
                 error: error
             ))
         }
@@ -25,7 +26,7 @@ extension HeistExecution.Machine {
         do {
             if let authored = step.expectationPolicy.expectedExpectation?
                 .waitStep(using: actionExpectationTimeoutPolicy) {
-                let resolved = try authored.resolve(in: context.environment)
+                let resolved = try authored.resolve(in: environment)
                 predicate = HeistExecution.Predicate(
                     authored: authored.predicate,
                     resolved: resolved.predicate
@@ -39,7 +40,7 @@ extension HeistExecution.Machine {
             return resume(afterCompletedLeaf: HeistExecution.ResultProjector.expectationResolutionFailure(
                 step: step,
                 command: command,
-                context: context,
+                path: path,
                 error: error
             ))
         }
@@ -50,7 +51,7 @@ extension HeistExecution.Machine {
             step: step,
             command: command,
             predicate: predicate,
-            context: context,
+            path: path,
             phase: .beginningObservation
         ))
         return .pending(.perform([

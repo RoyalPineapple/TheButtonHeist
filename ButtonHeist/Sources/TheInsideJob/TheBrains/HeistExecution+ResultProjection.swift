@@ -8,12 +8,12 @@ extension HeistExecution {
     internal enum ResultProjector {
         internal static func actionResolutionFailure(
             step: ActionStep,
-            context: StepContext,
+            path: HeistExecutionPath,
             error: Error
         ) -> HeistExecutionStepResult {
             let evidence = HeistActionEvidence.commandResolutionFailure
             return .action(
-                path: context.path,
+                path: path,
                 execution: .failed(
                     command: step.command,
                     evidence: .init(admitted: evidence),
@@ -30,7 +30,7 @@ extension HeistExecution {
         internal static func expectationResolutionFailure(
             step: ActionStep,
             command: ResolvedHeistActionCommand,
-            context: StepContext,
+            path: HeistExecutionPath,
             error: Error
         ) -> HeistExecutionStepResult {
             let observed = "could not resolve heist expectation: \(error)"
@@ -44,7 +44,7 @@ extension HeistExecution {
                 expectation: nil
             )
             return .action(
-                path: context.path,
+                path: path,
                 execution: .failed(
                     command: step.command,
                     evidence: .init(admitted: evidence),
@@ -92,7 +92,7 @@ extension HeistExecution {
                 expectation: nil
             )
             return .action(
-                path: leaf.context.path,
+                path: leaf.path,
                 execution: .failed(
                     command: leaf.step.command,
                     evidence: .init(admitted: evidence),
@@ -175,7 +175,7 @@ extension HeistExecution {
                 )
             }
             return .action(
-                path: leaf.context.path,
+                path: leaf.path,
                 execution: execution
             )
         }

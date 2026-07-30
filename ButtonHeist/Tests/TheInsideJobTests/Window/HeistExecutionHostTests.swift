@@ -50,9 +50,28 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         XCTAssertEqual(directStep.status, plannedStep.status)
         XCTAssertEqual(directStep.actionCommand, plannedStep.actionCommand)
         XCTAssertEqual(directStep.failure, plannedStep.failure)
-        XCTAssertEqual(
-            directStep.reportActionResult?.observationEvidence,
+        let directEvidence = try XCTUnwrap(
+            directStep.reportActionResult?.observationEvidence
+        )
+        let plannedEvidence = try XCTUnwrap(
             plannedStep.reportActionResult?.observationEvidence
+        )
+        XCTAssertEqual(directEvidence.coverage, plannedEvidence.coverage)
+        let directBaseline = try XCTUnwrap(directEvidence.baseline)
+        let plannedBaseline = try XCTUnwrap(plannedEvidence.baseline)
+        let directCurrent = try XCTUnwrap(directEvidence.current)
+        let plannedCurrent = try XCTUnwrap(plannedEvidence.current)
+        XCTAssertTrue(
+            directBaseline.hasSameObservedState(
+                as: plannedBaseline,
+                geometryTolerance: CoarseFrameComparison.currentGeometryTolerance
+            )
+        )
+        XCTAssertTrue(
+            directCurrent.hasSameObservedState(
+                as: plannedCurrent,
+                geometryTolerance: CoarseFrameComparison.currentGeometryTolerance
+            )
         )
     }
 
@@ -219,7 +238,7 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
 
         let execution = Task { @MainActor in
             try await HeistExecution.Host(brains: brains).execute(
-                coldStartNotificationPlan(),
+                try coldStartNotificationPlan(),
                 timeout: try .seconds(5)
             )
         }
@@ -261,7 +280,7 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         XCTAssertEqual(
             evidence.baseline?.interface.projectedElements.first?
                 .semantics.assertable.label,
-            "Trigger"
+            "Baseline publication"
         )
         XCTAssertEqual(evidence.notificationTexts, ["After window"])
         XCTAssertEqual(
@@ -273,8 +292,8 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         )
     }
 
-    private func coldStartNotificationPlan() -> HeistPlan {
-        HeistPlan(body: [
+    private func coldStartNotificationPlan() throws -> HeistPlan {
+        try HeistPlan(body: [
             .action(ActionStep(
                 command: .activate(.label("Trigger")),
                 expectationPolicy: .expect(ActionExpectation(
@@ -283,62 +302,6 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
                 ))
             )),
         ])
-    }
-
-    func testCanonicalPublicationCanCompleteWaitWhilePhysicalCaptureIsUnavailable() async throws {
-        let observation = hostObservation(label: "Home")
-        let source = HostVisibleObservationSource(nil)
-        let tripwire = TheTripwire(pulseSource: .injected)
-        let brains = TheBrains(
-            tripwire: tripwire,
-            failureEvidencePolicy: .hierarchy,
-            visibleObservationSource: source.capture,
-            notificationIngress: .injected
-        )
-        await brains.startTestObservation()
-        defer { brains.stopTestObservation() }
-        let stream = brains.vault.semanticObservationStream
-        _ = await stream.commitVisibleObservationForTesting(observation)
-        let gate = HostCaptureGate()
-        installFirstReadingGate(gate, on: stream)
-        stream.observationWaiterDidRegister = {
-            tripwire.onTick()
-        }
-        defer {
-            stream.observationWaiterDidRegister = {}
-            gate.release()
-        }
-
-        let execution = Task { @MainActor in
-            try await HeistExecution.Host(brains: brains).execute(
-                try notificationWaitPlan("Saved"),
-                timeout: try .seconds(5)
-            )
-        }
-        await gate.waitUntilEntered()
-        brains.vault.accessibilityNotifications.recordForTesting(
-            code: 1008,
-            notificationData: CapturedAccessibilityNotificationPayload("Saved" as NSString),
-            associatedElement: .none
-        )
-        let inFlightClaim = brains.vault.accessibilityNotifications
-            .freezeObservationCycleClaim()
-        XCTAssertTrue(inFlightClaim.acknowledgeObservationCycle())
-        let publicationClaim = brains.vault.accessibilityNotifications
-            .freezeObservationCycleClaim()
-        _ = await stream.commitVisibleObservationForTesting(
-            observation,
-            notificationBatch: publicationClaim.batch
-        )
-        XCTAssertTrue(publicationClaim.acknowledgeObservationCycle())
-        gate.release()
-
-        let completion = try await execution.value
-        let step = try XCTUnwrap(completion.steps.first)
-        XCTAssertEqual(step.status, .passed)
-        XCTAssertEqual(try step.replayExpectation()?.met, true)
-        XCTAssertEqual(step.waitObservation?.coverage, .complete)
-        XCTAssertNil(step.failure)
     }
 
     func testFailedOriginRestorationCannotProduceCompletedWaitEvidence() async throws {

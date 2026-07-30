@@ -5,6 +5,11 @@ import ThePlans
 
 extension HeistExecution {
     internal struct Machine {
+        internal enum Root {
+            case plan
+            case action(ActionStep)
+        }
+
         private enum Progress {
             case ready
             case running
@@ -15,6 +20,7 @@ extension HeistExecution {
             case complete(Completion)
         }
 
+        internal let root: Root
         internal let rootEnvironment: HeistExecutionEnvironment
         internal let failureCaptureMode: ScreenCaptureMode?
         internal let actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy
@@ -30,6 +36,7 @@ extension HeistExecution {
             failureCaptureMode: ScreenCaptureMode? = nil,
             actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy = .default
         ) throws {
+            root = .plan
             self.failureCaptureMode = failureCaptureMode
             self.actionExpectationTimeoutPolicy = actionExpectationTimeoutPolicy
             rootEnvironment = try HeistExecutionEnvironment.empty.binding(
@@ -50,10 +57,31 @@ extension HeistExecution {
             ]
         }
 
+        internal init(
+            action: HeistActionCommand,
+            failureCaptureMode: ScreenCaptureMode? = nil,
+            actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy = .default
+        ) {
+            root = .action(ActionStep(command: action))
+            rootEnvironment = .empty
+            self.failureCaptureMode = failureCaptureMode
+            self.actionExpectationTimeoutPolicy = actionExpectationTimeoutPolicy
+            continuations = []
+        }
+
         internal mutating func start() -> State {
             guard case .ready = progress else { return state }
             progress = .running
-            return advanceExecution()
+            switch root {
+            case .plan:
+                return advanceExecution()
+            case .action(let action):
+                return begin(
+                    action: action,
+                    path: .body.step(at: 0),
+                    environment: rootEnvironment
+                )
+            }
         }
 
         internal mutating func advance(_ input: Input) -> State {

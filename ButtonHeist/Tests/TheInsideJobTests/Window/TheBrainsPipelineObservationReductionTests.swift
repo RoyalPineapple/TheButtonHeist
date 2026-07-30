@@ -20,12 +20,14 @@ extension TheBrainsPipelineTests {
 
         XCTAssertEqual(
             boundary.events.map(\.testKind),
-            [.screenChanged, .elementsChanged]
+            [.elementsChanged, .screenChanged, .elementsChanged]
         )
-        guard case .screenChanged(let screen) = boundary.events[0],
-              case .elementsChanged(let arrival) = boundary.events[1] else {
-            return XCTFail("Expected screen boundary and actual state")
+        guard case .elementsChanged(let departure) = boundary.events[0],
+              case .screenChanged(let screen) = boundary.events[1],
+              case .elementsChanged(let arrival) = boundary.events[2] else {
+            return XCTFail("Expected departure, screen boundary, and actual state")
         }
+        XCTAssertTrue(departure.interface.tree.isEmpty)
         XCTAssertEqual(screen.idAfter, "Checkout")
         XCTAssertEqual(arrival, boundary.current.snapshot)
 
@@ -51,7 +53,7 @@ extension TheBrainsPipelineTests {
 
         XCTAssertEqual(
             after.events.map(\.testKind),
-            [.screenChanged, .elementsChanged]
+            [.elementsChanged, .screenChanged, .elementsChanged]
         )
     }
 
@@ -72,7 +74,7 @@ extension TheBrainsPipelineTests {
 
         XCTAssertEqual(
             after.events.map(\.testKind),
-            [.screenChanged, .elementsChanged]
+            [.elementsChanged, .screenChanged, .elementsChanged]
         )
     }
 
@@ -87,7 +89,7 @@ extension TheBrainsPipelineTests {
 
         XCTAssertEqual(
             after.events.map(\.testKind),
-            [.screenChanged, .elementsChanged]
+            [.elementsChanged, .screenChanged, .elementsChanged]
         )
     }
 
@@ -107,7 +109,7 @@ extension TheBrainsPipelineTests {
 
         XCTAssertEqual(
             after.events.map(\.testKind),
-            [.screenChanged, .elementsChanged]
+            [.elementsChanged, .screenChanged, .elementsChanged]
         )
         let evidence = brains.vault.semanticObservationStream
             .evidence(after: boundary)
@@ -165,7 +167,7 @@ extension TheBrainsPipelineTests {
 
         XCTAssertEqual(
             after.events.map(\.testKind),
-            [.screenChanged, .elementsChanged]
+            [.elementsChanged, .screenChanged, .elementsChanged]
         )
     }
 

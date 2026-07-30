@@ -222,7 +222,11 @@ private extension HeistExecution.Machine {
     ) -> HeistExecution.State {
         switch step {
         case .action(let action):
-            return begin(action: action, context: context)
+            return begin(
+                action: action,
+                path: context.path,
+                environment: context.environment
+            )
         case .wait(let wait):
             return begin(wait: wait, context: context)
         case .conditional(let conditional):
