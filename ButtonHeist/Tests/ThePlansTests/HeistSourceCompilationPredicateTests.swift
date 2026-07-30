@@ -73,6 +73,25 @@ import Testing
     try assertCanonicalRoundTrip(plan)
 }
 
+@Test func `checked in predicate guidance uses canonical source spellings`() throws {
+    let plan = try HeistSourceCompilation.compile(root("""
+    Activate(.label("Pay")).expect(.screenChanged)
+    WaitFor(.screenChanged("Receipt"), timeout: 10)
+    WaitFor(.screenChanged(.contains("Receipt")))
+    WaitFor(.notification)
+    WaitFor(.notification(.contains("saved")))
+    WaitFor(.notification(text: .contains("saved"), element: .label("Receipt")))
+    Increment(.label("Quantity"))
+        .expect(.elementsChanged([.updated(
+            .label("Quantity"),
+            .value(before: "2", after: "3")
+        )]))
+    """))
+
+    #expect(plan.body.count == 7)
+    try assertCanonicalRoundTrip(plan)
+}
+
 @Test func `runtime parser accepts container predicates and scoped targets`() throws {
     let plan = try HeistSourceCompilation.compile(root("""
     WaitFor(.exists(.container(.label("Checkout"))), timeout: 2)

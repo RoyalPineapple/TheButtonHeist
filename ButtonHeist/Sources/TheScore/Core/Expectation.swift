@@ -110,9 +110,7 @@ private extension Expectation {
             switch self {
             case .baseline(let snapshot), .event(.elementsChanged(let snapshot)):
                 return AccessibilityTargetMatchInput(interface: snapshot.interface)
-            case .event(.screenChanged):
-                return AccessibilityTargetMatchInput(elements: [])
-            case .event(.notification), .event(.noChange):
+            case .event:
                 return nil
             }
         }

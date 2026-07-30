@@ -41,7 +41,7 @@ Reach for `get_screen` when layout, pixels, or current viewport geometry matters
 Allowed `perform(step:)` statements are one action or one `WaitFor(...)` statement:
 
 ```swift
-Activate(.label("Pay")).expect(.screenChanged())
+Activate(.label("Pay")).expect(.screenChanged)
 TypeText("milk", into: .label("Search"))
     .expect(.exists(.element(.label("Search"), .value("milk"))))
 Increment(.label("Quantity"))
@@ -58,7 +58,7 @@ longPress(.label("Message"))
 swipe(.label("Carousel"), .left)
 drag(.label("Slider"), to: ScreenPoint(x: 200, y: 40))
 
-WaitFor(.label("Checkout"), timeout: 5)
+WaitFor(.exists(.label("Checkout")), timeout: 5)
 ```
 
 `perform(step:)` accepts one durable DSL step only. It rejects program-shaped
@@ -96,10 +96,11 @@ Activate(.label("Pay"), ordinal: 0)
 **Waiting**: use `perform(step:)` with `WaitFor(...)` when the UI is updating asynchronously — network requests, timers, animations completing. The predicate should name the specific outcome:
 
 ```swift
-WaitFor(.screenChanged(), timeout: 10)
+WaitFor(.screenChanged, timeout: 10)
 WaitFor(.exists(.container(.label("Checkout"))), timeout: 5)
-WaitFor(.label("Receipt"), timeout: 5)
+WaitFor(.exists(.label("Receipt")), timeout: 5)
 WaitFor(.missing(.label("Loading")), timeout: 10)
+WaitFor(.notification(text: .contains("saved"), element: .label("Receipt")))
 ```
 
 For `.missing(...)`, the predicate means the element is absent from the current settled hierarchy. It does not require The Button Heist to prove the element existed and then vanished.
@@ -111,8 +112,9 @@ happened. Container predicates can match `.label(...)`, `.value(...)`,
 `.dataTable(rowCount: .init(...), columnCount: .init(...))`, or
 `.matching(...)` combinations. Use `.within(container: .label("Checkout"), ...)`
 when an element target must resolve inside that container. Use
-`.screenChanged([...])` when the preceding action itself must prove a screen
-transition. Use `.exists(...)` or `.missing(...)` for current-tree state. Use
+`.screenChanged` or `.screenChanged("Checkout")` when the preceding action
+itself must prove a screen transition. Use `.exists(...)` or `.missing(...)`
+for current-tree state. Use
 `.elementsChanged([.appeared(...), .disappeared(...), .updated(...)])` only
 when the observed transition itself is required; final state alone never
 satisfies those lifecycle assertions.
@@ -163,7 +165,7 @@ returns invalid plans as ordinary structured validation content, so inspect
 ```swift
 HeistPlan {
     Activate(.label("Pay"))
-        .expect(.screenChanged())
+        .expect(.screenChanged)
 
     TypeText("milk", into: .label("Search"))
         .expect(.exists(.element(.label("Search"), .value("milk"))))
@@ -190,9 +192,9 @@ HeistPlan("shop") {
             .value(.contains("1 item"))
         ))]))
 
-    If(.label("Pay")) {
+    If(.exists(.label("Pay"))) {
         Activate(.label("Pay"))
-            .expect(.screenChanged())
+            .expect(.screenChanged)
     }.else {
         Warn("Pay button unavailable")
     }
@@ -264,9 +266,9 @@ For operations that take time, keep using the DSL:
 
 ```swift
 Activate(.label("Pay"))
-    .expect(.screenChanged([.exists(.label("Receipt"))]))
+    .expect(.screenChanged("Receipt"))
 
-WaitFor(.label("Receipt"), timeout: 10)
+WaitFor(.exists(.label("Receipt")), timeout: 10)
 ```
 
 If the action result shows a spinner or loading overlay instead of the final state,
@@ -281,7 +283,7 @@ know what should change:
 
 ```swift
 Activate(.label("Continue"))
-    .expect(.screenChanged())
+    .expect(.screenChanged)
 
 TypeText("milk", into: .label("Search"))
     .expect(.exists(.element(.label("Search"), .value("milk"))))

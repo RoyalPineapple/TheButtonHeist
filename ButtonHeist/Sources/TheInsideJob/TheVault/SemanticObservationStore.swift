@@ -222,8 +222,17 @@ extension TheVault {
             let currentEvent: Observation.Event
             let events: [Observation.Event]
             if continuity.isReplacement {
+                let departure = Observation.Snapshot(
+                    interface: Interface(
+                        timestamp: currentSnapshot?.interface.timestamp
+                            ?? snapshot.interface.timestamp,
+                        tree: []
+                    ),
+                    context: currentSnapshot?.context ?? .empty
+                )
                 currentEvent = .elementsChanged(snapshot)
                 events = notificationEvents + [
+                    .elementsChanged(departure),
                     .screenChanged(ScreenFacts(
                         idAfter: InterfaceSummary.screenName(for: snapshot.interface)
                     )),

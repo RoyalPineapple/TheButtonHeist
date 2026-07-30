@@ -273,15 +273,17 @@ or `.suffix`.
 
 ## Accessibility predicate grammar
 
-`AccessibilityPredicate` is the concrete root condition. `ScreenPredicate` and
-`ElementAssertion` are the two concrete assertion contexts, and their
-constructors expose only valid combinations:
+`AccessibilityPredicate` is the concrete root condition. Its constructors
+expose only valid combinations:
 
-- Root: `.exists(target)`, `.missing(target)`, `.changed(declaration)`, and
-  `.announcement(...)`.
-- Screen declaration: `.screenChanged([.exists(target),
-  .missing(target)])`.
-- Elements declaration: `.elementsChanged([.exists(target),
+- Current state: `.exists(target)` and `.missing(target)`.
+- Notification evidence: `.notification`, `.notification("Saved")`,
+  `.notification(.contains("saved"))`, `.notification(element: .label("Save"))`,
+  or `.notification(text: .contains("saved"), element: .label("Save"))`.
+- Screen evidence: `.screenChanged`, `.screenChanged("Receipt")`, or
+  `.screenChanged(.contains("Receipt"))`.
+- Element evidence: `.elementsChanged` or
+  `.elementsChanged([.exists(target),
   .missing(target), .appeared(target), .disappeared(target),
   .updated(target, change)])`.
 
@@ -293,7 +295,7 @@ root-level generic changed predicate and no alternate spelling.
 
 A screen boundary is also an element lifecycle change: every old-tree node
 disappears, the screen marker occurs, and every new-tree node appears. Therefore
-`changed(.elements(...))` can match appearances or disappearances across a
+`.elementsChanged(...)` can match appearances or disappearances across a
 screen boundary. `updated` can only match two captures in the same screen
 generation.
 
@@ -310,15 +312,11 @@ diagnostics, and conversion to the retained `WaitStep` wire shape. Source and
 Swift DSL authoring both route through that owner.
 
 A single `.expect(predicate, timeout:)` accepts any root
-`AccessibilityPredicate`. Chaining is supported only to combine one
-`.screenChanged(...)` declaration with one current-tree `.exists(...)` or
-`.missing(...)` assertion, in either order; the current-tree assertion becomes
-a screen assertion. Any other pair is rejected as unsupported composition.
+`AccessibilityPredicate`. An action has one expectation; chaining a second
+`.expect(...)` is rejected. Follow the action with `WaitFor(...)` when the flow
+must prove another predicate.
 
-With no explicit timeout, the action-expectation default is 1 second. One
-explicit timeout applies to the composition, and two equal explicit timeouts
-are accepted. Two different explicit timeouts are rejected. Chaining does not
-create another predicate or wire representation.
+With no explicit timeout, the action-expectation default is 1 second.
 
 ## Timeouts
 
@@ -365,7 +363,7 @@ Use `HeistPlan` for reusable or multi-step behavior:
 ```swift
 HeistPlan("checkout") {
     Activate(.label("Pay"))
-        .expect(.screenChanged([.exists(.label("Receipt"))]))
+        .expect(.screenChanged("Receipt"))
 
     WaitFor(.exists(.label("Receipt")), timeout: 10)
 }
@@ -375,7 +373,7 @@ Use `perform(step:)` for one durable step:
 
 ```swift
 Activate(.label("Pay"))
-    .expect(.screenChanged([.exists(.label("Receipt"))]))
+    .expect(.screenChanged("Receipt"))
 ```
 
 `WaitFor(...)` evaluates the same predicate language as action expectations.
@@ -392,7 +390,7 @@ such as `.list` or `.dataTable(rowCount: .init(...), columnCount: .init(...))`,
 scrollability through `.scrollable(true)`, custom
 actions, modal boundary, or `.matching(...)` combinations. Use
 `.within(container: .label("Checkout"), .label("Pay"))` when an element target
-must resolve inside that container. Use `.screenChanged()` when the action
+must resolve inside that container. Use `.screenChanged` when the action
 itself must prove navigation occurred.
 
 Use `RepeatUntil` for bounded repetition toward a settled outcome. The body

@@ -42,17 +42,20 @@ import ThePlans
         #expect(composed.result == .satisfied)
     }
 
-    @Test func `screen replacement is authored as boundary then actual state`() {
+    @Test func `screen replacement is authored as departure boundary then arrival`() {
         let events = screenReplacementEvents(
+            departing: snapshot(["Cart"]),
             arriving: snapshot(["Checkout"])
         )
 
-        guard case .screenChanged(let screen) = events[0],
-              case .elementsChanged(let arrival) = events[1]
+        guard case .elementsChanged(let departure) = events[0],
+              case .screenChanged(let screen) = events[1],
+              case .elementsChanged(let arrival) = events[2]
         else {
-            Issue.record("Expected screen boundary and actual arrival")
+            Issue.record("Expected departure, screen boundary, and arrival")
             return
         }
+        #expect(departure.interface.tree.isEmpty)
         #expect(screen == ScreenFacts(idAfter: "Checkout"))
         #expect(arrival == snapshot(["Checkout"]))
     }
@@ -62,26 +65,34 @@ import ThePlans
             .appeared(.label("Checkout")),
         ]))
         let events = screenReplacementEvents(
+            departing: snapshot(["Checkout"]),
             arriving: snapshot(["Checkout"])
         )
         let expectation = Expectation(
             [predicate],
             baseline: snapshot(["Checkout"])
         )
-        let afterBoundary = expectation.evaluating(events[0])
+        let afterDeparture = expectation.evaluating(events[0])
+        let afterBoundary = afterDeparture.evaluating(events[1])
 
+        #expect(afterDeparture.result != .satisfied)
         #expect(afterBoundary.result != .satisfied)
-        #expect(afterBoundary.evaluating(events[1]).result == .satisfied)
+        #expect(afterBoundary.evaluating(events[2]).result == .satisfied)
+        #expect(Expectation(
+            [predicate],
+            baseline: snapshot(["Checkout"]),
+            events: events
+        ).result == .satisfied)
     }
 
     @Test func `replacement removes matching old-generation targets`() throws {
         let predicate = try resolved(.elementsChanged([
             .disappeared(.label("Library")),
         ]))
-        let events: [Observation.Event] = [
-            .screenChanged(ScreenFacts(idAfter: "Checkout")),
-            .elementsChanged(snapshot(["Library"])),
-        ]
+        let events = screenReplacementEvents(
+            departing: snapshot(["Library"]),
+            arriving: snapshot(["Checkout"])
+        )
         let expectation = Expectation(
             [predicate],
             baseline: snapshot(["Library"])
@@ -94,6 +105,39 @@ import ThePlans
             baseline: snapshot(["Library"]),
             events: events
         ).result == .satisfied)
+    }
+
+    @Test func `replacement presence replays from departure and arrival snapshots`() throws {
+        let events = screenReplacementEvents(
+            departing: snapshot(["Library"]),
+            arriving: snapshot(["Checkout"])
+        )
+        let exists = try resolved(.exists(.label("Checkout")))
+        let missing = try resolved(.missing(.label("Library")))
+
+        #expect(Expectation([exists], events: Array(events.prefix(2))).result != .satisfied)
+        #expect(Expectation([exists], events: events).result == .satisfied)
+        #expect(Expectation([missing], events: [events[1]]).result != .satisfied)
+        #expect(Expectation([missing], events: events).result == .satisfied)
+    }
+
+    @Test func `replacement rejects property updates across the screen boundary`() throws {
+        let predicate = try resolved(.elementsChanged([
+            .updated(
+                .label("Counter"),
+                .value(before: "1", after: "2")
+            ),
+        ]))
+        let events = screenReplacementEvents(
+            departing: valueSnapshot(label: "Counter", value: "1"),
+            arriving: valueSnapshot(label: "Counter", value: "2")
+        )
+
+        #expect(Expectation(
+            [predicate],
+            baseline: valueSnapshot(label: "Counter", value: "1"),
+            events: events
+        ).result != .satisfied)
     }
 
     @Test func `no-change event is retained in authored order without answering other lanes`() throws {
@@ -126,10 +170,30 @@ import ThePlans
         )
     }
 
+    private func valueSnapshot(
+        label: String,
+        value: String
+    ) -> Observation.Snapshot {
+        Observation.Snapshot(
+            interface: makeTestInterface(elements: [
+                makeTestHeistElement(label: label, value: value),
+            ]),
+            context: .empty
+        )
+    }
+
     private func screenReplacementEvents(
+        departing: Observation.Snapshot,
         arriving: Observation.Snapshot
     ) -> [Observation.Event] {
         [
+            .elementsChanged(Observation.Snapshot(
+                interface: makeTestInterface(
+                    elements: [],
+                    timestamp: departing.interface.timestamp
+                ),
+                context: departing.context
+            )),
             .screenChanged(ScreenFacts(idAfter: "Checkout")),
             .elementsChanged(arriving),
         ]

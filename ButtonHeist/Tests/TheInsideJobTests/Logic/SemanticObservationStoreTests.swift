@@ -132,24 +132,54 @@ final class SemanticObservationStoreTests: XCTestCase {
         XCTAssertEqual(state.current, second.current)
     }
 
-    func testDiscardRecordsScreenBoundaryAndActualReplacement() {
+    func testReplacementPublishesNotificationDepartureBoundaryAndArrivalInOrder() {
         var state = TheVault.State()
-        _ = state.commitObservation(admission())
+        let baseline = state.commitObservation(admission(
+            keyboardVisible: true,
+            timestamp: Date(timeIntervalSince1970: 1)
+        ))
         let boundary = state.history.endIndex
+        let replacement = state.commitObservation(admission(
+            notifications: [
+                Observation.AdmittedNotification(
+                    sequence: 1,
+                    kind: .announcement,
+                    text: "Opening checkout",
+                    element: nil
+                ),
+                Observation.AdmittedNotification(
+                    sequence: 2,
+                    kind: .screenChanged,
+                    text: nil,
+                    element: nil
+                ),
+            ],
+            keyboardVisible: false,
+            timestamp: Date(timeIntervalSince1970: 2)
+        ))
 
-        state.discardCurrentObservation()
-        let replacement = state.commitObservation(admission())
-
-        XCTAssertEqual(replacement.events.count, 2)
-        guard case .screenChanged = replacement.events[0],
-              case .elementsChanged(let arrival) = replacement.events[1]
+        XCTAssertEqual(replacement.events.count, 4)
+        guard case .notification(let notification) = replacement.events[0],
+              case .elementsChanged(let departure) = replacement.events[1],
+              case .screenChanged = replacement.events[2],
+              case .elementsChanged(let arrival) = replacement.events[3]
         else {
-            return XCTFail("Expected screen boundary and actual replacement")
+            return XCTFail("Expected notification, departure, screen boundary, and arrival")
         }
+        XCTAssertEqual(notification.text, "Opening checkout")
+        XCTAssertTrue(departure.interface.tree.isEmpty)
+        XCTAssertEqual(
+            departure.interface.timestamp,
+            baseline.current.snapshot.interface.timestamp
+        )
+        XCTAssertEqual(departure.context, baseline.current.snapshot.context)
+        XCTAssertNotEqual(departure.context, arrival.context)
         XCTAssertEqual(arrival, replacement.current.snapshot)
         XCTAssertEqual(state.history.screenGeneration(at: boundary), 0)
-        XCTAssertEqual(state.history.screenGeneration(at: boundary + 1), 1)
-        XCTAssertEqual(state.history.screenGeneration(at: boundary + 2), 1)
+        XCTAssertEqual(state.history.screenGeneration(at: boundary + 1), 0)
+        XCTAssertEqual(state.history.screenGeneration(at: boundary + 2), 0)
+        XCTAssertEqual(state.history.screenGeneration(at: boundary + 3), 1)
+        XCTAssertEqual(state.history.screenGeneration(at: boundary + 4), 1)
     }
 
     func testNotificationPrecedesForcedElementChange() throws {
@@ -197,7 +227,9 @@ final class SemanticObservationStoreTests: XCTestCase {
 
     private func admission(
         scope: SemanticObservationScope = .visible,
-        notifications: [Observation.AdmittedNotification] = []
+        notifications: [Observation.AdmittedNotification] = [],
+        keyboardVisible: Bool? = nil,
+        timestamp: Date = Date(timeIntervalSince1970: 0)
     ) -> Observation.Admission {
         let observation = InterfaceObservation.makeForTests()
         let through = notifications.map(\.sequence).max() ?? 0
@@ -212,8 +244,8 @@ final class SemanticObservationStoreTests: XCTestCase {
                 through: AccessibilityNotificationCursor(sequence: through),
                 scopedScreenChangedThrough: 0
             )!,
-            keyboardVisible: nil,
-            timestamp: Date(timeIntervalSince1970: 0),
+            keyboardVisible: keyboardVisible,
+            timestamp: timestamp,
             viewportFrames: observation.tree.viewportFrames,
             geometryTolerance: CoarseFrameComparison.currentGeometryTolerance
         )

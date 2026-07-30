@@ -315,7 +315,7 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(publication.current.snapshot, snapshot)
     }
 
-    func testScreenChangedPublishesBoundaryAndActualArrival() async throws {
+    func testScreenChangedPublishesDepartureBoundaryAndActualArrival() async throws {
         let first = InterfaceObservation.makeForTests(elements: [
             (element(label: "Menu", traits: .header), "menu"),
         ])
@@ -334,11 +334,14 @@ extension TheVaultResolutionTests {
         }
         let replacement = try XCTUnwrap(admitted)
 
-        XCTAssertEqual(replacement.events.count, 2)
-        guard case .screenChanged(let screen) = replacement.events[0],
-              case .elementsChanged(let arrival) = replacement.events[1] else {
-            return XCTFail("Expected screen boundary and actual arrival")
+        XCTAssertEqual(replacement.events.count, 3)
+        guard case .elementsChanged(let departure) = replacement.events[0],
+              case .screenChanged(let screen) = replacement.events[1],
+              case .elementsChanged(let arrival) = replacement.events[2] else {
+            return XCTFail("Expected departure, screen boundary, and actual arrival")
         }
+        XCTAssertTrue(departure.interface.tree.isEmpty)
+        XCTAssertEqual(departure.context, baseline.current.snapshot.context)
         XCTAssertEqual(screen.idAfter, "Checkout")
         XCTAssertEqual(arrival, replacement.current.snapshot)
 
@@ -346,6 +349,8 @@ extension TheVaultResolutionTests {
         _ = history.record(baseline.events, protectedBy: nil)
         let replacementRecord = history.record(replacement.events, protectedBy: nil)
         XCTAssertEqual(history.screenGeneration(at: replacementRecord.lowerBound), 0)
+        XCTAssertEqual(history.screenGeneration(at: replacementRecord.lowerBound + 1), 0)
+        XCTAssertEqual(history.screenGeneration(at: replacementRecord.lowerBound + 2), 0)
         XCTAssertEqual(history.screenGeneration(at: replacementRecord.upperBound), 1)
         XCTAssertEqual(
             history.evidence(
