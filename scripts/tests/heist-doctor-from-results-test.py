@@ -4,122 +4,87 @@ import gzip
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from uuid import UUID
 
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts"))
+from heist_doctor_pairing import TreeOutcome, pair_recordings
+
 SCRIPT = ROOT / "scripts/heist-doctor-from-results.sh"
 FINGERPRINT_A = "0123456789abcdef01234567"
 FINGERPRINT_B = "89abcdef0123456789abcdef"
 
 
-class HeistDoctorFromResultsTests(unittest.TestCase):
+class HeistDoctorPairingTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary_directory.name)
-        self.last_pass_root = self.root / "main-artifact"
-        self.new_fail_root = self.root / "pr-artifact"
-        self.last_pass_root.mkdir()
-        self.new_fail_root.mkdir()
-        self.capture_path = self.root / "doctor-arguments"
-        self.doctor_path = self.root / "heist-doctor"
-        self.doctor_path.write_text(
-            "#!/usr/bin/env bash\n"
-            "set -euo pipefail\n"
-            "printf '%s\\n' \"$@\" > \"$DOCTOR_ARGUMENT_CAPTURE\"\n",
-            encoding="utf-8",
-        )
-        self.doctor_path.chmod(0o755)
+        self.passes = self.root / "main"
+        self.failures = self.root / "pr"
+        self.passes.mkdir()
+        self.failures.mkdir()
 
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
 
-    def test_pairs_by_decoded_fingerprint_and_outcome(self) -> None:
-        older_pass = self.write_recording(
-            self.last_pass_root / "passing-history" / "11111111-1111-4111-8111-111111111111.json.gz",
-            fingerprint=FINGERPRINT_A,
-            outcome="passed",
-            recorded_at=10,
-        )
-        selected_pass = self.write_recording(
-            self.last_pass_root / "unrelated-directory" / "22222222-2222-4222-8222-222222222222.json",
-            fingerprint=FINGERPRINT_A,
-            outcome="passed",
-            recorded_at=20,
-        )
-        selected_fail = self.write_recording(
-            self.new_fail_root / "different-directory" / "33333333-3333-4333-8333-333333333333.json.gz",
-            fingerprint=FINGERPRINT_A,
-            outcome="failed",
-            recorded_at=30,
-        )
-        self.write_recording(
-            self.new_fail_root / "newest-but-unmatched" / "44444444-4444-4444-8444-444444444444.json",
-            fingerprint=FINGERPRINT_B,
-            outcome="failed",
-            recorded_at=40,
-        )
-        self.write_recording(
-            self.last_pass_root / "legacy" / "20260730-123-passed.json.gz",
-            fingerprint=FINGERPRINT_A,
-            outcome="passed",
-            recorded_at=50,
-        )
-        os.utime(older_pass, (100, 100))
+    def test_pairs_newest_eligible_failure_with_newest_prior_pass(self) -> None:
+        older = self.record(self.passes, 1, 10, compressed=True)
+        selected_pass = self.record(self.passes, 2, 20)
+        self.record(self.passes, 3, 35)
+        self.record(self.passes, 15, 25, TreeOutcome.CHILD_ABORTED, child=TreeOutcome.FAILED)
+        selected_fail = self.record(self.failures, 4, 30, TreeOutcome.FAILED, compressed=True)
+        self.record(self.failures, 5, 40, TreeOutcome.FAILED, fingerprint=FINGERPRINT_B)
+        self.record(self.passes, 6, 25).rename(self.passes / "not-a-uuid.json")
+        os.utime(older, (100, 100))
         os.utime(selected_pass, (1, 1))
 
-        completed = self.run_script()
+        pairing = pair_recordings(self.passes, self.failures)
 
-        self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertIn(f"fingerprint: {FINGERPRINT_A}", completed.stdout)
+        self.assertEqual(pairing.warnings, ())
         self.assertEqual(
-            self.capture_path.read_text(encoding="utf-8").splitlines(),
+            pairing.pair and (pairing.pair.last_pass.path, pairing.pair.new_fail.path),
+            (selected_pass, selected_fail),
+        )
+
+    def test_malformed_canonical_recordings_are_warnings(self) -> None:
+        duplicate = self.path(self.passes, 9)
+        duplicate.write_text('{"schemaVersion":1,"schemaVersion":1}', encoding="utf-8")
+        inconsistent = self.record(self.passes, 10, 15, TreeOutcome.CHILD_ABORTED)
+        selected_pass = self.record(self.passes, 11, 20)
+        selected_fail = self.record(self.failures, 12, 30, TreeOutcome.FAILED)
+
+        pairing = pair_recordings(self.passes, self.failures)
+
+        self.assertEqual(
+            pairing.pair and (pairing.pair.last_pass.path, pairing.pair.new_fail.path),
+            (selected_pass, selected_fail),
+        )
+        self.assertEqual([warning.path for warning in pairing.warnings], [duplicate, inconsistent])
+        self.assertIn("duplicate JSON key", pairing.warnings[0].reason)
+        self.assertIn("requires a failed child", pairing.warnings[1].reason)
+
+    def test_shell_preserves_flags_and_delegates(self) -> None:
+        selected_pass = self.record(self.passes, 13, 10)
+        selected_fail = self.record(self.failures, 14, 20, TreeOutcome.FAILED)
+        capture = self.root / "arguments"
+        doctor = self.root / "heist-doctor"
+        doctor.write_text(
+            "#!/usr/bin/env bash\nprintf '%s\\n' \"$@\" > \"$DOCTOR_ARGUMENT_CAPTURE\"\n",
+            encoding="utf-8",
+        )
+        doctor.chmod(0o755)
+        environment = os.environ | {"DOCTOR_ARGUMENT_CAPTURE": str(capture)}
+
+        completed = subprocess.run(
             [
-                "--last-pass",
-                str(selected_pass),
-                "--new-fail",
-                str(selected_fail),
-                "--format",
-                "human",
-            ],
-        )
-
-    def test_later_failed_step_cannot_supply_pass_baseline(self) -> None:
-        self.write_recording(
-            self.last_pass_root / "55555555-5555-4555-8555-555555555555.json",
-            fingerprint=FINGERPRINT_A,
-            outcome="passed",
-            recorded_at=10,
-            additional_outcome="failed",
-        )
-        self.write_recording(
-            self.new_fail_root / "66666666-6666-4666-8666-666666666666.json.gz",
-            fingerprint=FINGERPRINT_A,
-            outcome="failed",
-            recorded_at=20,
-        )
-
-        completed = self.run_script()
-
-        self.assertEqual(completed.returncode, 1)
-        self.assertIn("same decoded plan fingerprint", completed.stderr)
-        self.assertFalse(self.capture_path.exists())
-
-    def run_script(self) -> subprocess.CompletedProcess[str]:
-        environment = os.environ.copy()
-        environment["DOCTOR_ARGUMENT_CAPTURE"] = str(self.capture_path)
-        return subprocess.run(
-            [
-                str(SCRIPT),
-                "--last-pass-dir",
-                str(self.last_pass_root),
-                "--new-fail-dir",
-                str(self.new_fail_root),
-                "--doctor",
-                str(self.doctor_path),
-                "--no-build",
+                str(SCRIPT), "--last-pass-dir", str(self.passes),
+                "--new-fail-dir", str(self.failures), "--doctor", str(doctor),
+                "--format", "json", "--step-path", "$.body[0]", "--no-build",
             ],
             cwd=ROOT,
             env=environment,
@@ -128,59 +93,69 @@ class HeistDoctorFromResultsTests(unittest.TestCase):
             check=False,
         )
 
-    def write_recording(
-        self,
-        path: Path,
-        *,
-        fingerprint: str,
-        outcome: str,
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(
+            capture.read_text().splitlines(),
+            [
+                "--last-pass", str(selected_pass), "--new-fail", str(selected_fail),
+                "--format", "json", "--step-path", "$.body[0]",
+            ],
+        )
+
+    @staticmethod
+    def path(root: Path, index: int, compressed: bool = False) -> Path:
+        return root / f"{UUID(int=index)}.json{'.gz' if compressed else ''}"
+
+    @classmethod
+    def record(
+        cls,
+        root: Path,
+        index: int,
         recorded_at: float,
-        additional_outcome: str | None = None,
+        outcome: TreeOutcome = TreeOutcome.PASSED,
+        *,
+        fingerprint: str = FINGERPRINT_A,
+        compressed: bool = False,
+        child: TreeOutcome | None = None,
     ) -> Path:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        steps = [self.step("$.body[0]", outcome)]
-        if additional_outcome is not None:
-            steps.append(self.step("$.body[1]", additional_outcome))
+        path = cls.path(root, index, compressed)
+        children = [cls.step("$.body[0].body[0]", child)] if child else []
         recording = {
             "schemaVersion": 1,
-            "result": {
-                "steps": steps,
-                "durationMs": 1,
-            },
+            "result": {"steps": [cls.step("$.body[0]", outcome, children)], "durationMs": 1},
             "planName": "fixture",
             "planFingerprint": fingerprint,
             "recordedAt": recorded_at,
             "producerVersion": "1.0.0",
         }
-        data = json.dumps(recording, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        path.write_bytes(gzip.compress(data, mtime=0) if path.name.endswith(".gz") else data)
+        data = json.dumps(recording, separators=(",", ":")).encode()
+        path.write_bytes(gzip.compress(data, mtime=0) if compressed else data)
         return path
 
     @staticmethod
-    def step(path: str, outcome: str) -> dict[str, object]:
-        if outcome == "failed":
-            node = {
-                "type": "failure",
-                "message": "fixture failure",
-                "outcome": "failed",
-                "failure": {
-                    "category": "explicitFailure",
-                    "contract": "fixture",
-                    "observed": "fixture failure",
-                },
-                "children": [],
-            }
-        else:
-            node = {
-                "type": "warning",
-                "message": "fixture warning",
-                "outcome": outcome,
-                "children": [],
-            }
-        return {
-            "path": path,
-            "node": node,
+    def step(
+        path: str,
+        outcome: TreeOutcome,
+        children: list[dict[str, object]] | None = None,
+    ) -> dict[str, object]:
+        failure = {
+            "category": "explicitFailure",
+            "contract": "fixture",
+            "observed": "fixture",
         }
+        node = {
+            "type": (
+                "failure" if outcome is TreeOutcome.FAILED
+                else "heist" if outcome is TreeOutcome.CHILD_ABORTED
+                else "warning"
+            ),
+            "message": "fixture",
+            "outcome": outcome.value,
+            "children": children or [],
+        }
+        if outcome.failed:
+            node["failure"] = failure
+        return {"path": path, "node": node}
 
 
 if __name__ == "__main__":
