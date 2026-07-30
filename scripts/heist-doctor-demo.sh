@@ -176,9 +176,9 @@ struct DoctorDemoFixture {
         )
         let observationEvidence = Observation.Evidence(
             baseline: baseline,
-            current: current,
             events: after == nil ? [.noChange] : [.elementsChanged(current)],
-            completeness: .complete
+            current: current,
+            coverage: .complete
         )
         let actionResult: ActionResult
         switch outcome {

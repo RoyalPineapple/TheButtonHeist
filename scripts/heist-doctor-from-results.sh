@@ -26,13 +26,13 @@ done
 [[ "$NEW_FAIL_SET" == true ]] || ARGS+=(--new-fail-dir "$DEFAULT_RESULTS_DIR")
 [[ "$FORMAT_SET" == true ]] || ARGS+=(--format "${BUTTONHEIST_DOCTOR_FORMAT:-human}")
 
+if [[ "$BUILD_DOCTOR" == true && "$DOCTOR" == "$REPO_ROOT/.build/debug/heist-doctor" ]]; then
+    swift build --package-path "$REPO_ROOT" --product heist-doctor >/dev/null
+fi
+
 if [[ ! -x "$DOCTOR" ]]; then
-    if [[ "$BUILD_DOCTOR" == true && "$DOCTOR" == "$REPO_ROOT/.build/debug/heist-doctor" ]]; then
-        swift build --package-path "$REPO_ROOT" --product heist-doctor >/dev/null
-    else
-        echo "Error: heist-doctor executable not found: $DOCTOR" >&2
-        exit 1
-    fi
+    echo "Error: heist-doctor executable not found: $DOCTOR" >&2
+    exit 1
 fi
 
 exec "$DOCTOR" "${ARGS[@]}"

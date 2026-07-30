@@ -180,7 +180,7 @@ public extension Observation {
         public let current: Snapshot?
         public let coverage: Coverage
 
-        package init(
+        public init(
             baseline: Snapshot?,
             events: [Event],
             current: Snapshot?,
