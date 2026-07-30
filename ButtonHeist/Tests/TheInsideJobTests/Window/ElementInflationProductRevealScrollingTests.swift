@@ -38,7 +38,7 @@ extension ElementInflationProductTests {
             label: "Wait Cached Exhaustive"
         )
         try await seedOffViewportTarget(fixture)
-        let stopWhenRevealed = {
+        let stopWhenRevealed: @MainActor @Sendable () -> Bool = {
             fixture.scrollView.contentOffset.y >= 500
         }
 

@@ -100,6 +100,34 @@ extension Observation.Stream {
         }
     }
 
+    /// Advances successful pulse cycles until canonical truth covers a sealed
+    /// notification range. The cutoff is finite, so each committed cycle either
+    /// satisfies it or acknowledges the earlier frozen claim that precedes it.
+    internal func visibleObservationThroughCausalCycles(
+        covering coverage: AccessibilityNotificationCoverage
+    ) async -> TheVault.State.Current? {
+        var historyIndex = state.history.endIndex
+        while !Task.isCancelled {
+            if let current = currentObservation(covering: coverage) {
+                return current
+            }
+            switch await waitForObservation(
+                after: historyIndex,
+                scope: .visible,
+                boundary: .observationCycle
+            ) {
+            case .observation:
+                historyIndex = state.history.endIndex
+            case .cycleCompletedWithoutObservation,
+                 .deadlineReached,
+                 .cancelled,
+                 .unavailable:
+                return nil
+            }
+        }
+        return nil
+    }
+
     /// Returns current truth only when the cycle-owned notification cursor has
     /// reached the supplied causal cutoff.
     internal func currentObservation(

@@ -1036,16 +1036,25 @@ extension HeistExecution {
                 if case .running(_, let task, _, _) = session.interaction {
                     _ = await task.value
                 }
+                let terminalFailure: HeistExecution.Failure?
                 switch resolution {
                 case .success:
-                    await self.admitTerminalNotifications(session.notificationScope)
+                    terminalFailure = await self.admitTerminalNotifications(
+                        session.notificationScope
+                    )
+                        ? nil
+                        : .accessibilityTreeUnavailable
                 case .failure:
-                    break
+                    terminalFailure = nil
                 }
                 session.observationDemand.cancel()
                 self.brains.vault.semanticObservationStream
                     .releaseHistory(from: session.protectedHistoryIndex)
                 self.phase = .finished
+                if let terminalFailure {
+                    session.continuation.resume(throwing: terminalFailure)
+                    return
+                }
                 switch resolution {
                 case .success(let completion):
                     session.continuation.resume(returning: completion)
@@ -1057,19 +1066,20 @@ extension HeistExecution {
 
         private func admitTerminalNotifications(
             _ scope: AccessibilityNotificationScopeLease
-        ) async {
+        ) async -> Bool {
             guard await scope.admitCausallyCovered({ [self] coverage in
                 guard coverage.requiresObservation else {
                     return true
                 }
                 return await brains.vault.semanticObservationStream
-                    .visibleObservationAfterNextCycle(
+                    .visibleObservationThroughCausalCycles(
                         covering: coverage
                     ) != nil
             }) != nil else {
                 scope.cancel()
-                return
+                return false
             }
+            return true
         }
 
     }

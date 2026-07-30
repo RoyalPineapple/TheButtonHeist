@@ -126,6 +126,46 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         )
     }
 
+    func testTerminalCausalAdmissionAdvancesPastAnEarlierFrozenClaim() async throws {
+        let observation = hostObservation(label: "Home")
+        let source = HostVisibleObservationSource(sequence: [observation, observation])
+        let brains = TheBrains(
+            tripwire: TheTripwire(),
+            failureEvidencePolicy: .hierarchy,
+            visibleObservationSource: source.capture
+        )
+        let bus = brains.vault.accessibilityNotifications
+        let scope = bus.beginHeistScope()
+        bus.record(
+            sequence: 1,
+            rawCode: 1008,
+            timestamp: Date(timeIntervalSince1970: 1),
+            notificationData: .string("Earlier"),
+            associatedElement: .none
+        )
+        _ = bus.freezeObservationCycleClaim()
+        bus.record(
+            sequence: 2,
+            rawCode: 1008,
+            timestamp: Date(timeIntervalSince1970: 2),
+            notificationData: .string("Terminal"),
+            associatedElement: .none
+        )
+        await brains.startTestObservation()
+        defer { brains.stopTestObservation() }
+
+        let current = await scope.admitCausallyCovered { coverage in
+            await brains.vault.semanticObservationStream
+                .visibleObservationThroughCausalCycles(covering: coverage)
+        }
+
+        XCTAssertNotNil(current)
+        XCTAssertEqual(source.captureCount, 2)
+        XCTAssertTrue(
+            bus.checkpoint(after: .origin, selection: .all).events.isEmpty
+        )
+    }
+
     func testSuccessfulStepUsesAlreadyCoveredVaultObservationWithoutAnotherCapture() async {
         let observation = hostObservation(label: "Home")
         let source = HostVisibleObservationSource(nil)
