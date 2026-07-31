@@ -1,4 +1,4 @@
-public enum RepairScoringReason: String, Codable, Sendable, Hashable {
+package enum RepairScoringReason: String, Codable, Sendable, Hashable {
     case oldTargetIsCurrentMatch
     case identifierUnchanged
     case labelUnchanged
@@ -17,7 +17,7 @@ public enum RepairScoringReason: String, Codable, Sendable, Hashable {
     case onlyCurrentElementWithCompatibleActionFamily
 }
 
-public enum RepairSuggestionReason: Codable, Sendable, Hashable {
+package enum RepairSuggestionReason: Codable, Sendable, Hashable {
     case oldTargetResolvedInLastSuccessfulSnapshot
     case oldTargetResolvesWithoutRequestedAction
     case oldTargetCurrentMatchCount(Int)
@@ -32,18 +32,18 @@ public enum RepairSuggestionReason: Codable, Sendable, Hashable {
     case currentFailureExpectationUnmet
 }
 
-public enum RepairCaveat: String, Codable, Sendable, Hashable {
+package enum RepairCaveat: String, Codable, Sendable, Hashable {
     case candidateDoesNotExposeSameActionFamily
     case ordinalDisambiguation
     case tiedBestCandidates
 }
 
-public enum RepairEvidenceSource: String, Codable, Sendable, Hashable {
+package enum RepairEvidenceSource: String, Codable, Sendable, Hashable {
     case lastSuccess
     case currentFailure
 }
 
-public enum RepairChangeFactObservation: Codable, Sendable, Hashable {
+package enum RepairChangeFactObservation: Codable, Sendable, Hashable {
     case noSemanticChange
     case screenChange
     case valueChange(old: String?, new: String?)

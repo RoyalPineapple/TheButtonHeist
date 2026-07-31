@@ -178,20 +178,16 @@ result, there is no safe target repair.
 
 ## Diagnosis Pipeline
 
-The repair engine now exposes the suggestion flow as a typed diagnosis:
+The `heist-doctor` executable runs the suggestion flow as a typed diagnosis:
 
 ```text
 evidence eligibility -> candidate ranking -> candidate validation -> suggestion or refusal
 ```
 
-`HeistDoctor.diagnosis(for:)` accepts already-extracted repair evidence.
-`HeistDoctor.diagnosis(lastPass:newFail:stepPath:)` runs the same pipeline from
-result pairs. Both return `HeistRepairDiagnosis`, which records validated
-suggestions, ranked candidate diagnostics, and typed refusal facts.
-
-Diagnosis is the public product. Callers that only need the rendered views read
-them from the diagnosis itself: `diagnosis.suggestions` for validated repairs
-and `diagnosis.noSuggestionReason` when the pipeline refused.
+Its internal core accepts already-extracted repair evidence or result pairs and
+records validated suggestions, ranked candidate diagnostics, and typed refusal
+facts. The supported interface is the executable's human or JSON output; the
+core model types are implementation details, not an SDK surface.
 
 The artifact boundary stays deliberately boring for now:
 
