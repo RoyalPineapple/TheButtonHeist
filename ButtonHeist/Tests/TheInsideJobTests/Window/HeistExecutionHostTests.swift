@@ -344,7 +344,7 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
             id: .init(rawValue: 1),
             step: step,
             command: try HeistActionCommand.dismiss.resolve(in: .empty),
-            predicate: nil,
+            expectation: .noChange,
             path: "$.body[0]",
             phase: .dispatching(Expectation([.noChange]))
         ))

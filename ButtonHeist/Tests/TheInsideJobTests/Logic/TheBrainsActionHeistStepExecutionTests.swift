@@ -70,6 +70,31 @@ final class HeistMachineStepExecutionTests: XCTestCase {
         }
     }
 
+    func testNoChangeOnlyActionTimeoutIsSettlementFailureAfterSuccessfulDispatch() throws {
+        let policies: [ActionExpectationPolicy] = [
+            .default,
+            .waived(try ActionExpectationWaiver(validating: "fixture")),
+        ]
+
+        for policy in policies {
+            let plan = try HeistPlan(body: [
+                .action(ActionStep(command: .dismiss, expectationPolicy: policy)),
+            ])
+            var driver = try HeistMachineTestDriver(plan: plan)
+
+            let completion = try driver.run()
+            let action = try XCTUnwrap(completion.steps.first)
+
+            XCTAssertEqual(action.status, .failed)
+            XCTAssertEqual(action.actionEvidence?.result?.outcome.failureKind, .timeout)
+            XCTAssertEqual(action.failure?.category, .expectation)
+            XCTAssertEqual(action.failure?.contract, "action settles through terminal no-change")
+            XCTAssertNil(action.failure?.expected)
+            XCTAssertEqual(try action.replayExpectation()?.predicate, nil)
+            XCTAssertEqual(try action.replayExpectation()?.met, false)
+        }
+    }
+
     func testAuthoredActionRequiresNoChangeAfterItsAuthoredExpectation() throws {
         let plan = try HeistPlan(body: [
             .action(ActionStep(

@@ -154,8 +154,7 @@ extension HeistExecution {
                     command: leaf.step.command,
                     evidence: .init(admitted: evidence)
                 )
-            } else if leaf.expectation.authoredPredicate != nil,
-                      leaf.phase.dispatch?.success == true {
+            } else if leaf.phase.dispatch?.success == true {
                 execution = .failed(
                     command: leaf.step.command,
                     evidence: .init(admitted: evidence),
@@ -347,11 +346,14 @@ extension HeistExecution.ResultProjector {
            expectationActual != observed {
             observed += "; replay: \(expectationActual)"
         }
+        let authoredExpectation = step.expectationPolicy.expectedExpectation
         return HeistFailureDetail(
             category: .expectation,
-            contract: "post-action expectation is met",
+            contract: authoredExpectation == nil
+                ? "action settles through terminal no-change"
+                : "post-action expectation is met",
             observed: observed,
-            expected: step.expectationPolicy.expectedExpectation?.predicate.description
+            expected: authoredExpectation?.predicate.description
         )
     }
 
