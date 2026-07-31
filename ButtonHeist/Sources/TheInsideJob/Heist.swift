@@ -200,12 +200,12 @@ extension TheInsideJob {
         let shouldRestoreRuntime = !brains.semanticObservationIsActive
         if shouldRestoreRuntime {
             tripwire.startPulse()
-            await brains.startSemanticObservation()
+            brains.vault.semanticObservationStream.start()
             brains.safecracker.startKeyboardObservation()
         }
         defer {
             if shouldRestoreRuntime {
-                brains.stopSemanticObservation()
+                brains.vault.semanticObservationStream.stop()
                 tripwire.stopPulse()
                 brains.safecracker.stopKeyboardObservation()
             }

@@ -27,11 +27,11 @@ final class TheBrainsScrollTests: XCTestCase {
             visibleObservationSource: visibleObservationSource.capture
         )
         brains.tripwire.startPulse()
-        await brains.startSemanticObservation()
+        brains.vault.semanticObservationStream.start()
     }
 
     override func tearDown() async throws {
-        brains?.stopSemanticObservation()
+        brains?.vault.semanticObservationStream.stop()
         brains?.tripwire.stopPulse()
         brains = nil
         visibleObservationSource = nil

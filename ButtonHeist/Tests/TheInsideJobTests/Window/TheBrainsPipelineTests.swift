@@ -23,7 +23,7 @@ final class TheBrainsPipelineTests: XCTestCase {
     }
 
     override func tearDown() async throws {
-        brains.stopSemanticObservation()
+        brains.vault.semanticObservationStream.stop()
         brains = nil
         try await super.tearDown()
     }

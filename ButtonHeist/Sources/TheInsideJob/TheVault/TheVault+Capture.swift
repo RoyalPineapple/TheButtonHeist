@@ -7,44 +7,22 @@ import TheScore
 import AccessibilitySnapshotParser
 
 enum InventoryEnumeration {
-    enum ReportedCount: Equatable {
-        case known(Int)
-        case unknown
-
-        init(_ rawValue: Int) {
-            if rawValue == NSNotFound || rawValue < 0 {
-                self = .unknown
-            } else {
-                self = .known(rawValue)
-            }
-        }
-
-        var value: Int? {
-            guard case .known(let count) = self else { return nil }
-            return count
-        }
-    }
-
     struct Result {
-        let reportedCountsByContainerPath: [TreePath: ReportedCount]
-        let attemptedIndicesByContainerPath: [TreePath: [Int]]
+        let reportedCountsByContainerPath: [TreePath: Int?]
+        let attemptedCount: Int
         let offscreenElements: [TheVault.OffscreenScrollElement]
         let knownUnattemptedCount: Int
 
         init(
-            reportedCountsByContainerPath: [TreePath: ReportedCount] = [:],
-            attemptedIndicesByContainerPath: [TreePath: [Int]] = [:],
+            reportedCountsByContainerPath: [TreePath: Int?] = [:],
+            attemptedCount: Int = 0,
             offscreenElements: [TheVault.OffscreenScrollElement] = [],
             knownUnattemptedCount: Int = 0
         ) {
             self.reportedCountsByContainerPath = reportedCountsByContainerPath
-            self.attemptedIndicesByContainerPath = attemptedIndicesByContainerPath
+            self.attemptedCount = attemptedCount
             self.offscreenElements = offscreenElements
             self.knownUnattemptedCount = knownUnattemptedCount
-        }
-
-        var attemptedCount: Int {
-            attemptedIndicesByContainerPath.values.reduce(0) { $0 + $1.count }
         }
     }
 }
@@ -198,21 +176,22 @@ extension TheVault {
     ) -> InventoryEnumeration.Result {
         let admittedInventories = scrollViewsByPath
             .sorted(by: { $0.key < $1.key })
-            .compactMap { path, scrollView -> (TreePath, UIScrollView, InventoryEnumeration.ReportedCount)? in
+            .compactMap { path, scrollView -> (TreePath, UIScrollView, Int?)? in
                 guard Self.admitsOffscreenInventory(from: scrollView) else { return nil }
-                return (path, scrollView, InventoryEnumeration.ReportedCount(scrollView.accessibilityElementCount()))
+                let reportedCount = scrollView.accessibilityElementCount()
+                return (path, scrollView, reportedCount == NSNotFound || reportedCount < 0 ? nil : reportedCount)
             }
         let reportedCountsByContainerPath = Dictionary(
             uniqueKeysWithValues: admittedInventories.map { ($0.0, $0.2) }
         )
         var representedObjectIDs = Set(objectsByPath.values.map(ObjectIdentifier.init))
         var elements: [OffscreenScrollElement] = []
-        var attemptedIndicesByContainerPath: [TreePath: [Int]] = [:]
+        var attemptedCount = 0
         var remainingRequests = max(0, budget)
         var knownUnattemptedCount = 0
 
         for (containerPath, scrollView, reportedCount) in admittedInventories {
-            guard let count = reportedCount.value, count > 0 else { continue }
+            guard let count = reportedCount, count > 0 else { continue }
 
             for index in 0..<count {
                 guard remainingRequests > 0 else {
@@ -223,7 +202,7 @@ extension TheVault {
                     break
                 }
                 remainingRequests -= 1
-                attemptedIndicesByContainerPath[containerPath, default: []].append(index)
+                attemptedCount += 1
 
                 guard let object = scrollView.accessibilityElement(at: index) as? NSObject,
                       representedObjectIDs.insert(ObjectIdentifier(object)).inserted
@@ -246,7 +225,7 @@ extension TheVault {
 
         let result = InventoryEnumeration.Result(
             reportedCountsByContainerPath: reportedCountsByContainerPath,
-            attemptedIndicesByContainerPath: attemptedIndicesByContainerPath,
+            attemptedCount: attemptedCount,
             offscreenElements: elements,
             knownUnattemptedCount: knownUnattemptedCount
         )

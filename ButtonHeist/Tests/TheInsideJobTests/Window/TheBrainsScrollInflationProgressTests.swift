@@ -11,7 +11,7 @@ import UIKit
 extension TheBrainsScrollTests {
 
     func testInflationRecordsDiscoveredOriginWhenExplorationFindsTarget() async throws {
-        brains.stopSemanticObservation()
+        brains.vault.semanticObservationStream.stop()
         let baselineObject = retainedLiveObject()
         await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(.makeForTests([
             .init(makeElement(label: "Home"), heistId: "home", object: baselineObject),
@@ -72,7 +72,7 @@ extension TheBrainsScrollTests {
     }
 
     func testInflationUsesNextSettledVisibleEvidenceForCommittedTarget() async throws {
-        brains.stopSemanticObservation()
+        brains.vault.semanticObservationStream.stop()
         let targetId: HeistId = "coke_button"
         let staleKnownTarget = makeElement(label: "Coke", traits: .button)
         await installScreenWithOffViewportEntry(
@@ -130,7 +130,7 @@ extension TheBrainsScrollTests {
     }
 
     func testRevealRetryResolvesTargetFromNextSettledObservation() async throws {
-        brains.stopSemanticObservation()
+        brains.vault.semanticObservationStream.stop()
         let targetId: HeistId = "coke_button"
         let overviewVisible = makeElement(label: "Combo Overview", traits: .header)
         let staleCoke = makeElement(label: "Coke", traits: .button)
@@ -193,7 +193,7 @@ extension TheBrainsScrollTests {
     }
 
     func testRevealRetryAttemptsFreshKnownTargetOnlyOnce() async throws {
-        brains.stopSemanticObservation()
+        brains.vault.semanticObservationStream.stop()
         let overviewVisible = makeElement(label: "Combo Overview", traits: .header)
         let staleCoke = makeElement(label: "Coke", traits: .button)
         await installScreenWithOffViewportEntry(

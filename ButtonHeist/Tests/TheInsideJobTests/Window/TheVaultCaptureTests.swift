@@ -381,8 +381,8 @@ final class TheVaultCaptureTests: XCTestCase {
 
         XCTAssertEqual(scrollView.requestedIndices, [])
         XCTAssertEqual(scrollView.countRequestCount, 1)
-        XCTAssertEqual(result.reportedCountsByContainerPath[path], .known(0))
-        XCTAssertEqual(result.attemptedIndicesByContainerPath[path], nil)
+        XCTAssertEqual(result.reportedCountsByContainerPath[path]!, 0)
+        XCTAssertEqual(result.attemptedCount, 0)
         XCTAssertEqual(result.knownUnattemptedCount, 0)
     }
 
@@ -398,7 +398,7 @@ final class TheVaultCaptureTests: XCTestCase {
 
         XCTAssertEqual(scrollView.requestedIndices, [])
         XCTAssertEqual(scrollView.countRequestCount, 1)
-        XCTAssertEqual(result.attemptedIndicesByContainerPath[path], nil)
+        XCTAssertEqual(result.attemptedCount, 0)
         XCTAssertEqual(result.knownUnattemptedCount, 4)
     }
 
@@ -414,7 +414,7 @@ final class TheVaultCaptureTests: XCTestCase {
 
         XCTAssertEqual(scrollView.requestedIndices, [0, 1])
         XCTAssertEqual(scrollView.countRequestCount, 1)
-        XCTAssertEqual(result.attemptedIndicesByContainerPath[path], [0, 1])
+        XCTAssertEqual(result.attemptedCount, 2)
         XCTAssertEqual(result.knownUnattemptedCount, 0)
     }
 
@@ -430,7 +430,7 @@ final class TheVaultCaptureTests: XCTestCase {
 
         XCTAssertEqual(scrollView.requestedIndices, [0, 1, 2])
         XCTAssertEqual(scrollView.countRequestCount, 1)
-        XCTAssertEqual(result.attemptedIndicesByContainerPath[path], [0, 1, 2])
+        XCTAssertEqual(result.attemptedCount, 3)
         XCTAssertEqual(result.knownUnattemptedCount, 0)
     }
 
@@ -446,7 +446,7 @@ final class TheVaultCaptureTests: XCTestCase {
 
         XCTAssertEqual(scrollView.requestedIndices, [0, 1, 2])
         XCTAssertEqual(scrollView.countRequestCount, 1)
-        XCTAssertEqual(result.attemptedIndicesByContainerPath[path], [0, 1, 2])
+        XCTAssertEqual(result.attemptedCount, 3)
         XCTAssertEqual(result.knownUnattemptedCount, 1)
     }
 
@@ -475,7 +475,7 @@ final class TheVaultCaptureTests: XCTestCase {
         )
 
         XCTAssertEqual(scrollView.requestedIndices, [0, 1, 2, 3])
-        XCTAssertEqual(result.attemptedIndicesByContainerPath[path], [0, 1, 2, 3])
+        XCTAssertEqual(result.attemptedCount, 4)
         XCTAssertEqual(result.knownUnattemptedCount, 1)
     }
 
@@ -495,8 +495,7 @@ final class TheVaultCaptureTests: XCTestCase {
         XCTAssertEqual(second.requestedIndices, [0])
         XCTAssertEqual(first.countRequestCount, 1)
         XCTAssertEqual(second.countRequestCount, 1)
-        XCTAssertEqual(result.attemptedIndicesByContainerPath[firstPath], [0, 1])
-        XCTAssertEqual(result.attemptedIndicesByContainerPath[secondPath], [0])
+        XCTAssertEqual(result.attemptedCount, 3)
         XCTAssertEqual(result.knownUnattemptedCount, 1)
     }
 
@@ -512,7 +511,7 @@ final class TheVaultCaptureTests: XCTestCase {
 
         XCTAssertEqual(scrollView.requestedIndices, [0, 1])
         XCTAssertEqual(scrollView.countRequestCount, 1)
-        XCTAssertEqual(result.attemptedIndicesByContainerPath[path], [0, 1])
+        XCTAssertEqual(result.attemptedCount, 2)
         XCTAssertEqual(result.knownUnattemptedCount, 999_998)
     }
 
@@ -528,7 +527,10 @@ final class TheVaultCaptureTests: XCTestCase {
 
         XCTAssertEqual(scrollView.requestedIndices, [])
         XCTAssertEqual(scrollView.countRequestCount, 1)
-        XCTAssertEqual(result.reportedCountsByContainerPath[path], .unknown)
+        guard let reportedCount = result.reportedCountsByContainerPath[path] else {
+            return XCTFail("Expected an admitted inventory count")
+        }
+        XCTAssertNil(reportedCount)
         XCTAssertEqual(result.knownUnattemptedCount, 0)
     }
 

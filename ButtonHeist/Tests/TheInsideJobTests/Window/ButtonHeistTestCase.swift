@@ -221,11 +221,11 @@ class ButtonHeistRuntimeTestCase: ButtonHeistTestCase {
 extension TheBrains {
     func startTestObservation() async {
         tripwire.startPulse()
-        await startSemanticObservation()
+        vault.semanticObservationStream.start()
     }
 
     func stopTestObservation() {
-        stopSemanticObservation()
+        vault.semanticObservationStream.stop()
         tripwire.stopPulse()
     }
 }
@@ -263,12 +263,12 @@ class ButtonHeistObservationTestCase: ButtonHeistTestCase {
         if pulses {
             brains.tripwire.startPulse()
         }
-        await brains.startSemanticObservation()
+        brains.vault.semanticObservationStream.start()
     }
 
     final override func stopObserving() async throws {
         guard let brains else { return }
-        brains.stopSemanticObservation()
+        brains.vault.semanticObservationStream.stop()
         brains.tripwire.stopPulse()
         XCTAssertFalse(brains.semanticObservationIsActive)
         XCTAssertFalse(brains.tripwire.isPulseRunning)

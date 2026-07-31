@@ -535,9 +535,9 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
             failureEvidencePolicy: .hierarchy
         )
         tripwire.startPulse()
-        await brains.startSemanticObservation()
+        brains.vault.semanticObservationStream.start()
         defer {
-            brains.stopSemanticObservation()
+            brains.vault.semanticObservationStream.stop()
             tripwire.stopPulse()
         }
         let initial = await brains.vault.semanticObservationStream.refreshedVisibleObservation(

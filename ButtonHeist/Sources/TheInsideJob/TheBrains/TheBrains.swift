@@ -106,10 +106,6 @@ final class TheBrains {
         )
     }
 
-    func stopSemanticObservation() {
-        vault.semanticObservationStream.stop()
-    }
-
     func observeInterface(_ query: InterfaceQuery) async -> InterfaceQueryResult {
         guard semanticObservationIsActive else {
             return .failure(.inactiveRuntime)

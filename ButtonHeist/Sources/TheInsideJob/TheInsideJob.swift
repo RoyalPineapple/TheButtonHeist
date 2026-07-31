@@ -112,7 +112,7 @@ public final class TheInsideJob {
 
     let runtimeConfiguration: InsideJobRuntimeConfiguration
     let transportProvider: @MainActor (SessionAuthToken, Set<ConnectionScope>) -> ServerTransport
-    let lifecycleBoundaryTasks = LifecycleBoundaryTasks()
+    let lifecycleBoundaryTasks = TaskTracker()
 
     // MARK: - Computed State
 

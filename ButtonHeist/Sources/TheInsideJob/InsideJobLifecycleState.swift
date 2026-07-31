@@ -149,23 +149,6 @@ extension TheInsideJob {
         }
     }
 
-    /// Tracks @objc lifecycle bridge Tasks that must finish before start/resume reads `serverPhase`.
-    @MainActor
-    final class LifecycleBoundaryTasks {
-        private let tasks = TaskTracker()
-
-        var isEmpty: Bool { tasks.snapshot.taskCount == 0 }
-
-        func spawn(_ body: @escaping @MainActor @Sendable () async -> Void) {
-            tasks.spawn {
-                await body()
-            }
-        }
-
-        func drain() async {
-            await tasks.waitForIdle()
-        }
-    }
 }
 
 struct InsideJobLifecycleReducer: @MainActor StateReducer {

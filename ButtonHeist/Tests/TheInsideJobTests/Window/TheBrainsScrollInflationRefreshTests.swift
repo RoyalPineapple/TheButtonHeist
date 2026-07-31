@@ -11,7 +11,7 @@ import UIKit
 extension TheBrainsScrollTests {
 
     func testUnpublishedRefreshSourceDoesNotChangeSemanticOrLiveTruth() async throws {
-        brains.stopSemanticObservation()
+        brains.vault.semanticObservationStream.stop()
         let targetId = HeistId(rawValue: "gone_target")
         let staleTarget = AccessibilityElement.make(
             label: "Gone Target",
@@ -79,7 +79,7 @@ extension TheBrainsScrollTests {
     }
 
     func testStaleLiveObjectRefreshResolvesNextSettledObservation() async throws {
-        brains.stopSemanticObservation()
+        brains.vault.semanticObservationStream.stop()
         let targetId = HeistId(rawValue: "recycled_target")
         let staleFrame = CGRect(x: 40, y: 120, width: 240, height: 44)
         let staleTarget = AccessibilityElement.make(
@@ -143,7 +143,7 @@ extension TheBrainsScrollTests {
     }
 
     func testStaleSemanticTargetRefreshPreservesTypedWitness() async throws {
-        brains.stopSemanticObservation()
+        brains.vault.semanticObservationStream.stop()
         let targetId: HeistId = "restored_target"
         let target = try resolvedTarget(AccessibilityTarget.label("Restored Target").and(.traits([.button])))
         let originalScreen = InterfaceObservation.makeForTests([

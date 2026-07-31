@@ -76,14 +76,16 @@ extension TheInsideJob {
     /// retained in `lifecycleBoundaryTasks` so callers that resume the server
     /// (`start()` / `resume()`) can await prior shutdowns before they begin.
     func spawnLifecycleTask(_ body: @escaping @MainActor @Sendable () async -> Void) {
-        lifecycleBoundaryTasks.spawn(body)
+        lifecycleBoundaryTasks.spawn {
+            await body()
+        }
     }
 
     /// Wait for any in-flight lifecycle tasks (suspend/stop wrappers spawned
     /// from @objc handlers) to finish before mutating server phase. Loops so
     /// observer-spawned Tasks that arrive during the drain are also awaited.
     func awaitPendingLifecycleTasks() async {
-        await lifecycleBoundaryTasks.drain()
+        await lifecycleBoundaryTasks.waitForIdle()
     }
 
     // MARK: - Suspend / Resume

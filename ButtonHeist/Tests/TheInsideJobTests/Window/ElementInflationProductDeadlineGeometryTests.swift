@@ -24,7 +24,7 @@ extension ElementInflationProductTests {
             visibleObservationSource: refreshObservationSource.capture
         )
         tripwire.startPulse()
-        await refreshBrains.startSemanticObservation()
+        refreshBrains.vault.semanticObservationStream.start()
         let stream = refreshBrains.vault.semanticObservationStream
         let ticker = Task { @MainActor in
             while !Task.isCancelled {
@@ -36,7 +36,7 @@ extension ElementInflationProductTests {
         }
         defer {
             ticker.cancel()
-            refreshBrains.stopSemanticObservation()
+            refreshBrains.vault.semanticObservationStream.stop()
             tripwire.stopPulse()
         }
         let staleObject = UIButton(frame: CGRect(x: 20, y: 20, width: 160, height: 44))

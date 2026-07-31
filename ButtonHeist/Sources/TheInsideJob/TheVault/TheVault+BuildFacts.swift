@@ -95,7 +95,7 @@ extension TheVault.BuildFacts {
         from result: TheVault.CaptureResult,
         identityContext: TheVault.IdentityContext
     ) -> TheVault.BuildFacts {
-        let elementScrollExtraction = elementScrollFacts(
+        let elementScrollFacts = elementScrollFacts(
             identityContext: identityContext,
             objectsByPath: result.objectsByPath,
             scrollViewsByPath: result.scrollViewsByPath
@@ -104,7 +104,7 @@ extension TheVault.BuildFacts {
         return TheVault.BuildFacts(
             scroll: TheVault.ScrollFacts(
                 contextContainerPaths: identityContext.scrollableContainerPaths,
-                elementsByPath: elementScrollExtraction.elementsByPath,
+                elementsByPath: elementScrollFacts,
                 containerViewSpacesByPath: containerViewSpaces(
                     identityContext: identityContext,
                     scrollViewsByPath: result.scrollViewsByPath
@@ -130,10 +130,6 @@ extension TheVault.BuildFacts {
         )
     }
 
-    private struct ElementScrollFactsExtraction {
-        let elementsByPath: [TreePath: TheVault.ElementScrollFacts]
-    }
-
     private static func firstResponderPaths(in objectsByPath: [TreePath: NSObject]) -> Set<TreePath> {
         Set(
             objectsByPath.compactMap { path, object in
@@ -146,7 +142,7 @@ extension TheVault.BuildFacts {
         identityContext: TheVault.IdentityContext,
         objectsByPath: [TreePath: NSObject],
         scrollViewsByPath: [TreePath: UIScrollView]
-    ) -> ElementScrollFactsExtraction {
+    ) -> [TreePath: TheVault.ElementScrollFacts] {
         var elementsByPath: [TreePath: TheVault.ElementScrollFacts] = [:]
 
         for identity in identityContext.elements {
@@ -168,17 +164,17 @@ extension TheVault.BuildFacts {
             )
         }
 
-        return ElementScrollFactsExtraction(elementsByPath: elementsByPath)
+        return elementsByPath
     }
 
     private static func scrollInventories(
         scrollViewsByPath: [TreePath: UIScrollView],
-        reportedCountsByContainerPath: [TreePath: InventoryEnumeration.ReportedCount]
+        reportedCountsByContainerPath: [TreePath: Int?]
     ) -> [TreePath: ScrollInventory] {
         Dictionary(
             uniqueKeysWithValues: scrollViewsByPath.keys.compactMap { path in
                 guard let inventory = ScrollInventory(
-                    totalElementCount: reportedCountsByContainerPath[path]?.value
+                    totalElementCount: reportedCountsByContainerPath[path] ?? nil
                 ) else { return nil }
                 return (path, inventory)
             }
