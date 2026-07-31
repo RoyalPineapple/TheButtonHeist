@@ -4,13 +4,13 @@ import TheScore
 /// Limits for public machine inputs before they materialize recursive
 /// JSON structures. Public users hit these through `buttonheist json_lines` and
 /// MCP tool arguments.
-public enum PublicJSONInputLimits {
+@_spi(ButtonHeistTooling) public enum PublicJSONInputLimits {
     public static let maxRequestBytes = 1_000_000
     public static let maxNestingDepth = 32
     public static let maxTotalObjectKeys = 1_024
 }
 
-public struct PublicJSONInputError: Error, LocalizedError, CustomStringConvertible, Equatable, Sendable {
+@_spi(ButtonHeistTooling) public struct PublicJSONInputError: Error, LocalizedError, CustomStringConvertible, Equatable, Sendable {
     public let message: String
 
     public init(_ message: String) {
@@ -22,17 +22,17 @@ public struct PublicJSONInputError: Error, LocalizedError, CustomStringConvertib
 }
 
 /// Shared limits for recursive public JSON-like inputs.
-public struct PublicJSONInputPolicy: Sendable, Equatable {
+@_spi(ButtonHeistTooling) public struct PublicJSONInputPolicy: Sendable, Equatable {
 
     public enum NullHandling: Sendable, Equatable {
         case allowed
         case rejected(expected: String)
     }
 
-    public let maxBytes: Int
-    public let maxNestingDepth: Int
-    public let maxTotalObjectKeys: Int
-    public let nullHandling: NullHandling
+    let maxBytes: Int
+    let maxNestingDepth: Int
+    let maxTotalObjectKeys: Int
+    let nullHandling: NullHandling
 
     public init(
         maxBytes: Int = PublicJSONInputLimits.maxRequestBytes,
@@ -48,14 +48,14 @@ public struct PublicJSONInputPolicy: Sendable, Equatable {
 }
 
 /// A limit violation before a public input boundary renders it as an error.
-public enum PublicJSONInputViolation: Sendable, Equatable {
+enum PublicJSONInputViolation: Sendable, Equatable {
     case bytes(max: Int, observed: Int)
     case nestingDepth(max: Int, observed: Int)
     case objectKeyCount(max: Int, observed: Int)
     case nullValue(expected: String)
     case nonFiniteNumber(Double)
 
-    public func publicJSONInputMessage(context: String) -> String {
+    func publicJSONInputMessage(context: String) -> String {
         switch self {
         case .bytes(let max, let observed):
             return "\(context) exceeds \(max) bytes (observed \(observed) bytes)"
@@ -72,7 +72,7 @@ public enum PublicJSONInputViolation: Sendable, Equatable {
 }
 
 /// A generic JSON-like value node used by public input preflight traversal.
-public enum PublicJSONValueNode<Value> {
+@_spi(ButtonHeistTooling) public enum PublicJSONValueNode<Value> {
     case null
     case bool(Bool)
     case int(Int)
@@ -86,18 +86,32 @@ public enum PublicJSONValueNode<Value> {
 extension PublicJSONValueNode: Sendable where Value: Sendable {}
 
 /// Applies a shared recursive input policy to already-materialized JSON-like values.
-public enum PublicJSONValuePreflight {
+@_spi(ButtonHeistTooling) public enum PublicJSONValuePreflight {
     public typealias NodeProvider<Value> = @Sendable (Value) -> PublicJSONValueNode<Value>
 
     public static func validateObject<Value>(
         _ object: [String: Value],
         policy: PublicJSONInputPolicy = PublicJSONInputPolicy(),
         context: String = "Public JSON input",
-        mapViolation: (@Sendable (PublicJSONInputViolation) -> Error)? = nil,
         node: @escaping NodeProvider<Value>
     ) throws {
-        let failure = mapViolation ?? publicJSONInputFailure(context: context)
-        var traversal = PublicJSONValueTraversal(policy: policy, mapViolation: failure, node: node)
+        try validateObject(
+            object,
+            policy: policy,
+            context: context,
+            mapViolation: publicJSONInputFailure(context: context),
+            node: node
+        )
+    }
+
+    static func validateObject<Value>(
+        _ object: [String: Value],
+        policy: PublicJSONInputPolicy = PublicJSONInputPolicy(),
+        context: String = "Public JSON input",
+        mapViolation: @escaping @Sendable (PublicJSONInputViolation) -> Error,
+        node: @escaping NodeProvider<Value>
+    ) throws {
+        var traversal = PublicJSONValueTraversal(policy: policy, mapViolation: mapViolation, node: node)
         let byteCount = try traversal.jsonEncodedSize(of: object, depth: 1)
         try traversal.validateByteCount(byteCount)
     }
@@ -108,7 +122,7 @@ public enum PublicJSONValuePreflight {
 }
 
 /// Expected root shape for public JSON input.
-public enum PublicJSONRoot: Sendable {
+@_spi(ButtonHeistTooling) public enum PublicJSONRoot: Sendable {
     case any
     case array
     case object
@@ -157,7 +171,7 @@ private enum PublicJSONParsedValue: Decodable {
 }
 
 /// Decodes public JSON input after applying size and shape limits.
-public enum PublicJSONInputDecoder {
+@_spi(ButtonHeistTooling) public enum PublicJSONInputDecoder {
     public static func decode<T: Decodable>(
         _ type: T.Type,
         from input: String,
@@ -174,7 +188,7 @@ public enum PublicJSONInputDecoder {
         )
     }
 
-    public static func decode<T: Decodable>(
+    static func decode<T: Decodable>(
         _ type: T.Type,
         from data: Data,
         root: PublicJSONRoot = .any,
@@ -206,8 +220,8 @@ public enum PublicJSONInputDecoder {
     }
 }
 
-public enum PublicJSONInputPreflight {
-    public static func validateObject(
+enum PublicJSONInputPreflight {
+    static func validateObject(
         _ input: String,
         context: String = "Public JSON request",
         maxBytes: Int = PublicJSONInputLimits.maxRequestBytes,
@@ -226,7 +240,7 @@ public enum PublicJSONInputPreflight {
         )
     }
 
-    public static func validateArray(
+    static func validateArray(
         _ data: Data,
         context: String = "Public JSON input",
         maxBytes: Int = PublicJSONInputLimits.maxRequestBytes,
@@ -245,7 +259,7 @@ public enum PublicJSONInputPreflight {
         )
     }
 
-    public static func validate(
+    static func validate(
         _ data: Data,
         root: PublicJSONRoot = .any,
         context: String = "Public JSON input",
@@ -267,7 +281,7 @@ public enum PublicJSONInputPreflight {
         )
     }
 
-    public static func validate(
+    static func validate(
         _ data: Data,
         root: PublicJSONRoot = .any,
         context: String = "Public JSON input",

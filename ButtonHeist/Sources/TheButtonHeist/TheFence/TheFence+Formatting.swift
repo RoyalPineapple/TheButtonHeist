@@ -9,7 +9,7 @@ extension FenceResponse {
 
     // MARK: - Human Formatting
 
-    public func humanFormatted() -> String {
+    @_spi(ButtonHeistTooling) public func humanFormatted() -> String {
         switch self {
         case .ok(let message):
             return message
@@ -222,14 +222,6 @@ extension FenceResponse {
         return lines
     }
 
-    private func formatTreeLines(_ interface: Interface, detail: InterfaceDetail) -> [String] {
-        let profile = ProjectionProfile(
-            kind: detail == .full ? .full : .summary,
-            limits: .current()
-        )
-        return formatTreeLines(InterfaceProjection(interface: interface, profile: profile))
-    }
-
     private func formatTreeLines(_ projection: InterfaceProjection) -> [String] {
         projection.tree.flatMap { formatTreeLines($0, depth: 0, detail: projection.detail) }
     }
@@ -316,12 +308,12 @@ extension FenceResponse {
 
     private func formatContainerLines(
         _ container: AccessibilityContainer,
-        annotation: InterfaceContainerAnnotation?,
+        containerName: String?,
         detail: InterfaceDetail
     ) -> [String] {
         let facts = container.containerPredicateFacts
         let identifier = Self.nonEmpty(facts.identifier)
-        let containerName = Self.nonEmpty(annotation?.containerName?.rawValue)
+        let containerName = Self.nonEmpty(containerName)
         var parts: [String]
         switch facts.role {
         case .none:
@@ -383,20 +375,6 @@ extension FenceResponse {
             }
         }
         return [parts.joined(separator: " ")]
-    }
-
-    private func formatContainerLines(
-        _ container: AccessibilityContainer,
-        containerName: String?,
-        detail: InterfaceDetail
-    ) -> [String] {
-        formatContainerLines(
-            container,
-            annotation: containerName.flatMap {
-                try? InterfaceContainerAnnotation(path: .root, containerName: ContainerName(validating: $0))
-            },
-            detail: detail
-        )
     }
 
     private func formatScreenshot(

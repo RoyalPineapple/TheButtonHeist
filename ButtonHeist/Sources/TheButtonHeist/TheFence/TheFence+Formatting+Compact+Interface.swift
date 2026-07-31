@@ -183,14 +183,14 @@ extension FenceResponse {
 
     private static func compactContainerLine(
         _ container: AccessibilityContainer,
-        annotation: InterfaceContainerAnnotation?,
+        containerName: String?,
         detail: InterfaceDetail,
         observedElementCount: Int? = nil,
         scrollInventory: ScrollInventory? = nil
     ) -> String {
         let facts = container.containerPredicateFacts
         let identifier = nonEmpty(facts.identifier)
-        let containerName = nonEmpty(annotation?.containerName?.rawValue)
+        let containerName = nonEmpty(containerName)
         var parts: [String]
         switch facts.role {
         case .none:
@@ -244,24 +244,6 @@ extension FenceResponse {
             }
         }
         return "── \(parts.joined(separator: " ")) ──"
-    }
-
-    private static func compactContainerLine(
-        _ container: AccessibilityContainer,
-        containerName: String?,
-        detail: InterfaceDetail,
-        observedElementCount: Int? = nil,
-        scrollInventory: ScrollInventory? = nil
-    ) -> String {
-        compactContainerLine(
-            container,
-            annotation: containerName.flatMap {
-                try? InterfaceContainerAnnotation(path: .root, containerName: ContainerName(validating: $0))
-            },
-            detail: detail,
-            observedElementCount: observedElementCount,
-            scrollInventory: scrollInventory
-        )
     }
 
     private static func compactContainerClosingLine(_ projection: InterfaceContainerProjection) -> String {
