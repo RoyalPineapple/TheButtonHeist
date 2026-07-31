@@ -20,13 +20,13 @@ struct GetScreenCommand: OneShotCLICommand {
     @ButtonHeistActor
     func runnerDescriptor() async throws -> CLIRunner.CommandDescriptor {
         let arguments: TheFence.CommandArgumentEnvelope = try requestArguments()
-        let result: CLIRunner.CommandResultProjection?
+        let output: CLIRunner.CommandOutputProjection?
         if destination.inline {
-            result = { _, response in
-                try Self.inlineCommandResult(for: response)
+            output = { _, response in
+                try Self.inlineCommandOutput(for: response)
             }
         } else {
-            result = nil
+            output = nil
         }
         return CLIRunner.CommandDescriptor(
             fenceDescriptor: Self.fenceDescriptor,
@@ -34,7 +34,7 @@ struct GetScreenCommand: OneShotCLICommand {
             format: .human,
             arguments: arguments,
             statusMessage: runnerStatusMessage,
-            result: result
+            output: output
         )
     }
 
@@ -42,9 +42,9 @@ struct GetScreenCommand: OneShotCLICommand {
         CommandArgumentFields(try destination.argumentFields().map(Optional.some)).envelope
     }
 
-    static func inlineCommandResult(for response: FenceResponse) throws -> CLIRunner.CommandResult {
+    static func inlineCommandOutput(for response: FenceResponse) throws -> CLIRunner.CommandOutput {
         guard case .screenshotData(let payload, _) = response else {
-            return .response(CLIRunner.FormattedResponse(response: response, format: .human))
+            return .response(response)
         }
         guard let data = Data(base64Encoded: payload.pngData) else {
             throw ValidationError("Failed to decode screenshot data")

@@ -34,13 +34,12 @@ final class GetScreenCommandTests: XCTestCase {
             ))
         )
 
-        let result = try GetScreenCommand.inlineCommandResult(for: response)
+        let result = try GetScreenCommand.inlineCommandOutput(for: response)
 
         guard case .binary(let data) = result else {
             return XCTFail("expected inline screenshot to produce binary output")
         }
         XCTAssertEqual(data, expectedData)
-        XCTAssertFalse(result.isFailure)
     }
 
     func testInlineCommandResultPreservesStructuredFailureResponse() throws {
@@ -48,32 +47,29 @@ final class GetScreenCommandTests: XCTestCase {
             message: "screenshot failed",
             details: FailureDetails(code: .requestActionFailed)
         )
-        let result = try GetScreenCommand.inlineCommandResult(for: .error(failure))
+        let result = try GetScreenCommand.inlineCommandOutput(for: .error(failure))
 
-        guard case .response(let formatted) = result else {
-            return XCTFail("expected failure to stay on formatted response path")
+        guard case .response(let failureResponse) = result else {
+            return XCTFail("expected failure to stay on semantic response path")
         }
-        XCTAssertEqual(formatted.format, .human)
-        XCTAssertEqual(formatted.envelope.response.diagnosticFailure, failure)
+        XCTAssertEqual(failureResponse.diagnosticFailure, failure)
         XCTAssertEqual(
-            CLIRunner.renderedOutput(for: result),
+            CLIRunner.renderedOutput(for: result, format: .human),
             .failedText("Error: screenshot failed")
         )
-        XCTAssertTrue(result.isFailure)
+        XCTAssertTrue(failureResponse.isFailure)
     }
 
     func testJSONEncodingFallbackMarksSuccessfulCommandAsFailed() {
-        let result = CLIRunner.CommandResult.response(CLIRunner.FormattedResponse(
-            response: .ok(message: "done"),
-            format: .json
-        ))
+        let result = CLIRunner.CommandOutput.response(.ok(message: "done"))
         let fallbackText =
             #"{"code":"formatting.json_encoding_failed","message":"encoding failed","status":"error"}"#
         let fallbackJSON = Data(fallbackText.utf8)
 
         let rendered = CLIRunner.renderedOutput(
             for: result,
-            jsonRenderer: { _ in fallbackJSON }
+            format: .json,
+            jsonRenderer: { _, _ in fallbackJSON }
         )
 
         XCTAssertEqual(rendered, .failedText(fallbackText))
@@ -85,7 +81,7 @@ final class GetScreenCommandTests: XCTestCase {
             payload: try XCTUnwrap(ScreenPayload.admit(pngData: "not-base64", width: 1, height: 1))
         )
 
-        XCTAssertThrowsError(try GetScreenCommand.inlineCommandResult(for: response)) { error in
+        XCTAssertThrowsError(try GetScreenCommand.inlineCommandOutput(for: response)) { error in
             XCTAssertTrue(String(describing: error).contains("Failed to decode screenshot data"))
         }
     }
