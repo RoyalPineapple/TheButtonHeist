@@ -596,9 +596,10 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
     }
 
     func testFailureScreenshotBoundaryStopsAfterOneUnavailableObservationCycle() async {
+        let tripwire = TheTripwire(pulseSource: .injected)
         let source = HostVisibleObservationSource(nil)
         let brains = TheBrains(
-            tripwire: TheTripwire(),
+            tripwire: tripwire,
             failureEvidencePolicy: .screenshot,
             visibleObservationSource: source.capture
         )
@@ -617,7 +618,7 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
             brains.vault.semanticObservationStream.observationWaiterCount,
             1
         )
-        brains.tripwire.stopPulse()
+        tripwire.onTick()
         guard case .failure(let failure) = await capture.value else {
             return XCTFail("Expected unavailable observation to fail screenshot capture")
         }
