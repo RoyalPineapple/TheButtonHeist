@@ -76,7 +76,7 @@ extension HeistExecution.Machine {
             result = .conditional(
                 path: conditional.context.path,
                 completion: .failed(
-                    evidence: .unavailable,
+                    evidence: nil,
                     failure: heistTimeoutFailure(
                         contract: "conditional selection completes within the whole-heist deadline"
                     )
@@ -87,7 +87,7 @@ extension HeistExecution.Machine {
                 path: loop.context.path,
                 declaration: .init(loop.step),
                 completion: .failed(
-                    evidence: .unavailable,
+                    evidence: nil,
                     failure: heistTimeoutFailure(
                         contract: "for_each_element selection completes within the whole-heist deadline"
                     ),
@@ -512,7 +512,7 @@ private extension HeistExecution.Machine {
     ) -> HeistExecutionStepResult {
         .conditional(
             path: context.path,
-            completion: .failed(evidence: .unavailable, failure: .init(
+            completion: .failed(evidence: nil, failure: .init(
                 category: .validation,
                 contract: "case predicates resolve before evaluation",
                 observed: "could not resolve heist case predicate: \(error)"
@@ -893,7 +893,7 @@ private extension HeistExecution.Machine {
             path: loop.context.path,
             declaration: .init(loop.step),
             completion: .failed(
-                evidence: .observed(evidence),
+                evidence: evidence,
                 failure: .init(
                     category: .runtimeUnavailable,
                     contract: "an admitted semantic snapshot is observable before for_each_element matching",
@@ -918,7 +918,7 @@ private extension HeistExecution.Machine {
         return .forEachElement(
             path: context.path,
             declaration: .init(step),
-            completion: .failed(evidence: .observed(evidence), failure: .init(
+            completion: .failed(evidence: evidence, failure: .init(
                 category: .targetResolution,
                 contract: "for_each_element matcher resolves before evaluation",
                 observed: observed,
@@ -941,7 +941,7 @@ private extension HeistExecution.Machine {
         return .forEachElement(
             path: context.path,
             declaration: .init(step),
-            completion: .failed(evidence: .observed(evidence), failure: .init(
+            completion: .failed(evidence: evidence, failure: .init(
                 category: .loop,
                 contract: "for_each_element matched count does not exceed limit",
                 observed: observed,
@@ -1116,7 +1116,7 @@ private extension HeistExecution.Machine {
                     invocationPath: invocation.step.path,
                     argument: invocation.step.argument,
                     completion: .childAborted(
-                        evidence: .observed(.init(admitted: evidence)),
+                        evidence: .init(admitted: evidence),
                         failure: childFailure(
                             category: .invocation,
                             path: children.abortedAtPath
@@ -1137,7 +1137,7 @@ private extension HeistExecution.Machine {
             path: context.path,
             invocationPath: step.path,
             argument: step.argument,
-            completion: .failed(evidence: .unavailable, failure: .init(
+            completion: .failed(evidence: nil, failure: .init(
                 category: .invocation,
                 contract: "heist invocation must not recurse",
                 observed: "recursive heist run \(resolvedPath)"
@@ -1153,7 +1153,7 @@ private extension HeistExecution.Machine {
             path: context.path,
             invocationPath: step.path,
             argument: step.argument,
-            completion: .failed(evidence: .unavailable, failure: .init(
+            completion: .failed(evidence: nil, failure: .init(
                 category: .invocation,
                 contract: "heist invocation path resolves to a definition",
                 observed: "unknown heist run \(step.path)",
@@ -1173,7 +1173,7 @@ private extension HeistExecution.Machine {
             path: context.path,
             invocationPath: step.path,
             argument: step.argument,
-            completion: .failed(evidence: .unavailable, failure: .init(
+            completion: .failed(evidence: nil, failure: .init(
                 category: expected == nil ? .validation : .expectation,
                 contract: expected == nil
                     ? "heist invocation argument binds to the target parameter"
@@ -1302,7 +1302,7 @@ extension HeistExecution.Machine {
             path: loop.context.path,
             declaration: .init(loop.step),
             completion: .failed(
-                evidence: .observed(.init(admitted: evidence)),
+                evidence: .init(admitted: evidence),
                 failure: .init(
                     category: .loop,
                     contract: "repeat_until predicate is met before timeout",
@@ -1471,7 +1471,7 @@ extension HeistExecution.Machine {
         .repeatUntil(
             path: context.path,
             declaration: .init(step),
-            completion: .failed(evidence: .unavailable, failure: .init(
+            completion: .failed(evidence: nil, failure: .init(
                 category: .validation,
                 contract: "repeat_until predicate resolves before evaluation",
                 observed: "could not resolve heist repeat_until predicate: \(error)",

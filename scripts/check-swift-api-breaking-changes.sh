@@ -55,11 +55,12 @@ if [[ "$MODE" == "report" ]]; then
     exit 0
 fi
 
-# v0.6.32 exposed the automatic main-thread watchdog as public API. Removing that
-# incorrect contract is intentional. The waiver is bound to that baseline, so it
-# expires automatically as soon as a newer tag becomes the comparison point.
+# v0.6.32 exposed the automatic main-thread watchdog and redundant
+# evidence/error/response-presentation facades as public API. Their correction
+# and removal are intentional source compression; this waiver is bound to that
+# baseline, so it expires automatically with the next tag.
 if [[ "$BASELINE_TAG" == "v0.6.32" ]]; then
-    echo "Intentional source-breaking watchdog correction against $BASELINE_TAG."
+    echo "Intentional source-breaking watchdog correction and removal of redundant evidence/error/response-presentation facades against $BASELINE_TAG."
     echo "The exemption expires when the next release tag becomes the API baseline."
     exit 0
 fi

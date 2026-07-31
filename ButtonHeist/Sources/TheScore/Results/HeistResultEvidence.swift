@@ -178,30 +178,6 @@ package enum HeistExecutedChildren: Sendable, Equatable {
     }
 }
 
-package enum HeistEvidenceAvailability<Evidence>: Codable, Sendable, Equatable
-where Evidence: Codable & Sendable & Equatable {
-    case unavailable
-    case observed(Evidence)
-
-    package init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        self = container.decodeNil() ? .unavailable : .observed(try container.decode(Evidence.self))
-    }
-
-    package func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        switch self {
-        case .unavailable: try container.encodeNil()
-        case .observed(let evidence): try container.encode(evidence)
-        }
-    }
-
-    package var value: Evidence? {
-        guard case .observed(let evidence) = self else { return nil }
-        return evidence
-    }
-}
-
 package protocol HeistResultEvidenceRule: Sendable {
     associatedtype Evidence: Codable & Sendable & Equatable
     static var rejection: String { get }

@@ -45,6 +45,8 @@ run_gate() {
 
 run_gate v0.6.32 strict 1
 [[ "$STATUS" -eq 0 ]] || fail "scoped watchdog baseline waiver failed: $OUTPUT"
+[[ "$OUTPUT" == *"watchdog correction and removal of redundant evidence/error/response-presentation facades"* ]] \
+    || fail "waiver did not name the intentional source compression: $OUTPUT"
 [[ "$OUTPUT" == *"exemption expires"* ]] || fail "waiver did not explain its scope: $OUTPUT"
 
 run_gate v0.6.31 strict 1

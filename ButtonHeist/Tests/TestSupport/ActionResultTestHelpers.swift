@@ -125,7 +125,7 @@ package enum HeistResultFixture {
             predicate: evidence.predicate,
             timeout: 1,
             completion: .failed(
-                evidence: .observed(evidence),
+                evidence: evidence,
                 failure: failure
             )
         )
@@ -204,7 +204,7 @@ package enum HeistResultFixture {
             return .conditional(
                 path: executionPath(path),
                 completion: .failed(
-                    evidence: .observed(evidence),
+                    evidence: evidence,
                     failure: failure ?? HeistFailureDetail(
                         category: .validation,
                         contract: "conditional branch completes",
@@ -277,7 +277,7 @@ package enum HeistResultFixture {
                 path: executionPath(resolvedPath),
                 declaration: declaration,
                 completion: .failed(
-                    evidence: .observed(evidence),
+                    evidence: evidence,
                     failure: failure,
                     children: passingChildren(children)
                 )

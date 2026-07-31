@@ -218,7 +218,7 @@ extension HeistExecutionStepResult {
             case .childAborted(let value, _, _):
                 evidence = value
             case .failed(let value, _, _):
-                evidence = value.value
+                evidence = value
             case .skipped:
                 evidence = nil
             }
@@ -240,7 +240,7 @@ extension HeistExecutionStepResult {
         case .childAborted(let value, _, _):
             relationship = (value.value, false, true)
         case .failed(let value, _, _):
-            relationship = (value.value?.value, false, false)
+            relationship = (value?.value, false, false)
         case .skipped:
             relationship = (nil, false, false)
         }
@@ -261,7 +261,7 @@ extension HeistExecutionStepResult {
         let relationship: (evidence: HeistForEachStringEvidence?, passed: Bool)
         switch completion {
         case .passed(let value, _): relationship = (value.value, true)
-        case .failed(let value, _, _): relationship = (value.value?.value, false)
+        case .failed(let value, _, _): relationship = (value?.value, false)
         case .childAborted(let value, _, _): relationship = (value.value, false)
         case .skipped: relationship = (nil, false)
         }
@@ -276,7 +276,7 @@ extension HeistExecutionStepResult {
 
     private static func repeatRelationshipMatches<Passed>(
         completion: HeistExecutionCompletion<
-            Passed, HeistEvidenceAvailability<HeistFailedRepeatUntilEvidence>, HeistFailedRepeatUntilEvidence
+            Passed, HeistFailedRepeatUntilEvidence?, HeistFailedRepeatUntilEvidence
         >,
         iteration: Bool,
         passedEvidence: (Passed) -> HeistRepeatUntilEvidence
@@ -284,7 +284,7 @@ extension HeistExecutionStepResult {
         let evidence: HeistRepeatUntilEvidence?
         switch completion {
         case .passed(let value, _): evidence = passedEvidence(value)
-        case .failed(let value, _, _): evidence = value.value?.value
+        case .failed(let value, _, _): evidence = value?.value
         case .childAborted(let value, _, _): evidence = value.value
         case .skipped: evidence = nil
         }

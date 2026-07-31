@@ -486,7 +486,7 @@ import ThePlans
                     invocationPath: "Checkout",
                     argument: .none,
                     completion: .childAborted(
-                        evidence: .unavailable,
+                        evidence: nil,
                         failure: invocationFailureDetail(observed: "child failed"),
                         children: abortedChildren
                     )
@@ -499,7 +499,7 @@ import ThePlans
                     invocationPath: "Checkout",
                     argument: .none,
                     completion: .childAborted(
-                        evidence: .observed(mismatchedEvidence),
+                        evidence: mismatchedEvidence,
                         failure: invocationFailureDetail(observed: "child failed"),
                         children: abortedChildren
                     )
@@ -513,7 +513,7 @@ import ThePlans
                     invocationPath: "Checkout",
                     argument: .none,
                     completion: .failed(
-                        evidence: .observed(childFailureEvidence),
+                        evidence: childFailureEvidence,
                         failure: invocationFailureDetail(observed: "invocation failed")
                     )
                 ),
@@ -549,7 +549,7 @@ import ThePlans
             invocationPath: "Checkout",
             argument: .none,
             completion: .childAborted(
-                evidence: .observed(childFailureEvidence),
+                evidence: childFailureEvidence,
                 failure: invocationFailureDetail(observed: "child failed"),
                 children: try #require(HeistAbortedChildren([child]))
             )

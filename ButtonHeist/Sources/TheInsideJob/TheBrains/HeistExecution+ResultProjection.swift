@@ -68,7 +68,7 @@ extension HeistExecution {
                 predicate: step.predicate,
                 timeout: step.timeout,
                 completion: .failed(
-                    evidence: .unavailable,
+                    evidence: nil,
                     failure: HeistFailureDetail(
                         category: .wait,
                         contract: "wait predicate resolves before evaluation",
@@ -114,7 +114,7 @@ extension HeistExecution {
                 predicate: step.predicate,
                 timeout: step.timeout,
                 completion: .failed(
-                    evidence: .unavailable,
+                    evidence: nil,
                     failure: HeistFailureDetail(
                         category: .wait,
                         contract: "wait begins within the whole-heist deadline",
@@ -197,7 +197,7 @@ extension HeistExecution {
                 completion = .passed(evidence: passedEvidence)
             } else {
                 completion = .failed(
-                    evidence: .observed(expectation),
+                    evidence: expectation,
                     failure: waitFailure(step: step, evidence: expectation, outcome: outcome)
                 )
             }
