@@ -18,8 +18,7 @@ import AccessibilitySnapshotParser
 /// are not projected into a second store. Live UIKit references remain in
 /// `InterfaceObservation.liveCapture` and are reacquired for every action.
 struct InterfaceTree: Sendable, Equatable {
-    let elements: [HeistId: Element]
-    let containers: [TreePath: Container]
+    private let topology: Topology
     let viewportCapture: LiveCapture.Snapshot
 
     static let empty = InterfaceTree(elements: [:], containers: [:], viewportCapture: .empty)
@@ -29,9 +28,24 @@ struct InterfaceTree: Sendable, Equatable {
         containers: [TreePath: Container] = [:],
         viewportCapture: LiveCapture.Snapshot = .empty
     ) {
-        self.elements = elements
-        self.containers = containers
+        topology = Topology(
+            elements: elements,
+            containers: containers,
+            preferredOrder: Self.viewportOrder(in: viewportCapture)
+        )
         self.viewportCapture = viewportCapture
+    }
+
+    /// Indexed views admitted from the one semantic topology.
+    ///
+    /// The indexes accelerate target resolution; they do not own hierarchy or
+    /// traversal order.
+    var elements: [HeistId: Element] {
+        topology.elements
+    }
+
+    var containers: [TreePath: Container] {
+        topology.containers
     }
 
     var elementIDs: Set<HeistId> {
@@ -49,12 +63,8 @@ struct InterfaceTree: Sendable, Equatable {
         viewportCapture.firstResponderHeistId.flatMap { elements[$0]?.heistId }
     }
 
-    var elementCount: Int {
-        elements.count
-    }
-
     func findElement(heistId: HeistId) -> Element? {
-        elements[heistId]
+        topology.findElement(heistId: heistId)
     }
 
     /// Where every visible element sits, for asking whether the tree moved.
@@ -128,26 +138,11 @@ struct InterfaceTree: Sendable, Equatable {
     }
 
     var orderedContainers: [Container] {
-        containers.values.sorted { left, right in
-            left.path.indices.lexicographicallyPrecedes(right.path.indices)
-        }
+        topology.orderedContainers
     }
 
     var orderedElements: [Element] {
-        var seen = Set<HeistId>()
-        let visible = viewportCapture.hierarchy.pathIndexedElements.compactMap { indexed -> Element? in
-            guard let heistID = viewportCapture.heistIdsByPath[indexed.path],
-                  viewportElementIDs.contains(heistID),
-                  let element = elements[heistID],
-                  seen.insert(heistID).inserted
-            else { return nil }
-            return element
-        }
-        let offViewport = elements
-            .filter { !seen.contains($0.key) }
-            .map(\.value)
-            .sorted { $0.heistId < $1.heistId }
-        return visible + offViewport
+        topology.orderedElements
     }
 
     var viewportOnly: InterfaceTree {
@@ -167,7 +162,7 @@ struct InterfaceTree: Sendable, Equatable {
             else { return element }
             return element.withScreenSpace(.offscreen)
         }
-        return InterfaceTree(
+        return Self(
             elements: retainedElements.merging(other.elements) { _, new in new },
             containers: containers.merging(other.containers) { _, new in new },
             viewportCapture: other.viewportCapture
@@ -181,15 +176,289 @@ struct InterfaceTree: Sendable, Equatable {
         let previousContainerPaths = Set(viewportCapture.hierarchy.pathIndexedContainers.map(\.path))
         let nextContainerPaths = Set(next.viewportCapture.hierarchy.pathIndexedContainers.map(\.path))
         let disappearedContainers = previousContainerPaths.subtracting(nextContainerPaths)
-        return InterfaceTree(
-            elements: elements
-                .filter { !disappearedVisible.contains($0.key) }
-                .merging(next.elements) { _, new in new },
-            containers: containers
-                .filter { !disappearedContainers.contains($0.key) }
-                .merging(next.containers) { _, new in new },
+        let nextElements = elements
+            .filter { !disappearedVisible.contains($0.key) }
+            .merging(next.elements) { _, new in new }
+        let retainedContainers = containers.filter { path, _ in
+            !disappearedContainers.contains(path) || nextElements.values.contains {
+                ($0.scrollMembership?.containerPath ?? $0.path).hasPrefix(path)
+            }
+        }
+        return Self(
+            elements: nextElements,
+            containers: retainedContainers.merging(next.containers) { _, new in new },
             viewportCapture: next.viewportCapture
         )
+    }
+
+    private static func viewportOrder(in capture: LiveCapture.Snapshot) -> [Topology.NodeIdentity] {
+        let containers = capture.hierarchy.pathIndexedContainers.map { item in
+            (item.path, Topology.NodeIdentity.container(item.path))
+        }
+        let elements = capture.hierarchy.pathIndexedElements.compactMap { item in
+            capture.heistIdsByPath[item.path].map { (item.path, Topology.NodeIdentity.element($0)) }
+        }
+        return (containers + elements).sorted { $0.0 < $1.0 }.map(\.1)
+    }
+
+    // MARK: - Admitted Topology
+
+    /// Ordered semantic ownership admitted once from capture and merge input.
+    ///
+    /// `nodes` is the authoritative topology. Its two indexes are admitted
+    /// once for resolution; they do not own parentage or traversal order.
+    private struct Topology: Sendable, Equatable {
+        enum NodeIdentity: Hashable, Sendable {
+            case element(HeistId)
+            case container(TreePath)
+        }
+
+        enum Payload: Sendable, Equatable {
+            case element(Element)
+            case container(Container)
+        }
+        struct Node: Sendable, Equatable {
+            let path: TreePath
+            let identity: NodeIdentity
+            let payload: Payload
+        }
+
+        let nodes: [Node]
+        private let elementNodeOffsetByHeistId: [HeistId: Int]
+        private let containerNodeOffsetByPath: [TreePath: Int]
+        let projectedContainerPathBySourcePath: [TreePath: TreePath]
+
+        /// Derived lookup projections of the admitted node sequence. Topology
+        /// owns the payloads; these values intentionally own no copies.
+        var elements: [HeistId: Element] {
+            Dictionary(
+                uniqueKeysWithValues: elementNodeOffsetByHeistId.compactMap { heistId, offset in
+                    guard nodes.indices.contains(offset),
+                          case .element(let element) = nodes[offset].payload
+                    else { return nil }
+                    return (heistId, element)
+                }
+            )
+        }
+
+        var containers: [TreePath: Container] {
+            Dictionary(
+                uniqueKeysWithValues: containerNodeOffsetByPath.compactMap { path, offset in
+                    guard nodes.indices.contains(offset),
+                          case .container(let container) = nodes[offset].payload
+                    else { return nil }
+                    return (path, container)
+                }
+            )
+        }
+
+        func findElement(heistId: HeistId) -> Element? {
+            guard let offset = elementNodeOffsetByHeistId[heistId],
+                  nodes.indices.contains(offset),
+                  case .element(let element) = nodes[offset].payload
+            else { return nil }
+            return element
+        }
+
+        var orderedElements: [Element] {
+            nodes.compactMap { node in
+                guard case .element(let element) = node.payload else { return nil }
+                return element
+            }
+        }
+
+        var orderedContainers: [Container] {
+            nodes.compactMap { node in
+                guard case .container(let container) = node.payload else { return nil }
+                return container
+            }
+        }
+
+        init(
+            elements: [HeistId: Element],
+            containers: [TreePath: Container],
+            preferredOrder: [NodeIdentity]
+        ) {
+            let candidates = elements.map { heistId, element in
+                Candidate.element(heistId: heistId, element: element)
+            } + containers.map { path, container in
+                Candidate.container(path: path, container: container)
+            }
+            let rank = Self.rank(candidates.map(\.identity), preferredOrder: preferredOrder)
+            let children = Dictionary(grouping: candidates) { candidate in
+                candidate.parent(admittedContainers: containers)
+            }.mapValues { candidates in
+                candidates.sorted {
+                    rank[$0.identity, default: .max] < rank[$1.identity, default: .max]
+                }
+            }
+            var admitted: [Node] = []
+            func visit(_ candidates: [Candidate], parent: TreePath) {
+                for (index, candidate) in candidates.enumerated() {
+                    let path = parent.appending(index)
+                    admitted.append(Node(
+                        path: path,
+                        identity: candidate.identity,
+                        payload: candidate.payload
+                    ))
+                    if case .container(let container) = candidate.payload {
+                        visit(children[container.path] ?? [], parent: path)
+                    }
+                }
+            }
+            visit(children[.root] ?? [], parent: .root)
+            nodes = admitted
+            var elementOffsets: [HeistId: Int] = [:]
+            var containerOffsets: [TreePath: Int] = [:]
+            var projectedPaths: [TreePath: TreePath] = [:]
+            for (offset, node) in admitted.enumerated() {
+                switch (node.identity, node.payload) {
+                case (.element(let heistId), .element):
+                    elementOffsets[heistId] = offset
+                case (.container(let path), .container(let container)):
+                    containerOffsets[path] = offset
+                    projectedPaths[container.path] = node.path
+                case (.element, .container), (.container, .element):
+                    continue
+                }
+            }
+            elementNodeOffsetByHeistId = elementOffsets
+            containerNodeOffsetByPath = containerOffsets
+            projectedContainerPathBySourcePath = projectedPaths
+        }
+
+        struct Candidate {
+            let identity: NodeIdentity
+            let payload: Payload
+            static func element(heistId: HeistId, element: Element) -> Self {
+                Self(identity: .element(heistId), payload: .element(element))
+            }
+
+            static func container(path: TreePath, container: Container) -> Self {
+                Self(identity: .container(path), payload: .container(container))
+            }
+
+            /// Hierarchy ownership is carried by source paths. Scroll membership
+            /// is reveal evidence, not topology: an explored off-viewport entry
+            /// can retain it after its live scroll container leaves the capture.
+            /// A partial discovery tree therefore promotes a missing ancestor to
+            /// a root instead of depending on incidental flat-array order.
+            func parent(admittedContainers: [TreePath: Container]) -> TreePath {
+                guard let parent = sourcePath.parent,
+                      admittedContainers[parent] != nil
+                else { return .root }
+                return parent
+            }
+
+            private var sourcePath: TreePath {
+                switch payload {
+                case .element(let element): element.path
+                case .container(let container): container.path
+                }
+            }
+
+        }
+
+        private static func rank(
+            _ identities: [NodeIdentity],
+            preferredOrder: [NodeIdentity]
+        ) -> [NodeIdentity: Int] {
+            var ranks: [NodeIdentity: Int] = [:]
+            for identity in preferredOrder where ranks[identity] == nil {
+                ranks[identity] = ranks.count
+            }
+            for identity in identities.sorted(by: stableOrder) where ranks[identity] == nil {
+                ranks[identity] = ranks.count
+            }
+            return ranks
+        }
+
+        private static func stableOrder(_ left: NodeIdentity, _ right: NodeIdentity) -> Bool {
+            switch (left, right) {
+            case let (.container(left), .container(right)): left < right
+            case let (.element(left), .element(right)): left < right
+            case (.container, .element): true
+            case (.element, .container): false
+            }
+        }
+    }
+
+    var projectedContainerPathBySourcePath: [TreePath: TreePath] {
+        topology.projectedContainerPathBySourcePath
+    }
+
+    func semanticInterface(timestamp: Date) -> Interface {
+        let containerPaths = projectedContainerPathBySourcePath
+        var elementAnnotations: [InterfaceElementAnnotation] = []
+        var containerAnnotations: [InterfaceContainerAnnotation] = []
+        var identities: [TreePath: Observation.ElementIdentity] = [:]
+        var traversalIndex = 0
+        var index = 0
+
+        func project(parent: TreePath) -> [AccessibilityHierarchy] {
+            var result: [AccessibilityHierarchy] = []
+            while index < topology.nodes.count, topology.nodes[index].path.parent == parent {
+                let node = topology.nodes[index]
+                index += 1
+                switch node.payload {
+                case .element(let entry):
+                    let ownerPath = entry.geometry.view.ownerPath
+                    let projectedOwnerPath: TreePath
+                    if ownerPath == .root {
+                        projectedOwnerPath = .root
+                    } else if let projected = containerPaths[ownerPath] {
+                        projectedOwnerPath = projected
+                    } else {
+                        // Discovery may retain an off-viewport element after
+                        // its source scroll container leaves the latest
+                        // capture. The owner is live geometry evidence, so it
+                        // cannot invent semantic topology; project it at the
+                        // admitted root while retaining reveal membership on
+                        // the semantic element itself.
+                        projectedOwnerPath = .root
+                    }
+                    elementAnnotations.append(InterfaceElementAnnotation(
+                        path: node.path,
+                        actions: entry.element.projectedActionSet.orderedActions,
+                        geometry: HeistElement.Geometry(
+                            screen: entry.geometry.screen,
+                            view: .init(
+                                ownerPath: projectedOwnerPath,
+                                frame: entry.geometry.view.frame,
+                                activationPoint: entry.geometry.view.activationPoint
+                            )
+                        )
+                    ))
+                    identities[node.path] = entry.heistId.observationElementIdentity
+                    result.append(.element(entry.element, traversalIndex: traversalIndex))
+                    traversalIndex += 1
+                case .container(let entry):
+                    containerAnnotations.append(InterfaceContainerAnnotation(
+                        path: node.path,
+                        containerName: entry.containerName,
+                        scrollInventory: entry.scrollInventory
+                    ))
+                    result.append(.container(entry.container, children: project(parent: node.path)))
+                }
+            }
+            return result
+        }
+
+        let hierarchy = project(parent: .root)
+        precondition(index == topology.nodes.count, "Admitted topology must be reachable from its roots")
+        do {
+            return try Interface(
+                timestamp: timestamp,
+                tree: hierarchy,
+                annotations: InterfaceAnnotations(
+                    elements: elementAnnotations,
+                    containers: containerAnnotations
+                ),
+                observationIdentities: InterfaceElementIdentities(identities)
+            )
+        } catch {
+            preconditionFailure("Admitted semantic topology must project a valid Interface: \(error)")
+        }
     }
 
     // MARK: - Element Entry

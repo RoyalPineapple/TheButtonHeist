@@ -348,10 +348,7 @@ extension TheVault {
                 )
             }
             return Observation.Snapshot(
-                interface: TheVault.WireConversion.toSemanticInterface(
-                    from: tree,
-                    timestamp: admission.timestamp
-                ),
+                interface: tree.semanticInterface(timestamp: admission.timestamp),
                 context: Observation.Context(
                     firstResponder: tree.firstResponderTarget,
                     keyboardVisible: admission.keyboardVisible,

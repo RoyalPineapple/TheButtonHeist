@@ -260,26 +260,16 @@ extension TheFenceHandlerTests {
                     originalPath: TreePath([1]),
                     rootPath: TreePath([0])
                 )
-                return .interface(Interface(
-                    timestamp: source.timestamp,
-                    projecting: [selectedNode],
-                    elementMetadata: { path, _, _ in
-                        annotations.elementByPath[path].map {
-                            InterfaceElementProjectionMetadata(
-                                actions: $0.actions,
-                                geometry: $0.geometry
-                            )
-                        }
-                    },
-                    containerMetadata: { path, _ in
-                        annotations.containerByPath[path].map {
-                            InterfaceContainerProjectionMetadata(
-                                containerName: $0.containerName,
-                                scrollInventory: $0.scrollInventory
-                            )
-                        }
-                    }
-                ))
+                do {
+                    return .interface(try Interface(
+                        timestamp: source.timestamp,
+                        tree: [selectedNode],
+                        annotations: annotations,
+                        observationIdentities: .empty
+                    ))
+                } catch {
+                    preconditionFailure("Test interface fixture failed admission: \(error)")
+                }
             default:
                 return .actionResult(ActionResult.success(payload: .activate))
             }

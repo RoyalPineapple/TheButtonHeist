@@ -33,7 +33,7 @@ extension WireConverterTests {
         )
         let screen = TheVault.buildObservation(from: parse)
 
-        let tree = WireConversion.toSemanticInterface(from: screen.tree).tree
+        let tree = screen.tree.semanticInterface(timestamp: Date()).tree
 
         guard case .container(let info, _) = tree.first else {
             return XCTFail("Expected container root")
@@ -67,7 +67,7 @@ extension WireConverterTests {
             firstResponderHeistId: nil
         )
 
-        let interface = WireConversion.toSemanticInterface(from: screen.tree)
+        let interface = screen.tree.semanticInterface(timestamp: Date())
         let record = try XCTUnwrap(interface.projectedElementRecords.single)
 
         XCTAssertEqual(
@@ -136,7 +136,7 @@ extension WireConverterTests {
             )
         )
 
-        let interface = WireConversion.toSemanticInterface(from: screen.tree)
+        let interface = screen.tree.semanticInterface(timestamp: Date())
         let expression = AccessibilityPredicate.exists(.container(.identifier(containerIdentifier)))
         let predicate = try expression.resolve(in: .empty)
         let snapshot = Observation.Snapshot(interface: interface, context: .empty)
@@ -238,7 +238,7 @@ extension WireConverterTests {
             )
         )
 
-        let interface = WireConversion.toSemanticInterface(from: screen.tree)
+        let interface = screen.tree.semanticInterface(timestamp: Date())
         let expression = AccessibilityPredicate.exists(.container(.identifier(orderIdentifier)))
         let predicate = try expression.resolve(in: .empty)
         let snapshot = Observation.Snapshot(interface: interface, context: .empty)

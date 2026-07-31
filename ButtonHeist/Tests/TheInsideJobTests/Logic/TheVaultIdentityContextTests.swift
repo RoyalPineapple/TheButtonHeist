@@ -293,7 +293,7 @@ final class TheVaultIdentityContextTests: XCTestCase {
                 TreePath([1]): secondScrollView,
             ]
         ))
-        let interface = TheVault.WireConversion.toSemanticInterface(from: observation.tree)
+        let interface = observation.tree.semanticInterface(timestamp: Date())
         let containerNames = interface.annotations.containers.compactMap(\.containerName)
 
         XCTAssertEqual(
@@ -366,7 +366,7 @@ final class TheVaultIdentityContextTests: XCTestCase {
                 TreePath([0, 0, 0, 0]): listScrollView,
             ]
         ))
-        let interface = TheVault.WireConversion.toSemanticInterface(from: observation.tree)
+        let interface = observation.tree.semanticInterface(timestamp: Date())
         let containerNames = interface.annotations.containers.compactMap(\.containerName)
 
         XCTAssertEqual(
@@ -399,7 +399,7 @@ final class TheVaultIdentityContextTests: XCTestCase {
             ],
         ))
 
-        let interface = TheVault.WireConversion.toSemanticInterface(from: observation.tree)
+        let interface = observation.tree.semanticInterface(timestamp: Date())
 
         XCTAssertEqual(
             interface.annotations.containers.first?.containerName,
@@ -441,7 +441,7 @@ final class TheVaultIdentityContextTests: XCTestCase {
                     TreePath([0, 0]): UIScrollView(frame: frame),
                 ]
             ))
-            let interface = TheVault.WireConversion.toSemanticInterface(from: observation.tree)
+            let interface = observation.tree.semanticInterface(timestamp: Date())
             return interface.annotations.containers.compactMap(\.containerName).sorted()
         }
 

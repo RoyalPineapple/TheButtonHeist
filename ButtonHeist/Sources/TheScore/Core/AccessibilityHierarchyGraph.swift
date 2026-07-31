@@ -5,77 +5,33 @@ package struct AccessibilityNodeRecord: Equatable, Sendable {
     package let path: TreePath
     package let node: AccessibilityHierarchy
     package let traversalIndex: Int?
-
-    package init(path: TreePath, node: AccessibilityHierarchy, traversalIndex: Int?) {
-        self.path = path
-        self.node = node
-        self.traversalIndex = traversalIndex
-    }
-}
-
-package struct AccessibilityElementNodeRecord: Equatable, Sendable {
-    package let path: TreePath
-    package let element: AccessibilityElement
-    package let traversalIndex: Int
-
-    package init(path: TreePath, element: AccessibilityElement, traversalIndex: Int) {
-        self.path = path
-        self.element = element
-        self.traversalIndex = traversalIndex
-    }
-
-    package var node: AccessibilityHierarchy {
-        .element(element, traversalIndex: traversalIndex)
-    }
 }
 
 package struct AccessibilityHierarchyGraph: Equatable, Sendable {
     package let nodesInPathOrder: [AccessibilityNodeRecord]
-    package let elementsInTraversalOrder: [AccessibilityElementNodeRecord]
 
     private let nodesByPath: [TreePath: AccessibilityHierarchy]
 
     package init(tree: [AccessibilityHierarchy]) {
-        let records: [(
-            node: AccessibilityNodeRecord,
-            element: AccessibilityElementNodeRecord?
-        )] = tree.compactMapSubtrees { node, path in
+        let nodesInPathOrder: [AccessibilityNodeRecord] = tree.compactMapSubtrees { node, path in
             switch node {
-            case .element(let element, let traversalIndex):
-                return (
-                    node: AccessibilityNodeRecord(
-                        path: path,
-                        node: node,
-                        traversalIndex: traversalIndex
-                    ),
-                    element: AccessibilityElementNodeRecord(
-                        path: path,
-                        element: element,
-                        traversalIndex: traversalIndex
-                    )
+            case .element(_, let traversalIndex):
+                AccessibilityNodeRecord(
+                    path: path,
+                    node: node,
+                    traversalIndex: traversalIndex
                 )
             case .container:
-                return (
-                    node: AccessibilityNodeRecord(
-                        path: path,
-                        node: node,
-                        traversalIndex: nil
-                    ),
-                    element: nil
+                AccessibilityNodeRecord(
+                    path: path,
+                    node: node,
+                    traversalIndex: nil
                 )
             }
         }
-        let nodesInPathOrder = records.map(\.node)
-        let elements = records.compactMap(\.element)
         let nodesByPath = Dictionary(uniqueKeysWithValues: nodesInPathOrder.map { ($0.path, $0.node) })
 
         self.nodesInPathOrder = nodesInPathOrder
-        self.elementsInTraversalOrder = elements.sorted {
-            if $0.traversalIndex != $1.traversalIndex {
-                return $0.traversalIndex < $1.traversalIndex
-            }
-            return $0.path < $1.path
-        }
         self.nodesByPath = nodesByPath
     }
 
@@ -137,10 +93,6 @@ package struct InterfaceGraphElementRecord: Equatable, Sendable {
         self.observationIdentity = observationIdentity
     }
 
-    package var node: AccessibilityHierarchy {
-        .element(accessibilityElement, traversalIndex: traversalIndex)
-    }
-
     package var projectedElement: HeistElement {
         guard let annotation else {
             preconditionFailure("Interface elements require canonical geometry annotations")
@@ -165,18 +117,15 @@ package struct InterfaceGraphElementRecord: Equatable, Sendable {
 package struct InterfaceGraphContainerRecord: Equatable, Sendable {
     package let path: TreePath
     package let container: AccessibilityContainer
-    package let node: AccessibilityHierarchy
     package let annotation: InterfaceContainerAnnotation?
 
     package init(
         path: TreePath,
         container: AccessibilityContainer,
-        node: AccessibilityHierarchy,
         annotation: InterfaceContainerAnnotation?
     ) {
         self.path = path
         self.container = container
-        self.node = node
         self.annotation = annotation
     }
 }
@@ -205,38 +154,7 @@ package struct InterfaceGraphNodeRecord: Equatable, Sendable {
     }
 }
 
-package struct InterfaceElementProjectionMetadata: Equatable, Sendable {
-    package let actions: [ElementAction]
-    package let geometry: HeistElement.Geometry
-    package let observationIdentity: Observation.ElementIdentity?
-
-    package init(
-        actions: [ElementAction],
-        geometry: HeistElement.Geometry,
-        observationIdentity: Observation.ElementIdentity? = nil
-    ) {
-        self.actions = actions
-        self.geometry = geometry
-        self.observationIdentity = observationIdentity
-    }
-}
-
-package struct InterfaceContainerProjectionMetadata: Equatable, Sendable {
-    package let containerName: ContainerName?
-    package let scrollInventory: ScrollInventory?
-
-    package init(containerName: ContainerName?, scrollInventory: ScrollInventory? = nil) {
-        self.containerName = containerName
-        self.scrollInventory = scrollInventory
-    }
-}
-
 package struct InterfaceGraph: Equatable, Sendable {
-    struct Projection {
-        let annotations: InterfaceAnnotations
-        let observationIdentities: InterfaceElementIdentities
-    }
-
     package let hierarchy: AccessibilityHierarchyGraph
     package let elementAnnotationByPath: [TreePath: InterfaceElementAnnotation]
     package let containerAnnotationByPath: [TreePath: InterfaceContainerAnnotation]
@@ -246,45 +164,7 @@ package struct InterfaceGraph: Equatable, Sendable {
 
     private let elementRecordByPath: [TreePath: InterfaceGraphElementRecord]
 
-    fileprivate init(
-        projecting tree: [AccessibilityHierarchy],
-        elementMetadata: (TreePath, AccessibilityElement, Int) -> InterfaceElementProjectionMetadata?,
-        containerMetadata: (TreePath, AccessibilityContainer) -> InterfaceContainerProjectionMetadata?
-    ) {
-        let hierarchy = AccessibilityHierarchyGraph(tree: tree)
-        var elementAnnotationByPath: [TreePath: InterfaceElementAnnotation] = [:]
-        var containerAnnotationByPath: [TreePath: InterfaceContainerAnnotation] = [:]
-        var observationIdentityByPath: [TreePath: Observation.ElementIdentity] = [:]
-
-        for record in hierarchy.nodesInPathOrder {
-            switch record.node {
-            case .element(let element, let traversalIndex):
-                guard let metadata = elementMetadata(record.path, element, traversalIndex) else { continue }
-                elementAnnotationByPath[record.path] = InterfaceElementAnnotation(
-                    path: record.path,
-                    actions: metadata.actions,
-                    geometry: metadata.geometry
-                )
-                observationIdentityByPath[record.path] = metadata.observationIdentity
-            case .container(let container, _):
-                guard let metadata = containerMetadata(record.path, container) else { continue }
-                containerAnnotationByPath[record.path] = InterfaceContainerAnnotation(
-                    path: record.path,
-                    containerName: metadata.containerName,
-                    scrollInventory: metadata.scrollInventory
-                )
-            }
-        }
-
-        self.init(
-            hierarchy: hierarchy,
-            elementAnnotationByPath: elementAnnotationByPath,
-            containerAnnotationByPath: containerAnnotationByPath,
-            observationIdentityByPath: observationIdentityByPath
-        )
-    }
-
-    fileprivate init(
+    package init(
         tree: [AccessibilityHierarchy],
         annotations: InterfaceAnnotations = .empty,
         observationIdentities: InterfaceElementIdentities = .empty
@@ -303,37 +183,6 @@ package struct InterfaceGraph: Equatable, Sendable {
             elementAnnotationByPath: elementAnnotationByPath,
             containerAnnotationByPath: containerAnnotationByPath,
             observationIdentityByPath: observationIdentityByPath
-        )
-    }
-
-    static func validate(
-        tree: [AccessibilityHierarchy],
-        annotations: InterfaceAnnotations = .empty,
-        observationIdentities: InterfaceElementIdentities = .empty
-    ) throws(InterfaceGraphValidationError) {
-        _ = try InterfaceGraph(
-            tree: tree,
-            annotations: annotations,
-            observationIdentities: observationIdentities
-        )
-    }
-
-    static func projection(
-        tree: [AccessibilityHierarchy],
-        elementMetadata: (TreePath, AccessibilityElement, Int) -> InterfaceElementProjectionMetadata?,
-        containerMetadata: (TreePath, AccessibilityContainer) -> InterfaceContainerProjectionMetadata?
-    ) -> Projection {
-        let graph = InterfaceGraph(
-            projecting: tree,
-            elementMetadata: elementMetadata,
-            containerMetadata: containerMetadata
-        )
-        return Projection(
-            annotations: InterfaceAnnotations(
-                elements: graph.elementAnnotationByPath.values.sorted { $0.path < $1.path },
-                containers: graph.containerAnnotationByPath.values.sorted { $0.path < $1.path }
-            ),
-            observationIdentities: InterfaceElementIdentities(graph.observationIdentityByPath)
         )
     }
 
@@ -358,7 +207,6 @@ package struct InterfaceGraph: Equatable, Sendable {
                 kind = .container(InterfaceGraphContainerRecord(
                     path: record.path,
                     container: container,
-                    node: record.node,
                     annotation: containerAnnotationByPath[record.path]
                 ))
             }
@@ -523,20 +371,6 @@ package struct InterfaceGraph: Equatable, Sendable {
             case .element:
                 break
             }
-        }
-    }
-}
-
-extension Interface {
-    package var graph: InterfaceGraph {
-        do {
-            return try InterfaceGraph(
-                tree: tree,
-                annotations: annotations,
-                observationIdentities: observationIdentities
-            )
-        } catch {
-            preconditionFailure("Invalid Interface graph: \(error)")
         }
     }
 }

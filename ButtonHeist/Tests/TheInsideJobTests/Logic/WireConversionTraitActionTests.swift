@@ -283,7 +283,7 @@ final class WireConverterTests: XCTestCase {
         )
         let screen = TheVault.buildObservation(from: parse)
 
-        let elements = WireConversion.toSemanticInterface(from: screen.tree).projectedElements
+        let elements = screen.tree.semanticInterface(timestamp: Date()).projectedElements
 
         XCTAssertEqual(elements.first?.semantics.assertable.actions, [])
     }

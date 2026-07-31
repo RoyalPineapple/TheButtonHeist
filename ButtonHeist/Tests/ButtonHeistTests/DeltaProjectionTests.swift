@@ -199,20 +199,16 @@ final class DeltaProjectionTests: XCTestCase {
                 geometry: geometry
             ))
         }
-        let annotationByPath = InterfaceAnnotations(elements: annotations).elementByPath
-        return Interface(
-            timestamp: Date(timeIntervalSince1970: includesSecond ? 1 : 2),
-            projecting: tree,
-            elementMetadata: { path, _, _ in
-                annotationByPath[path].map {
-                    InterfaceElementProjectionMetadata(
-                        actions: $0.actions,
-                        geometry: $0.geometry
-                    )
-                }
-            },
-            containerMetadata: { _, _ in nil }
-        )
+        do {
+            return try Interface(
+                timestamp: Date(timeIntervalSince1970: includesSecond ? 1 : 2),
+                tree: tree,
+                annotations: InterfaceAnnotations(elements: annotations),
+                observationIdentities: .empty
+            )
+        } catch {
+            preconditionFailure("Test interface fixture failed admission: \(error)")
+        }
     }
 
     private func publicDeltaJSON(_ projection: DeltaProjection) throws -> JSONProbe {

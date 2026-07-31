@@ -66,7 +66,7 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         )
 
         let observation = TheVault.buildObservation(from: result)
-        let interface = TheVault.WireConversion.toSemanticInterface(from: observation.tree)
+        let interface = observation.tree.semanticInterface(timestamp: Date())
 
         // Value-equal elements still get distinct synthesized heistIds because
         // live identity is keyed by tree path, not element value equality.

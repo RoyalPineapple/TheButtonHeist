@@ -152,24 +152,16 @@ package func makeTestInterface(
         convert(node, path: TreePath([offset]))
     }
     let annotations = InterfaceAnnotations(elements: elementAnnotations, containers: containerAnnotations)
-    return Interface(
-        timestamp: timestamp,
-        projecting: tree,
-        elementMetadata: { path, _, _ in
-            guard let annotation = annotations.elementByPath[path] else { return nil }
-            return InterfaceElementProjectionMetadata(
-                actions: annotation.actions,
-                geometry: annotation.geometry
-            )
-        },
-        containerMetadata: { path, _ in
-            guard let annotation = annotations.containerByPath[path] else { return nil }
-            return InterfaceContainerProjectionMetadata(
-                containerName: annotation.containerName,
-                scrollInventory: annotation.scrollInventory
-            )
-        }
-    )
+    do {
+        return try Interface(
+            timestamp: timestamp,
+            tree: tree,
+            annotations: annotations,
+            observationIdentities: .empty
+        )
+    } catch {
+        preconditionFailure("Test interface fixture failed admission: \(error)")
+    }
 }
 
 private func testGeometry(
