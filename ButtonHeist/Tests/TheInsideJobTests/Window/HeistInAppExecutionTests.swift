@@ -63,7 +63,7 @@ final class HeistInAppExecutionTests: XCTestCase {
             options.issueMatcher = { issue in
                 issue.type == .assertionFailure
                     && issue.compactDescription.contains(
-                        "Heist failed at $.body[0].invoke.body[0] (fail)"
+                        "Heist failed\nWhere:\n  RunHeist(\"syncFailure\")"
                     )
                     && issue.compactDescription.contains("Cause: stop")
                     && issue.sourceCodeContext.location?.fileURL.path == expectedFile
@@ -178,10 +178,18 @@ final class HeistInAppExecutionTests: XCTestCase {
         XCTAssertEqual(
             failure.description,
             """
-            Heist failed at $.body[0] (wait)
+            Wait for .exists(.label("Done")) failed after 250ms
             Cause: deadline expired
             Contract: wait predicate is met
             Expected: exists(label: Done)
+            Recent steps:
+              ✗ Wait for .exists(.label("Done"))  250ms
+            Wait evidence:
+              Screen changes: 0
+              Semantic element changes: 1
+              Notifications: 0
+              Final interface quiet: 125ms
+              Observation coverage: complete
             """
         )
         XCTAssertEqual(failure.description.components(separatedBy: "deadline expired").count, 2)

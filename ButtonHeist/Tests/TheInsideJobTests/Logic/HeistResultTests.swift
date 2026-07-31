@@ -234,7 +234,7 @@ final class HeistResultTests: XCTestCase {
         XCTAssertTrue(
             description.hasPrefix(
                 """
-                Heist failed at $.body[0] (action)
+                Activate .label("Button") failed
                 Cause: \(cause)
                 Contract: post-action expectation is met
                 Expected: \(expected)
@@ -340,6 +340,132 @@ final class HeistResultTests: XCTestCase {
             description.contains("Contract: action expectation predicate resolves before evaluation"),
             description
         )
+    }
+
+    func testFailureDescriptionUsesHumanLocationAndExistingWaitEvidence() throws {
+        let condition = AccessibilityPredicate.exists(.label("Add-ons"))
+        let selection = HeistCaseSelectionResult.selectingFirstMatch(
+            cases: [HeistCaseMatchResult(predicate: condition, met: false)],
+            ifNone: .noMatch,
+            elapsedMs: 1
+        ).selectingElseBranch()
+        let action = HeistResultFixture.action(
+            path: "$.body[0].conditional.else_body[0]",
+            command: .activate(.label("Add-ons"))
+        )
+        let current = makeTestObservationSnapshot(elements: [])
+        let notification = try XCTUnwrap(Observation.Notification(text: "Still loading", element: nil))
+        let waitEvidence = HeistResultFixture.expectationEvidence(
+            predicate: .exists(.label("Done")),
+            observation: Observation.Evidence(
+                baseline: nil,
+                events: [
+                    .elementsChanged(current),
+                    .notification(notification),
+                    .noChange,
+                ],
+                current: current,
+                coverage: .complete
+            ),
+            terminalCause: .deadline
+        )
+        let wait = HeistResultFixture.failedWait(
+            path: "$.body[0].conditional.else_body[1]",
+            evidence: waitEvidence,
+            failure: HeistFailureDetail(
+                category: .timeout,
+                contract: "wait predicate is met before timeout",
+                observed: "timed out",
+                expected: AccessibilityPredicate.exists(.label("Done")).description
+            )
+        )
+        let result = try HeistResult(
+            steps: [HeistResultFixture.conditional(selection: selection, children: [action, wait])],
+            durationMs: 251
+        )
+
+        let description = Heist.Failure(result).description
+
+        XCTAssertTrue(
+            description.hasPrefix(
+                """
+                Wait for .exists(.label("Done")) failed after 250ms
+                Where:
+                  Otherwise, when .exists(.label("Add-ons")) was not met
+                Cause: timed out
+                """
+            ),
+            description
+        )
+        XCTAssertTrue(description.contains("Recent steps:"), description)
+        XCTAssertTrue(description.contains("✓ Activate .label(\"Add-ons\")  250ms"), description)
+        XCTAssertTrue(description.contains("No semantic screen change observed"), description)
+        XCTAssertTrue(description.contains("✗ Wait for .exists(.label(\"Done\"))  250ms"), description)
+        XCTAssertTrue(description.contains("Wait evidence:"), description)
+        XCTAssertTrue(description.contains("Screen changes: 0"), description)
+        XCTAssertTrue(description.contains("Semantic element changes: 1"), description)
+        XCTAssertTrue(description.contains("Notifications: 1"), description)
+        XCTAssertTrue(description.contains("Final interface quiet: 125ms"), description)
+        XCTAssertTrue(description.contains("Observation coverage: complete"), description)
+        XCTAssertFalse(description.contains("$.body"), description)
+        XCTAssertEqual(Heist.Failure(result).failedStepPath, "$.body[0].conditional.else_body[1]")
+    }
+
+    func testFailureDescriptionDoesNotInferAbsenceFromIncompleteEvidence() throws {
+        let wait = HeistResultFixture.failedWait(
+            evidence: HeistResultFixture.expectationEvidence(
+                predicate: .exists(.label("Done")),
+                observation: Observation.Evidence(
+                    baseline: nil,
+                    events: [.noChange],
+                    current: nil,
+                    coverage: .incomplete(.historyUnavailable)
+                ),
+                terminalCause: .deadline
+            ),
+            failure: HeistFailureDetail(
+                category: .timeout,
+                contract: "wait predicate is met before timeout",
+                observed: "timed out"
+            )
+        )
+        let result = try HeistResult(steps: [wait], durationMs: 500)
+
+        let description = Heist.Failure(result).description
+
+        XCTAssertTrue(description.contains("Screen changes: unknown"), description)
+        XCTAssertTrue(description.contains("Semantic element changes recorded: 0"), description)
+        XCTAssertTrue(description.contains("Notifications recorded: 0"), description)
+        XCTAssertTrue(description.contains("Observation coverage: incomplete"), description)
+        XCTAssertFalse(description.contains("Final interface quiet:"), description)
+    }
+
+    func testFailureDescriptionLimitsRecentStepsToFive() throws {
+        let actions = (0..<6).map { index in
+            HeistResultFixture.action(
+                path: "$.body[\(index)]",
+                command: .activate(.label("Action \(index)"))
+            )
+        }
+        let wait = HeistResultFixture.failedWait(
+            path: "$.body[6]",
+            failure: HeistFailureDetail(
+                category: .timeout,
+                contract: "wait predicate is met before timeout",
+                observed: "timed out"
+            )
+        )
+        let result = try HeistResult(steps: actions + [wait], durationMs: 1_000)
+
+        let description = Heist.Failure(result).description
+
+        XCTAssertFalse(description.contains("Action 0"), description)
+        XCTAssertFalse(description.contains("Action 1"), description)
+        for index in 2..<6 {
+            XCTAssertTrue(description.contains("Action \(index)"), description)
+        }
+        XCTAssertEqual(description.components(separatedBy: "  ✓ Activate").count - 1, 4)
+        XCTAssertEqual(description.components(separatedBy: "  ✗ Wait for").count - 1, 1)
     }
 
 }
