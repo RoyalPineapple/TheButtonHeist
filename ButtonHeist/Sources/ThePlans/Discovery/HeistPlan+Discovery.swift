@@ -269,20 +269,40 @@ public extension HeistPlan {
     func heistCatalog(detail: HeistCatalogDetail = .summary) throws -> [HeistCatalogEntry] {
         var identities: [HeistCatalogIdentity] = []
         var entries: [HeistCatalogEntry] = []
-        HeistPlanTraversal().walkCatalogHeists(self) { projection in
+        HeistPlanTraversal(expandsInvocations: false).walk(self) { event in
+            let plan: HeistPlan
+            let context: HeistTraversalContext
             let identity: HeistCatalogIdentity
-            switch projection.kind {
-            case .entry(let name):
-                identity = .entry(name)
-            case .capability(let nameComponents):
-                guard let first = nameComponents.first else { preconditionFailure("definition catalog paths must not be empty") }
-                identity = .capability(HeistDefinitionPath(first: first, remaining: Array(nameComponents.dropFirst())))
+            let definitionComponents: [HeistPlanName]
+            switch event {
+            case .enterPlan(let observedPlan, let observedContext):
+                plan = observedPlan
+                context = observedContext
+                identity = .entry(plan.name)
+                definitionComponents = []
+            case .enterDefinition(let observedPlan, let observedContext):
+                guard let name = observedPlan.name else {
+                    preconditionFailure("admitted heist definitions must have names")
+                }
+                plan = observedPlan
+                context = observedContext
+                definitionComponents = context.definitionScope.pathPrefix + [name]
+                guard let first = definitionComponents.first else {
+                    preconditionFailure("definition catalog paths must not be empty")
+                }
+                identity = .capability(HeistDefinitionPath(first: first, remaining: Array(definitionComponents.dropFirst())))
+            default:
+                return
             }
             identities.append(identity)
 
-            let parameterKind = projection.plan.parameter.kind
+            let parameterKind = plan.parameter.kind
             let requiresArgument = parameterKind != .none
-            let surface = semanticSurface(for: projection)
+            let surface = semanticSurface(
+                plan: plan,
+                context: context,
+                definitionComponents: definitionComponents
+            )
             var summary = identity.role == .entry ? "Root entry heist" : "Reusable heist capability"
             if requiresArgument {
                 summary += " requiring \(parameterKind.rawValue) argument"
@@ -330,7 +350,7 @@ public extension HeistPlan {
                 requiresArgument: requiresArgument,
                 summary: summary,
                 tags: tags,
-                parameterName: projection.plan.parameter.name,
+                parameterName: plan.parameter.name,
                 nestedRunHeists: surface.nestedRunHeists.isEmpty ? nil : surface.nestedRunHeists,
                 actionCommands: surface.actionCommands.isEmpty ? nil : surface.actionCommands,
                 waitCount: surface.waits.count,
@@ -346,25 +366,45 @@ public extension HeistPlan {
     func describeHeist(at requestedPath: HeistDefinitionPath) throws -> HeistDescription {
         var identities: [HeistCatalogIdentity] = []
         var description: HeistDescription?
-        HeistPlanTraversal().walkCatalogHeists(self) { projection in
+        HeistPlanTraversal(expandsInvocations: false).walk(self) { event in
+            let plan: HeistPlan
+            let context: HeistTraversalContext
             let identity: HeistCatalogIdentity
-            switch projection.kind {
-            case .entry(let name):
-                identity = .entry(name)
-            case .capability(let nameComponents):
-                guard let first = nameComponents.first else { preconditionFailure("definition catalog paths must not be empty") }
-                identity = .capability(HeistDefinitionPath(first: first, remaining: Array(nameComponents.dropFirst())))
+            let definitionComponents: [HeistPlanName]
+            switch event {
+            case .enterPlan(let observedPlan, let observedContext):
+                plan = observedPlan
+                context = observedContext
+                identity = .entry(plan.name)
+                definitionComponents = []
+            case .enterDefinition(let observedPlan, let observedContext):
+                guard let name = observedPlan.name else {
+                    preconditionFailure("admitted heist definitions must have names")
+                }
+                plan = observedPlan
+                context = observedContext
+                definitionComponents = context.definitionScope.pathPrefix + [name]
+                guard let first = definitionComponents.first else {
+                    preconditionFailure("definition catalog paths must not be empty")
+                }
+                identity = .capability(HeistDefinitionPath(first: first, remaining: Array(definitionComponents.dropFirst())))
+            default:
+                return
             }
             identities.append(identity)
             guard description == nil, identity.lookupPath == requestedPath else { return }
             description = HeistDescription(
                 identity: identity,
-                parameterKind: projection.plan.parameter.kind,
-                parameterName: projection.plan.parameter.name,
-                requiresArgument: projection.plan.parameter.kind != .none,
+                parameterKind: plan.parameter.kind,
+                parameterName: plan.parameter.name,
+                requiresArgument: plan.parameter.kind != .none,
                 summary: nil,
                 validationStatus: .validated,
-                semanticSurface: semanticSurface(for: projection)
+                semanticSurface: semanticSurface(
+                    plan: plan,
+                    context: context,
+                    definitionComponents: definitionComponents
+                )
             )
         }
         try validateUniqueCatalogPaths(identities)
@@ -395,7 +435,9 @@ private extension HeistPlan {
     }
 
     func semanticSurface(
-        for projection: HeistPlanTraversal.CatalogHeistProjection
+        plan: HeistPlan,
+        context: HeistTraversalContext,
+        definitionComponents: [HeistPlanName]
     ) -> HeistSemanticSurface {
         var actionCommands: [HeistActionCommandType] = [], actionCommandSet = Set<HeistActionCommandType>()
         var targetPredicates: [HeistTargetPredicateFact] = [], targetPredicateSet = Set<HeistTargetPredicateFact>()
@@ -405,22 +447,21 @@ private extension HeistPlan {
         var expectedEffects: [AccessibilityPredicate] = [], expectedEffectIndexes = Set<Int>()
         var semanticFacets: [ElementPredicateCheck] = [], semanticFacetSet = Set<ElementPredicateCheck>()
 
-        let definitionComponents = projection.definitionComponents
-        let definitionScope = HeistDefinitionScope(definitions: projection.plan.definitions, pathPrefix: definitionComponents)
-        HeistPlanTraversal().walkSemanticSurfaceObservations(
-            steps: projection.plan.body,
+        let definitionScope = HeistDefinitionScope(definitions: plan.definitions, pathPrefix: definitionComponents)
+        HeistPlanTraversal().walk(
+            steps: plan.body,
             path: .root.child(.body),
             depth: 1,
-            referenceBindings: projection.context.referenceBindings,
+            referenceBindings: context.referenceBindings,
             definitionScope: definitionScope,
-            rootDefinitionScope: projection.context.rootDefinitionScope,
+            rootDefinitionScope: context.rootDefinitionScope,
             invocationStack: definitionComponents.isEmpty ? [] : [HeistInvocationPath(namePath: definitionComponents)]
-        ) { observation in
+        ) { event in
             var observedTargets: [AccessibilityTarget] = []
             var observedPredicate: AccessibilityPredicate?
             var isWait = false
-            switch observation {
-            case .action(let action):
+            switch event {
+            case .action(let action, _):
                 if actionCommandSet.insert(action.command.wireType).inserted { actionCommands.append(action.command.wireType) }
                 observedTargets = action.command.targetOccurrences.map(\.target)
                 observedPredicate = action.expectationPolicy.expectedExpectation?.predicate
@@ -428,7 +469,7 @@ private extension HeistPlan {
                 guard !context.path.ends(in: .expectation) else { return }
                 observedPredicate = wait.predicate
                 isWait = true
-            case .forEachElement(let step):
+            case .forEachElement(let step, _):
                 observedTargets = [.predicate(step.matching)]
             case .invoke(let invocation, let context):
                 observedPredicate = invocation.expectation?.predicate
@@ -436,6 +477,8 @@ private extension HeistPlan {
                    nestedRunHeistSet.insert(resolved.invocationPath).inserted {
                     nestedRunHeists.append(resolved.invocationPath)
                 }
+            default:
+                return
             }
             if let predicate = observedPredicate {
                 if isWait {

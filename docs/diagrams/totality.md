@@ -3,7 +3,7 @@
 Why every heist halts. Termination rests on two independent halves: structural guarantees enforced at admission (the plan cannot express an unbounded computation) and watchdog guarantees enforced at runtime (everything that waits has a mandatory timeout). This diagram answers "what stops a heist from running forever?"
 
 **Illustrates:** [SWIFT-HEIST-AUTHORING.md](../SWIFT-HEIST-AUTHORING.md), [HEIST-LANGUAGE-SPEC.md](../HEIST-LANGUAGE-SPEC.md)
-**Source of truth:** `ButtonHeist/Sources/ThePlans/Model/HeistCallGraph.swift`,
+**Source of truth:** `ButtonHeist/Sources/ThePlans/Model/HeistPlanTraversal.swift`,
 `ButtonHeist/Sources/ThePlans/Validation/HeistPlan+RuntimeValidationTraversal.swift`,
 `ButtonHeist/Sources/ThePlans/Validation/HeistPlan+RuntimeValidationLimits.swift`,
 `ButtonHeist/Sources/ThePlans/Model/LoopSteps.swift`,
@@ -16,7 +16,7 @@ flowchart TD
     HALT["every heist halts"]
 
     subgraph structural["Structural termination"]
-        ACYCLIC["acyclic definition graph:<br/>HeistCallGraph rejects cycles —<br/>'heist runs must not be recursive'"]
+        ACYCLIC["acyclic invocation stack:<br/>HeistPlanTraversal detects cycles —<br/>'heist runs must not be recursive'"]
         LIMITS["HeistPlanRuntimeSafetyLimits:<br/>maxDefinitions 250 · maxTotalSteps 500 ·<br/>maxNestedStepDepth 16"]
         FOREACH["forEachElement doubly bounded:<br/>initial-observation match count<br/>AND required limit greater than 0"]
         FORSTR["forEachString bounded:<br/>non-empty literal list ·<br/>maxForEachStringValues 100"]

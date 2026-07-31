@@ -719,13 +719,12 @@ and cycle safety before the root crosses its boundary. There is no candidate
 tree or node, graph projection, runtime-input wrapper, validation alias, or
 second admission route.
 
-After admission, `HeistPlanTraversal` owns the semantic walk.
-`HeistCallGraph` alone owns graph nodes and edges by reducing traversal events;
-traversal observes invocation cycles from its own invocation stack, never from
-graph state. Catalogs, descriptions, and semantic surfaces are local reductions
-over the same traversal observations and do not create another plan
-representation. This converges on the one complete-heist machine and canonical
-observation boundary below.
+After admission, `HeistPlanTraversal` owns the semantic walk and its `Event`
+currency. Its invocation stack detects cycles directly; no graph projection or
+topological-order owner exists. Catalogs, descriptions, semantic surfaces, lint,
+and runtime safety each reduce those same events locally without creating another
+plan representation. This converges on the one complete-heist machine and
+canonical observation boundary below.
 
 ```mermaid
 flowchart TD
@@ -736,9 +735,8 @@ flowchart TD
     Parse --> RootAdmission
     RootAdmission --> Validate["HeistPlanRuntimeSafetyValidator<br/>one cross-tree safety pass"]
     Validate --> Plan["Canonical admitted HeistPlan"]
-    Plan --> Walk["HeistPlanTraversal<br/>semantic walk + stack-owned cycle observation"]
-    Walk --> Graph["HeistCallGraph<br/>owns node + edge reduction"]
-    Walk --> Discovery["Catalog + descriptions + semantic surfaces<br/>local observation reduction"]
+    Plan --> Walk["HeistPlanTraversal<br/>Event walk + stack-owned cycle observation"]
+    Walk --> Discovery["Catalog + descriptions + semantic surfaces<br/>local event reduction"]
     Plan --> OfflineReport["validate_heist<br/>plan + invocation + lint report"]
     Plan --> FenceCommand["Fence command<br/>run_heist / perform / wait"]
     FenceCommand --> HandoffSocket["Handoff socket<br/>client version == app version"]

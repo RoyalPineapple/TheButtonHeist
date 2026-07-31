@@ -2,8 +2,8 @@ import Foundation
 
 /// RuntimeSafety owns the bounded executable-plan boundary.
 ///
-/// Totality rests on three bounds: (a) acyclic call graph
-/// [HeistCallGraph] - structural; (b) bounded ForEach; (c) timeout-floored
+/// Totality rests on three bounds: (a) acyclic invocation stack;
+/// (b) bounded ForEach; (c) timeout-floored
 /// RepeatUntil/WaitFor - runtime floors.
 package struct HeistPlanRuntimeSafetyValidator {
     private static let nestedCollectionLoopContract = "collection loops must not be nested"
@@ -32,18 +32,20 @@ package struct HeistPlanRuntimeSafetyValidator {
     }
 
     mutating func inspect(_ plan: HeistPlan) {
-        HeistPlanTraversal().walkRuntimeValidationObservations(plan) { observation in
-            inspect(observation)
+        HeistPlanTraversal().walk(plan) { event in
+            inspect(event)
         }
     }
 
-    private mutating func inspect(_ observation: HeistPlanTraversal.RuntimeValidationObservation) {
-        switch observation {
-        case .plan(let plan, let context, let requiresName):
-            validatePlanHeader(plan, path: context.path, requiresName: requiresName)
-        case .definitions(let definitions, let context):
+    private mutating func inspect(_ event: HeistPlanTraversal.Event) {
+        switch event {
+        case .enterPlan(let plan, let context):
+            validatePlanHeader(plan, path: context.path, requiresName: false)
+        case .enterDefinitions(let definitions, let context):
             validateDefinitions(definitions, path: context.path)
-        case .step(let step, let context):
+        case .enterDefinition(let plan, let context):
+            validatePlanHeader(plan, path: context.path, requiresName: true)
+        case .enterStep(let step, let context):
             validateStep(step, context: context)
         case .action(let action, let context):
             validateResolvedStringLoopAction(action, context: context)
@@ -84,6 +86,15 @@ package struct HeistPlanRuntimeSafetyValidator {
             validateInlineHeist(plan, context: context)
         case .invoke(let invocation, let context):
             validateInvocation(invocation, context: context)
+        case .leavePlan,
+             .leaveDefinitions,
+             .leaveDefinition,
+             .enterSteps,
+             .leaveSteps,
+             .leaveStep,
+             .conditional,
+             .elseBody:
+            break
         }
     }
 
@@ -144,14 +155,6 @@ package struct HeistPlanRuntimeSafetyValidator {
             )
         }
         validateParameterDeclaration(plan.parameter, path: path.child(.parameter))
-        if plan.body.isEmpty, plan.definitions.isEmpty {
-            fail(
-                path: path.child(.body),
-                contract: "heist plan must contain a body or nested definitions",
-                observed: "empty heist",
-                correction: "Add body steps, or use this plan only as a namespace with nested definitions."
-            )
-        }
     }
 
     mutating func validateDefinitions(
@@ -240,7 +243,7 @@ package struct HeistPlanRuntimeSafetyValidator {
             )
             return
         }
-        if let cycle = context.callGraphCycle(closing: resolved.callGraphNode) {
+        if let cycle = context.invocationCycle(closing: resolved.invocationPath) {
             fail(
                 path: context.path.child(.path),
                 contract: "heist runs must not be recursive",
