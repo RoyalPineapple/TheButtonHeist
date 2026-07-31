@@ -480,7 +480,11 @@ extension HeistExecution.Machine {
         _ expectation: Expectation,
         evaluating event: Observation.Event
     ) -> Expectation {
-        expectation.evaluating(event)
+        let evaluated = expectation.evaluating(event)
+        guard case .noChange = event else {
+            return evaluated.requiringNoChange()
+        }
+        return evaluated
     }
 }
 
