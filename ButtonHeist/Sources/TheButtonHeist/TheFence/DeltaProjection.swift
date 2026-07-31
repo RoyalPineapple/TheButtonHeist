@@ -205,13 +205,7 @@ private struct DeltaObservationFold {
         for event in evidence.events {
             switch event {
             case .elementsChanged(let snapshot):
-                let edits = previous.map {
-                    ElementEdits.between($0.interface, snapshot.interface)
-                } ?? ElementEdits(
-                    added: snapshot.interface.projectedElements,
-                    removed: [],
-                    updated: []
-                )
+                let edits = Observation.Evidence.editTransition(from: previous, to: snapshot)
                 accumulator.elementsChanged = true
                 edits.removed.forEach { accumulator.applyDisappearance($0) }
                 edits.added.forEach { accumulator.applyAppearance($0) }

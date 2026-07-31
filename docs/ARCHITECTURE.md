@@ -542,8 +542,10 @@ result coding encodes it directly in the optional `failureCapture` result field.
 `HeistReport.project(result:)` walks the execution tree once and owns its
 semantic nodes, summary, metrics, failure and warning facts, and diagnostics.
 JSON, compact text, human text, JUnit, doctor, and metric boundaries render
-that report instead of interpreting `HeistResult` independently. There is no
-competing execution report or Fence-owned report projection.
+that report instead of interpreting `HeistResult` independently. Doctor projects
+each recorded result once, selects report nodes, and reads their report-owned
+action evidence; there is no competing execution report or Fence-owned report
+projection.
 
 Each action or wait result owns its bounded `Observation.Evidence`. Report
 projection preserves that evidence on the corresponding semantic node and does

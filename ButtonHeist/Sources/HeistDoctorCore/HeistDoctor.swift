@@ -11,8 +11,10 @@ public enum HeistDoctor {
         newFail: HeistResult,
         stepPath requestedStepPath: HeistExecutionPath? = nil
     ) throws -> HeistRepairDiagnosis {
-        let currentStep = try selectedCurrentFailure(in: newFail, stepPath: requestedStepPath)
-        let lastStep = try selectedLastSuccess(in: lastPass, matching: currentStep.path)
+        let lastPassReport = HeistReport.project(result: lastPass)
+        let newFailReport = HeistReport.project(result: newFail)
+        let currentStep = try selectedCurrentFailure(in: newFailReport, stepPath: requestedStepPath)
+        let lastStep = try selectedLastSuccess(in: lastPassReport, matching: currentStep.path)
         let request = try HeistRepairRequest(
             lastSuccess: repairEvidence(from: lastStep),
             currentFailure: repairEvidence(from: currentStep)
@@ -21,18 +23,24 @@ public enum HeistDoctor {
     }
 
     private static func selectedCurrentFailure(
-        in result: HeistResult,
+        in report: HeistReport,
         stepPath: HeistExecutionPath?
-    ) throws -> HeistExecutionStepResult {
+    ) throws -> HeistReport.Node {
         if let stepPath {
-            let step = try result.actionStep(at: stepPath)
+            guard let step = report.outputNodes.first(where: {
+                $0.path == stepPath && $0.kind == .action
+            }) else {
+                throw HeistDoctorError.stepNotFound(path: stepPath)
+            }
             guard step.status == .failed else {
                 throw HeistDoctorError.stepStatus(path: stepPath, expected: .failed, actual: step.status)
             }
             return step
         }
 
-        guard let failed = result.firstFailedStep else {
+        guard let failedPath = report.summary.abortedAtPath,
+              let failed = report.outputNodes.first(where: { $0.path == failedPath })
+        else {
             throw HeistDoctorError.noFailedStep
         }
         guard failed.kind == .action else {
@@ -42,10 +50,14 @@ public enum HeistDoctor {
     }
 
     private static func selectedLastSuccess(
-        in result: HeistResult,
+        in report: HeistReport,
         matching stepPath: HeistExecutionPath
-    ) throws -> HeistExecutionStepResult {
-        let step = try result.actionStep(at: stepPath)
+    ) throws -> HeistReport.Node {
+        guard let step = report.outputNodes.first(where: {
+            $0.path == stepPath && $0.kind == .action
+        }) else {
+            throw HeistDoctorError.stepNotFound(path: stepPath)
+        }
         guard step.status == .passed else {
             throw HeistDoctorError.stepStatus(path: stepPath, expected: .passed, actual: step.status)
         }
@@ -231,14 +243,5 @@ private extension URL {
         let stem = String(name.dropLast(suffix.count))
         guard let uuid = UUID(uuidString: stem) else { return false }
         return uuid.uuidString.caseInsensitiveCompare(stem) == .orderedSame
-    }
-}
-
-private extension HeistResult {
-    func actionStep(at path: HeistExecutionPath) throws -> HeistExecutionStepResult {
-        guard let step = outputNodes.first(where: { $0.path == path && $0.kind == .action }) else {
-            throw HeistDoctorError.stepNotFound(path: path)
-        }
-        return step
     }
 }

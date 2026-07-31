@@ -200,6 +200,19 @@ public extension Observation {
                 return notification.text
             }
         }
+
+        package static func editTransition(
+            from previous: Snapshot?,
+            to current: Snapshot
+        ) -> ElementEdits {
+            previous.map {
+                ElementEdits.between($0.interface, current.interface)
+            } ?? ElementEdits(
+                added: current.interface.projectedElements,
+                removed: [],
+                updated: []
+            )
+        }
     }
 }
 
