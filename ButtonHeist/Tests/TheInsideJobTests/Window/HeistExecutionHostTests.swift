@@ -96,7 +96,7 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
     func testCausalAdmissionWaitsForVaultCoverageAcrossFailedCycles() async {
         let observation = hostObservation(label: "Home")
         let source = HostVisibleObservationSource(sequence: [nil, nil, observation])
-        let tripwire = TheTripwire()
+        let tripwire = TheTripwire(pulseSource: .injected)
         let brains = TheBrains(
             tripwire: tripwire,
             failureEvidencePolicy: .hierarchy,
@@ -111,8 +111,15 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
             notificationData: .string("Saved"),
             associatedElement: .none
         )
+        let ticker = observationTicker(
+            brains.vault.semanticObservationStream,
+            tripwire: tripwire
+        )
         await brains.startTestObservation()
-        defer { brains.stopTestObservation() }
+        defer {
+            ticker.cancel()
+            brains.stopTestObservation()
+        }
 
         let current = await window.admitCausallyCovered { coverage in
             await brains.vault.semanticObservationStream
@@ -129,8 +136,9 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
     func testTerminalCausalAdmissionAdvancesPastAnEarlierFrozenClaim() async throws {
         let observation = hostObservation(label: "Home")
         let source = HostVisibleObservationSource(sequence: [observation, observation])
+        let tripwire = TheTripwire(pulseSource: .injected)
         let brains = TheBrains(
-            tripwire: TheTripwire(),
+            tripwire: tripwire,
             failureEvidencePolicy: .hierarchy,
             visibleObservationSource: source.capture
         )
@@ -151,8 +159,15 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
             notificationData: .string("Terminal"),
             associatedElement: .none
         )
+        let ticker = observationTicker(
+            brains.vault.semanticObservationStream,
+            tripwire: tripwire
+        )
         await brains.startTestObservation()
-        defer { brains.stopTestObservation() }
+        defer {
+            ticker.cancel()
+            brains.stopTestObservation()
+        }
 
         let current = await scope.admitCausallyCovered { coverage in
             await brains.vault.semanticObservationStream
