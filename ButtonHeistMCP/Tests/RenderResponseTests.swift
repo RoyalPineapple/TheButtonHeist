@@ -316,7 +316,13 @@ struct RenderResponseTests {
                 payload: .activate,
                 observation: .observed(observationEvidence)
             ),
-            expectation: nil
+            expectation: try HeistExpectationEvidence(
+                predicate: nil,
+                bindings: .empty,
+                observation: observationEvidence,
+                terminalCause: .observed,
+                timing: .init(budgetMs: 3, elapsedMs: 3, lastTreeChangeElapsedMs: 3)
+            )
         )
         let step: [String: Any] = [
             "path": "$.body[0]",
