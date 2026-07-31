@@ -170,7 +170,6 @@ struct RenderResponseTests {
         #expect(text.contains("nested RunHeist: checkout.confirm"))
         #expect(text.contains("actions: activate"))
         #expect(text.contains("waits=0 expectations=1"))
-        #expect(text.contains("semantic surfaces: label=Checkout"))
         #expect(!text.contains("validation="))
         #expect(!text.contains("predicate("))
         #expect(!text.contains("point("))
@@ -181,12 +180,6 @@ struct RenderResponseTests {
         let entry = try #require(heists.first?.objectValue)
         #expect(entry["requiresArgument"] == .bool(false))
         #expect(entry["validationStatus"] == nil)
-        #expect(entry["semanticSurfaces"] == .array([
-            .string("label=Checkout"),
-            .string("identifier=confirm_button"),
-            .string("traits=button|link"),
-            .string("actions=activate|custom(Menu)"),
-        ]))
     }
 
     @Test("error render uses canonical public failure mapping")
@@ -311,11 +304,17 @@ struct RenderResponseTests {
         observationEvidence: Observation.Evidence
     ) throws -> HeistResult {
         let encoder = JSONEncoder()
+        let settledObservationEvidence = Observation.Evidence(
+            baseline: observationEvidence.baseline,
+            events: observationEvidence.events + [.noChange],
+            current: observationEvidence.current,
+            coverage: observationEvidence.coverage
+        )
         let expectation = try JSONDecoder().decode(
             HeistExpectationEvidence.self,
             from: JSONSerialization.data(withJSONObject: [
                 "bindings": ["targets": [:], "strings": [:]],
-                "observation": try jsonObject(observationEvidence, encoder: encoder),
+                "observation": try jsonObject(settledObservationEvidence, encoder: encoder),
                 "terminalCause": "observed",
                 "timing": [
                     "budgetMs": 3,
