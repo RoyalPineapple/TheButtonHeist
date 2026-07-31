@@ -20,7 +20,7 @@ final class WireTypeRoundTripTests: XCTestCase {
     }
 
     func testCurrentProductVersionRoundTripsExactly() throws {
-        let expected: ButtonHeistVersion = "0.6.32"
+        let expected: ButtonHeistVersion = buttonHeistVersion
         let envelope = RequestEnvelope(message: .ping)
         let data = try encoder.encode(envelope)
         let decoded = try decoder.decode(RequestEnvelope.self, from: data)
