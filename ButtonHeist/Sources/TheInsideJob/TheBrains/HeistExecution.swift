@@ -189,6 +189,8 @@ extension HeistExecution {
 
     internal struct RepeatUntilContinuation: Sendable {
         internal let step: RepeatUntilStep
+        internal let resolved: ResolvedRepeatUntilStep
+        internal let predicate: Predicate
         internal let context: StepContext
         internal var iterationIndex: Int
         internal var iterations: HeistExecutedChildren
@@ -285,10 +287,15 @@ extension HeistExecution {
 
     internal struct WaitLeaf: Sendable {
         internal let id: RequestID
-        internal let step: WaitStep
         internal let predicate: Predicate
-        internal let context: StepContext
+        internal let purpose: WaitPurpose
         internal var phase: WaitLeafPhase
+
+    }
+
+    internal enum WaitPurpose: Sendable {
+        case authored(step: WaitStep, context: StepContext)
+        case repeatCheck(loop: RepeatUntilContinuation, bodyChildren: HeistPassingChildren)
     }
 
     internal enum ActionLeafPhase: Sendable {

@@ -106,19 +106,20 @@ extension HeistExecution {
         }
 
         internal static func heistTimeout(
-            wait leaf: WaitLeaf
+            wait step: WaitStep,
+            path: HeistExecutionPath
         ) -> HeistExecutionStepResult {
             .wait(
-                path: leaf.context.path,
-                predicate: leaf.step.predicate,
-                timeout: leaf.step.timeout,
+                path: path,
+                predicate: step.predicate,
+                timeout: step.timeout,
                 completion: .failed(
                     evidence: .unavailable,
                     failure: HeistFailureDetail(
                         category: .wait,
                         contract: "wait begins within the whole-heist deadline",
                         observed: "whole-heist deadline expired before wait observation",
-                        expected: leaf.step.predicate.description
+                        expected: step.predicate.description
                     )
                 )
             )
@@ -184,17 +185,11 @@ extension HeistExecution {
         }
 
         internal static func project(
-            wait leaf: WaitLeaf,
-            evidence: Observation.Evidence,
-            outcome: LeafOutcome,
-            timing: HeistExpectationTiming
+            wait step: WaitStep,
+            path: HeistExecutionPath,
+            expectation: HeistExpectationEvidence,
+            outcome: LeafOutcome
         ) -> HeistExecutionStepResult {
-            let expectation = expectationEvidence(
-                leaf.predicate,
-                observation: evidence,
-                outcome: outcome,
-                timing: timing
-            )
             let passedEvidence = HeistPassedWaitEvidence(expectation)
             let completion: HeistWaitCompletion
             if let passedEvidence,
@@ -203,17 +198,13 @@ extension HeistExecution {
             } else {
                 completion = .failed(
                     evidence: .observed(expectation),
-                    failure: waitFailure(
-                        step: leaf.step,
-                        evidence: expectation,
-                        outcome: outcome
-                    )
+                    failure: waitFailure(step: step, evidence: expectation, outcome: outcome)
                 )
             }
             return .wait(
-                path: leaf.context.path,
-                predicate: leaf.step.predicate,
-                timeout: leaf.step.timeout,
+                path: path,
+                predicate: step.predicate,
+                timeout: step.timeout,
                 completion: completion
             )
         }
@@ -221,8 +212,8 @@ extension HeistExecution {
     }
 }
 
-private extension HeistExecution.ResultProjector {
-    static func expectationEvidence(
+extension HeistExecution.ResultProjector {
+    internal static func expectationEvidence(
         _ predicate: HeistExecution.Predicate,
         observation: Observation.Evidence,
         outcome: HeistExecution.LeafOutcome,

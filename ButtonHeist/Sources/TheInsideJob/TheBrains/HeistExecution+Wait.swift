@@ -23,20 +23,30 @@ extension HeistExecution.Machine {
             ))
         }
 
+        return begin(
+            wait: predicate,
+            purpose: .authored(step: step, context: context),
+            timeout: step.timeout
+        )
+    }
+
+    internal mutating func begin(
+        wait predicate: HeistExecution.Predicate,
+        purpose: HeistExecution.WaitPurpose,
+        timeout: WaitTimeout
+    ) -> HeistExecution.Decision {
         let id = nextID()
-        let timeout = HeistExecution.duration(step.timeout)
         running.activeLeaf = .wait(HeistExecution.WaitLeaf(
             id: id,
-            step: step,
             predicate: predicate,
-            context: context,
+            purpose: purpose,
             phase: .beginningObservation
         ))
         return .perform(.beginObservation(
             id,
             HeistExecution.ObservationRequest(
                 scope: predicate.observationScope,
-                timeout: timeout
+                timeout: HeistExecution.duration(timeout)
             )
         ))
     }
