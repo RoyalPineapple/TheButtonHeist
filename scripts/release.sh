@@ -420,17 +420,23 @@ else
     if gh run watch "$RUN_ID" --repo "$BUTTONHEIST_GITHUB_REPO" --exit-status; then
         echo ""
         echo "  ✓ Release workflow passed"
+        # The release is published and verified at this point (workflow passed,
+        # tag + assets + remote tap formula all exist). Upgrading the caller's
+        # local Homebrew is a convenience only — a broken local tap checkout
+        # (e.g. leftover merge-conflict markers in the installed formula) must
+        # never fail an already-successful release. Best-effort; warn, never exit.
         if command -v brew &>/dev/null && brew list royalpineapple/tap/buttonheist &>/dev/null; then
-            echo "  Upgrading Homebrew..."
-            brew update --quiet
-            brew upgrade royalpineapple/tap/buttonheist
-            HOMEBREW_BUTTONHEIST="$(brew --prefix royalpineapple/tap/buttonheist)/bin/buttonheist"
-            HOMEBREW_VERSION="$("$HOMEBREW_BUTTONHEIST" --version)"
-            if [[ "$HOMEBREW_VERSION" != "$NEW_VERSION" ]]; then
-                echo "Error: Homebrew buttonheist reports '$HOMEBREW_VERSION', expected '$NEW_VERSION'"
-                exit 1
+            echo "  Upgrading local Homebrew (best-effort)..."
+            if brew update --quiet \
+                && brew upgrade royalpineapple/tap/buttonheist \
+                && HOMEBREW_BUTTONHEIST="$(brew --prefix royalpineapple/tap/buttonheist)/bin/buttonheist" \
+                && HOMEBREW_VERSION="$("$HOMEBREW_BUTTONHEIST" --version)" \
+                && [[ "$HOMEBREW_VERSION" == "$NEW_VERSION" ]]; then
+                echo "  ✓ Homebrew upgraded to $HOMEBREW_VERSION"
+            else
+                echo "  ⚠ Local Homebrew upgrade to $NEW_VERSION did not complete (release is already published; this is local only)."
+                echo "    Fix your local tap and re-run: brew update && brew upgrade royalpineapple/tap/buttonheist"
             fi
-            echo "  ✓ Homebrew upgraded to $HOMEBREW_VERSION"
         fi
     else
         echo ""
