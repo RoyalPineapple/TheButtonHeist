@@ -58,8 +58,8 @@ extension FenceResponse {
             return humanHeistFormatted(report)
         case .heistValidation(let report):
             return formatHeistValidationHuman(report)
-        case .heistCatalog(let catalog):
-            return formatHeistCatalogHuman(catalog)
+        case .heistCatalog(let descriptions, let detail):
+            return formatHeistCatalogHuman(descriptions, detail: detail)
         case .heistDescription(let description):
             return formatHeistDescriptionHuman(description)
         case .sessionState(let payload):

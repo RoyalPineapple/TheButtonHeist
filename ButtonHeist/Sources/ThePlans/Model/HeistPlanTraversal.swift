@@ -49,6 +49,7 @@ public struct HeistPlanPath: Sendable, Equatable, Hashable, CustomStringConverti
             $0 == .field(field) && $1 == .field(nextField)
         }
     }
+
 }
 
 struct HeistTraversalContext {
@@ -124,29 +125,6 @@ struct HeistPlanTraversal {
 
     init(expandsInvocations: Bool = true) {
         self.expandsInvocations = expandsInvocations
-    }
-
-    static func walk(
-        _ step: HeistStep,
-        observe: (Event) throws -> Void
-    ) rethrows {
-        let definitionScope = HeistDefinitionScope(definitions: [])
-        let context = HeistTraversalContext(
-            path: .root,
-            depth: 0,
-            stepIndex: nil,
-            nextStep: nil,
-            referenceBindings: .empty,
-            bindingSamples: [],
-            definitionScope: definitionScope,
-            rootDefinitionScope: definitionScope,
-            invocationStack: []
-        )
-        try HeistPlanTraversal(expandsInvocations: false).walk(
-            step: step,
-            context: context,
-            observe: observe
-        )
     }
 
     func walk(

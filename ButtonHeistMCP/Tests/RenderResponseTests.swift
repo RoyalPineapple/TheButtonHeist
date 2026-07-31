@@ -102,15 +102,22 @@ struct RenderResponseTests {
     }
 
     @Test("summary heist catalog render stays a compact menu")
-    func summaryHeistCatalogRenderStaysCompactMenu() {
-        let response = FenceResponse.heistCatalog([
-            HeistCatalogEntry(
-                identity: .capability("checkout"),
-                parameterKind: .string,
-                summary: "Reusable heist capability requiring string argument",
-                tags: [.capability, .parameterized, .semanticAction]
-            ),
-        ])
+    func summaryHeistCatalogRenderStaysCompactMenu() throws {
+        let plan = try HeistPlan(
+            name: "root",
+            definitions: [
+                HeistPlan(
+                    name: "checkout",
+                    parameter: .string(name: "item"),
+                    body: [.action(ActionStep(command: .activate(.label("Checkout"))))]
+                ),
+            ],
+            body: [.warn(WarnStep(message: "ready"))]
+        )
+        let response = FenceResponse.heistCatalog(
+            try plan.heistDescriptions(),
+            detail: .summary
+        )
 
         let result = ButtonHeistMCPServer.renderResponse(response)
 
@@ -129,24 +136,30 @@ struct RenderResponseTests {
 
     @Test("detailed heist catalog render includes safe derived fields")
     func detailedHeistCatalogRenderIncludesSafeDerivedFields() throws {
-        let response = FenceResponse.heistCatalog([
-            HeistCatalogEntry(
-                identity: .capability("checkout"),
-                parameterKind: .none,
-                summary: "Reusable heist capability",
-                tags: [.capability, .composed, .assertion, .semanticAction],
-                nestedRunHeists: ["checkout.confirm"],
-                actionCommands: [.activate],
-                waitCount: 1,
-                expectationCount: 1,
-                semanticSurfaces: [
-                    .label(.exact("Checkout")),
-                    .identifier(.exact("confirm_button")),
-                    .traits([.link, .button]),
-                    .actions([.custom("Menu"), .activate]),
-                ]
-            ),
-        ])
+        let confirmation = try HeistPlan(
+            name: "confirm",
+            body: [.action(ActionStep(command: .activate(.identifier("confirm_button"))))]
+        )
+        let checkout = try HeistPlan(
+            name: "checkout",
+            definitions: [confirmation],
+            body: [
+                .action(ActionStep(
+                    command: .activate(.label("Checkout")),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done"))))
+                )),
+                .invoke(HeistInvocationStep(path: "confirm")),
+            ]
+        )
+        let plan = try HeistPlan(
+            name: "root",
+            definitions: [checkout],
+            body: [.warn(WarnStep(message: "ready"))]
+        )
+        let response = FenceResponse.heistCatalog(
+            try plan.heistDescriptions(),
+            detail: .detailed
+        )
 
         let result = ButtonHeistMCPServer.renderResponse(response)
 
@@ -156,8 +169,8 @@ struct RenderResponseTests {
         }
         #expect(text.contains("nested RunHeist: checkout.confirm"))
         #expect(text.contains("actions: activate"))
-        #expect(text.contains("waits=1 expectations=1"))
-        #expect(text.contains("semantic surfaces: label=Checkout, identifier=confirm_button, traits=button|link, actions=activate|custom(Menu)"))
+        #expect(text.contains("waits=0 expectations=1"))
+        #expect(text.contains("semantic surfaces: label=Checkout"))
         #expect(!text.contains("validation="))
         #expect(!text.contains("predicate("))
         #expect(!text.contains("point("))

@@ -27,7 +27,7 @@ extension TheFence {
     }
 
     func handleListHeists(_ request: ListHeistsRequest) -> FenceResponse {
-        .heistCatalog(request.catalog)
+        .heistCatalog(request.descriptions, detail: request.detail)
     }
 
     func handleDescribeHeist(_ request: DescribeHeistRequest) -> FenceResponse {

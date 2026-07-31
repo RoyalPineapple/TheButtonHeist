@@ -16,7 +16,8 @@ extension TheFence {
     }
 
     struct ListHeistsRequest {
-        let catalog: [HeistCatalogEntry]
+        let descriptions: [HeistDescription]
+        let detail: HeistCatalogDetail
     }
 
     struct DescribeHeistRequest {
@@ -180,7 +181,7 @@ extension TheFence {
                 from: arguments,
                 commandName: Command.listHeists.rawValue
             )
-            return ListHeistsRequest(catalog: try plan.heistCatalog(detail: detail))
+            return ListHeistsRequest(descriptions: try plan.heistDescriptions(), detail: detail)
         } catch let error as HeistCatalogError {
             throw FenceError.invalidRequest(error.description)
         }

@@ -126,8 +126,8 @@ struct PublicResponseModel: Encodable {
             ).encode(to: encoder)
         case .heistValidation(let report):
             try PublicHeistValidationResponse(report: report).encode(to: encoder)
-        case .heistCatalog(let catalog):
-            try PublicHeistCatalogResponse(catalog: catalog).encode(to: encoder)
+        case .heistCatalog(let descriptions, let detail):
+            try PublicHeistCatalogResponse(descriptions: descriptions, detail: detail).encode(to: encoder)
         case .heistDescription(let description):
             try PublicHeistDescriptionResponse(heist: description).encode(to: encoder)
         case .sessionState(let payload):

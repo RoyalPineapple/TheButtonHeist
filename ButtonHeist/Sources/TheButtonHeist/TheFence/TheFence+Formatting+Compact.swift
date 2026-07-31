@@ -62,8 +62,8 @@ extension FenceResponse {
             )
         case .heistValidation(let report):
             return compactHeistValidation(report)
-        case .heistCatalog(let catalog):
-            return compactHeistCatalog(catalog)
+        case .heistCatalog(let descriptions, let detail):
+            return compactHeistCatalog(descriptions, detail: detail)
         case .heistDescription(let description):
             return compactHeistDescription(description)
         case .sessionState(let payload):

@@ -5,10 +5,10 @@ import TheScore
 
 extension FenceResponse {
 
-    func compactHeistCatalog(_ catalog: [HeistCatalogEntry]) -> String {
-        guard !catalog.isEmpty else { return "heists: none" }
-        let lines = catalog.flatMap { entry in
-            catalogLines(for: entry, indent: "  ")
+    func compactHeistCatalog(_ descriptions: [HeistDescription], detail: HeistCatalogDetail) -> String {
+        guard !descriptions.isEmpty else { return "heists: none" }
+        let lines = descriptions.flatMap { description in
+            catalogLines(for: description, detail: detail, indent: "  ")
         }
         return (["heists:"] + lines).joined(separator: "\n")
     }
@@ -18,18 +18,15 @@ extension FenceResponse {
             "heist \(description.identity.displayName) [\(description.role.rawValue)] "
                 + "\(parameterSummary(description))",
         ]
-        if let summary = description.summary, !summary.isEmpty {
-            lines.append("summary: \(summary)")
-        }
         appendSurfaceLines(description.semanticSurface, to: &lines)
         return lines.joined(separator: "\n")
     }
 
-    func formatHeistCatalogHuman(_ catalog: [HeistCatalogEntry]) -> String {
-        guard !catalog.isEmpty else { return "No heists" }
+    func formatHeistCatalogHuman(_ descriptions: [HeistDescription], detail: HeistCatalogDetail) -> String {
+        guard !descriptions.isEmpty else { return "No heists" }
         var lines = ["Heists:"]
-        lines.append(contentsOf: catalog.flatMap { entry in
-            catalogLines(for: entry, indent: "  ", paddedRole: true)
+        lines.append(contentsOf: descriptions.flatMap { description in
+            catalogLines(for: description, detail: detail, indent: "  ", paddedRole: true)
         })
         return lines.joined(separator: "\n")
     }
@@ -40,56 +37,44 @@ extension FenceResponse {
             "Role: \(description.role.rawValue)",
             "Parameter: \(parameterSummary(description))",
         ]
-        if let summary = description.summary, !summary.isEmpty {
-            lines.append("Summary: \(summary)")
-        }
         appendSurfaceLines(description.semanticSurface, to: &lines)
         return lines.joined(separator: "\n")
     }
 
-    private func parameterSummary(_ entry: HeistCatalogEntry) -> String {
-        parameterSummary(
-            kind: entry.parameterKind,
-            name: entry.parameterName?.rawValue,
-            requiresArgument: entry.requiresArgument
-        )
-    }
-
     private func catalogLines(
-        for entry: HeistCatalogEntry,
+        for description: HeistDescription,
+        detail: HeistCatalogDetail,
         indent: String,
         paddedRole: Bool = false
     ) -> [String] {
         let role = paddedRole
-            ? entry.role.rawValue.padding(toLength: 10, withPad: " ", startingAt: 0)
-            : entry.role.rawValue
-        var firstLine = "\(indent)\(role) \(entry.identity.displayName) \(parameterSummary(entry))"
-        if let summary = entry.summary, !summary.isEmpty {
-            firstLine += " summary=\(summary)"
-        }
-        if !entry.tags.isEmpty {
-            firstLine += " tags=\(entry.tags.map(\.heistDiscoveryDisplayValue).joined(separator: ","))"
-        }
+            ? description.role.rawValue.padding(toLength: 10, withPad: " ", startingAt: 0)
+            : description.role.rawValue
+        let firstLine = "\(indent)\(role) \(description.identity.displayName) "
+            + "\(parameterSummary(description, includeName: detail == .detailed))"
+            + " summary=\(description.heistCatalogSummary)"
+            + " tags=\(description.heistCatalogTags.joined(separator: ","))"
         var lines = [firstLine]
-        if let nestedRunHeists = entry.nestedRunHeists, !nestedRunHeists.isEmpty {
-            lines.append("\(indent)  nested RunHeist: \(nestedRunHeists.map(\.heistDiscoveryDisplayValue).joined(separator: ", "))")
-        }
-        if let actionCommands = entry.actionCommands, !actionCommands.isEmpty {
-            lines.append("\(indent)  actions: \(actionCommands.map(\.heistDiscoveryDisplayValue).joined(separator: ", "))")
-        }
-        if let waitCount = entry.waitCount, let expectationCount = entry.expectationCount {
-            lines.append("\(indent)  waits=\(waitCount) expectations=\(expectationCount)")
-        }
-        if let semanticSurfaces = entry.semanticSurfaces, !semanticSurfaces.isEmpty {
-            lines.append("\(indent)  semantic surfaces: \(semanticSurfaces.map(\.heistDiscoveryDisplayValue).joined(separator: ", "))")
+        if detail == .detailed {
+            let surface = description.semanticSurface
+            if !surface.nestedRunHeists.isEmpty {
+                lines.append("\(indent)  nested RunHeist: \(surface.nestedRunHeists.map(\.heistDiscoveryDisplayValue).joined(separator: ", "))")
+            }
+            if !surface.actionCommands.isEmpty {
+                lines.append("\(indent)  actions: \(surface.actionCommands.map(\.heistDiscoveryDisplayValue).joined(separator: ", "))")
+            }
+            lines.append("\(indent)  waits=\(surface.waits.count) expectations=\(surface.expectations.count)")
+            if !surface.semanticSurfaces.isEmpty {
+                lines.append("\(indent)  semantic surfaces: \(surface.semanticSurfaces.map(\.heistDiscoveryDisplayValue).joined(separator: ", "))")
+            }
         }
         return lines
     }
 
-    private func parameterSummary(_ description: HeistDescription) -> String {
+    private func parameterSummary(_ description: HeistDescription, includeName: Bool = true) -> String {
         parameterSummary(
             kind: description.parameterKind,
-            name: description.parameterName?.rawValue,
+            name: includeName ? description.parameterName?.rawValue : nil,
             requiresArgument: description.requiresArgument
         )
     }
@@ -122,9 +107,46 @@ extension FenceResponse {
     }
 }
 
-extension HeistCatalogTag {
-    var heistDiscoveryDisplayValue: String {
-        rawValue
+extension HeistDescription {
+    var heistCatalogSummary: String {
+        var summary = role == .entry ? "Root entry heist" : "Reusable heist capability"
+        if parameterKind.requiresArgument {
+            summary += " requiring \(parameterKind.rawValue) argument"
+        }
+        return summary
+    }
+
+    var heistCatalogTags: [String] {
+        let surface = semanticSurface
+        var tags = [role == .entry ? "entry" : "capability"]
+        if parameterKind.requiresArgument {
+            tags.append("parameterized")
+        }
+        if !surface.nestedRunHeists.isEmpty {
+            tags.append("composed")
+        }
+        if !surface.waits.isEmpty || !surface.expectations.isEmpty {
+            tags.append("assertion")
+        }
+        for command in surface.actionCommands {
+            let tag: String? = switch command {
+            case .typeText:
+                "text-input"
+            case .scroll, .scrollToVisible, .scrollToEdge:
+                "scroll"
+            case .oneFingerTap, .longPress, .swipe, .drag:
+                "gesture"
+            case .activate, .increment, .decrement, .performCustomAction, .rotor, .dismiss, .magicTap,
+                 .editAction, .setPasteboard, .dismissKeyboard:
+                "semantic-action"
+            case .takeScreenshot:
+                nil
+            }
+            if let tag, !tags.contains(tag) {
+                tags.append(tag)
+            }
+        }
+        return tags
     }
 }
 

@@ -7,8 +7,8 @@ struct PublicHeistCatalogResponse: Encodable {
     let status = PublicResponseStatus.ok
     private let heists: [PublicHeistCatalogEntry]
 
-    init(catalog: [HeistCatalogEntry]) {
-        heists = catalog.map(PublicHeistCatalogEntry.init)
+    init(descriptions: [HeistDescription], detail: HeistCatalogDetail) {
+        heists = descriptions.map { PublicHeistCatalogEntry($0, detail: detail) }
     }
 }
 
@@ -131,19 +131,35 @@ private struct PublicHeistCatalogEntry: Encodable {
     let expectationCount: Int?
     let semanticSurfaces: [String]?
 
-    init(_ entry: HeistCatalogEntry) {
-        name = entry.identity.displayName
-        role = entry.role
-        parameterKind = entry.parameterKind
-        requiresArgument = entry.requiresArgument
-        summary = entry.summary
-        tags = entry.tags.map(\.heistDiscoveryDisplayValue)
-        parameterName = entry.parameterName
-        nestedRunHeists = entry.nestedRunHeists?.map(\.heistDiscoveryDisplayValue)
-        actionCommands = entry.actionCommands?.map(\.heistDiscoveryDisplayValue)
-        waitCount = entry.waitCount
-        expectationCount = entry.expectationCount
-        semanticSurfaces = entry.semanticSurfaces?.map(\.heistDiscoveryDisplayValue)
+    init(_ description: HeistDescription, detail: HeistCatalogDetail) {
+        name = description.identity.displayName
+        role = description.role
+        parameterKind = description.parameterKind
+        requiresArgument = description.requiresArgument
+        summary = description.heistCatalogSummary
+        tags = description.heistCatalogTags
+        switch detail {
+        case .summary:
+            parameterName = nil
+            nestedRunHeists = nil
+            actionCommands = nil
+            waitCount = nil
+            expectationCount = nil
+            semanticSurfaces = nil
+        case .detailed:
+            parameterName = description.parameterName
+            nestedRunHeists = description.semanticSurface.nestedRunHeists.isEmpty
+                ? nil
+                : description.semanticSurface.nestedRunHeists.map(\.heistDiscoveryDisplayValue)
+            actionCommands = description.semanticSurface.actionCommands.isEmpty
+                ? nil
+                : description.semanticSurface.actionCommands.map(\.heistDiscoveryDisplayValue)
+            waitCount = description.semanticSurface.waits.count
+            expectationCount = description.semanticSurface.expectations.count
+            semanticSurfaces = description.semanticSurface.semanticSurfaces.isEmpty
+                ? nil
+                : description.semanticSurface.semanticSurfaces.map(\.heistDiscoveryDisplayValue)
+        }
     }
 }
 
@@ -162,7 +178,7 @@ private struct PublicHeistDescription: Encodable {
         parameterKind = description.parameterKind
         parameterName = description.parameterName
         requiresArgument = description.requiresArgument
-        summary = description.summary
+        summary = nil
         semanticSurface = PublicHeistSurface(description.semanticSurface)
     }
 }

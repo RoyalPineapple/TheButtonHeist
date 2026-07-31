@@ -387,20 +387,15 @@ extension TheFenceHandlerTests {
 
         let response = try await fence.execute(command: .listHeists, arguments: try Self.planSourceArguments(for: plan))
 
-        guard case .heistCatalog(let catalog) = response else {
+        guard case .heistCatalog(let descriptions, let detail) = response else {
             return XCTFail("Expected heistCatalog response, got \(response)")
         }
-        XCTAssertEqual(catalog.map(\.identity.displayName), ["shop", "addToCart"])
-        XCTAssertEqual(catalog[1].parameterKind, .string)
-        XCTAssertTrue(catalog[1].requiresArgument)
-        XCTAssertEqual(catalog[1].summary, "Reusable heist capability requiring string argument")
-        XCTAssertEqual(catalog[1].tags, [.capability, .parameterized, .semanticAction])
-        XCTAssertNil(catalog[1].parameterName)
-        XCTAssertNil(catalog[1].actionCommands)
-        XCTAssertNil(catalog[1].nestedRunHeists)
-        XCTAssertNil(catalog[1].waitCount)
-        XCTAssertNil(catalog[1].expectationCount)
-        XCTAssertNil(catalog[1].semanticSurfaces)
+        XCTAssertEqual(detail, .summary)
+        XCTAssertEqual(descriptions.map(\.identity.displayName), ["shop", "addToCart"])
+        XCTAssertEqual(descriptions[1].parameterKind, .string)
+        XCTAssertTrue(descriptions[1].requiresArgument)
+        XCTAssertEqual(descriptions[1].parameterName, "item")
+        XCTAssertEqual(descriptions[1].semanticSurface.actionCommands, [.activate])
     }
 
     @ButtonHeistActor
@@ -421,12 +416,13 @@ extension TheFenceHandlerTests {
             ])
         )
 
-        guard case .heistCatalog(let catalog) = response else {
+        guard case .heistCatalog(let descriptions, let detail) = response else {
             return XCTFail("Expected heistCatalog response, got \(response)")
         }
-        XCTAssertEqual(catalog.map(\.identity.displayName), ["shop", "addToCart"])
-        XCTAssertEqual(catalog[1].parameterKind, .string)
-        XCTAssertTrue(catalog[1].requiresArgument)
+        XCTAssertEqual(detail, .summary)
+        XCTAssertEqual(descriptions.map(\.identity.displayName), ["shop", "addToCart"])
+        XCTAssertEqual(descriptions[1].parameterKind, .string)
+        XCTAssertTrue(descriptions[1].requiresArgument)
     }
 
     @ButtonHeistActor
@@ -439,13 +435,14 @@ extension TheFenceHandlerTests {
         ])
 
         let listResponse = try await fence.execute(command: .listHeists, arguments: sourceArguments)
-        guard case .heistCatalog(let catalog) = listResponse else {
+        guard case .heistCatalog(let descriptions, let detail) = listResponse else {
             return XCTFail("Expected heistCatalog response, got \(listResponse)")
         }
-        XCTAssertEqual(catalog.map(\.identity.displayName), ["agentFlow", "Cart", "Cart.addItem"])
-        let addItem = try XCTUnwrap(catalog.first { $0.identity.displayName == "Cart.addItem" })
+        XCTAssertEqual(detail, .detailed)
+        XCTAssertEqual(descriptions.map(\.identity.displayName), ["agentFlow", "Cart", "Cart.addItem"])
+        let addItem = try XCTUnwrap(descriptions.first { $0.identity.displayName == "Cart.addItem" })
         XCTAssertEqual(addItem.parameterKind, .string)
-        XCTAssertEqual(addItem.actionCommands, [.activate])
+        XCTAssertEqual(addItem.semanticSurface.actionCommands, [.activate])
 
         let describeResponse = try await fence.execute(
             command: .describeHeist,
@@ -519,15 +516,16 @@ extension TheFenceHandlerTests {
             arguments: TheFence.CommandArgumentEnvelope(values: arguments)
         )
 
-        guard case .heistCatalog(let catalog) = response else {
+        guard case .heistCatalog(let descriptions, let detail) = response else {
             return XCTFail("Expected heistCatalog response, got \(response)")
         }
-        let checkout = try XCTUnwrap(catalog.first { $0.identity.displayName == "checkout" })
-        XCTAssertEqual(checkout.nestedRunHeists, [invocationPath("checkout.confirm")])
-        XCTAssertEqual(checkout.actionCommands, [.activate])
-        XCTAssertEqual(checkout.waitCount, 1)
-        XCTAssertEqual(checkout.expectationCount, 1)
-        XCTAssertEqual(checkout.semanticSurfaces, [
+        XCTAssertEqual(detail, .detailed)
+        let checkout = try XCTUnwrap(descriptions.first { $0.identity.displayName == "checkout" })
+        XCTAssertEqual(checkout.semanticSurface.nestedRunHeists, [invocationPath("checkout.confirm")])
+        XCTAssertEqual(checkout.semanticSurface.actionCommands, [.activate])
+        XCTAssertEqual(checkout.semanticSurface.waits.count, 1)
+        XCTAssertEqual(checkout.semanticSurface.expectations.count, 1)
+        XCTAssertEqual(checkout.semanticSurface.semanticSurfaces, [
             .label(.exact("Checkout")),
             .label(.exact("Done")),
             .label(.exact("Receipt")),
