@@ -311,18 +311,25 @@ struct RenderResponseTests {
         observationEvidence: Observation.Evidence
     ) throws -> HeistResult {
         let encoder = JSONEncoder()
+        let expectation = try JSONDecoder().decode(
+            HeistExpectationEvidence.self,
+            from: JSONSerialization.data(withJSONObject: [
+                "bindings": ["targets": [:], "strings": [:]],
+                "observation": try jsonObject(observationEvidence, encoder: encoder),
+                "terminalCause": "observed",
+                "timing": [
+                    "budgetMs": 3,
+                    "elapsedMs": 3,
+                    "lastTreeChangeElapsedMs": 3,
+                ],
+            ])
+        )
         let evidence = HeistActionEvidence.completed(
             result: .success(
                 payload: .activate,
                 observation: .observed(observationEvidence)
             ),
-            expectation: try HeistExpectationEvidence(
-                predicate: nil,
-                bindings: .empty,
-                observation: observationEvidence,
-                terminalCause: .observed,
-                timing: .init(budgetMs: 3, elapsedMs: 3, lastTreeChangeElapsedMs: 3)
-            )
+            expectation: expectation
         )
         let step: [String: Any] = [
             "path": "$.body[0]",
