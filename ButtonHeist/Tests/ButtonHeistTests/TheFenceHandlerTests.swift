@@ -587,7 +587,7 @@ func assertCompactHeistSummary(
         line: line
     )
     XCTAssertTrue(
-        lines.first?.hasSuffix("ms") == true,
+        lines.first?.hasSuffix("ms [expectations: 1/1]") == true,
         lines.first ?? "<missing>",
         file: file,
         line: line

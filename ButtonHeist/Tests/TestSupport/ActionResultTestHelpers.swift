@@ -104,12 +104,15 @@ package enum HeistResultFixture {
         path: String = "$.body[0]",
         evidence: HeistExpectationEvidence = HeistResultFixture.defaultWaitEvidence(met: true)
     ) -> HeistExecutionStepResult {
+        guard let predicate = evidence.predicate else {
+            preconditionFailure("wait result fixture requires an authored predicate")
+        }
         guard let passedEvidence = HeistPassedWaitEvidence(evidence) else {
             preconditionFailure("passed wait result fixture requires complete replayable evidence")
         }
         return .wait(
             path: executionPath(path),
-            predicate: evidence.predicate,
+            predicate: predicate,
             timeout: 1,
             completion: .passed(evidence: passedEvidence)
         )
@@ -120,9 +123,12 @@ package enum HeistResultFixture {
         evidence: HeistExpectationEvidence = HeistResultFixture.defaultWaitEvidence(met: false),
         failure: HeistFailureDetail
     ) -> HeistExecutionStepResult {
-        .wait(
+        guard let predicate = evidence.predicate else {
+            preconditionFailure("failed wait result fixture requires an authored predicate")
+        }
+        return .wait(
             path: executionPath(path),
-            predicate: evidence.predicate,
+            predicate: predicate,
             timeout: 1,
             completion: .failed(
                 evidence: evidence,
@@ -132,7 +138,7 @@ package enum HeistResultFixture {
     }
 
     package static func expectationEvidence(
-        predicate: AccessibilityPredicate,
+        predicate: AccessibilityPredicate?,
         observation: Observation.Evidence,
         terminalCause: HeistExpectationEvidence.TerminalCause = .observed
     ) -> HeistExpectationEvidence {
