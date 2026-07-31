@@ -122,7 +122,7 @@ private struct PublicHeistCatalogEntry: Encodable {
     let role: HeistCatalogRole
     let parameterKind: HeistParameterKind
     let requiresArgument: Bool
-    let summary: String?
+    let summary: String
     let tags: [String]
     let parameterName: HeistReferenceName?
     let nestedRunHeists: [String]?
@@ -169,7 +169,6 @@ private struct PublicHeistDescription: Encodable {
     let parameterKind: HeistParameterKind
     let parameterName: HeistReferenceName?
     let requiresArgument: Bool
-    let summary: String?
     let semanticSurface: PublicHeistSurface
 
     init(_ description: HeistDescription) {
@@ -178,7 +177,6 @@ private struct PublicHeistDescription: Encodable {
         parameterKind = description.parameterKind
         parameterName = description.parameterName
         requiresArgument = description.requiresArgument
-        summary = nil
         semanticSurface = PublicHeistSurface(description.semanticSurface)
     }
 }
