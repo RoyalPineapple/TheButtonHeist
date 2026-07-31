@@ -108,10 +108,10 @@ extension HeistJUnitXML {
         let diagnostic = node.failure?.diagnosticFailure
         var lines = [message]
         if let diagnostic {
-            lines.append("code: \(diagnostic.code)")
-            lines.append("kind: \(diagnostic.kind.rawValue)")
-            lines.append("phase: \(diagnostic.phase.rawValue)")
-            lines.append("retryable: \(diagnostic.retryable)")
+            lines.append("code: \(diagnostic.details.errorCode)")
+            lines.append("kind: \(diagnostic.details.code.kind.rawValue)")
+            lines.append("phase: \(diagnostic.details.phase.rawValue)")
+            lines.append("retryable: \(diagnostic.details.retryable)")
         }
         if node.path == report.summary.abortedAtPath {
             if let screenshot = report.diagnostics.failureScreenshotSummary {

@@ -35,7 +35,7 @@ public struct SessionDevicePayload: Sendable, Equatable {
     public let connectionType: ConnectionScope
     public let shortId: String?
 
-    public init(
+    package init(
         deviceName: String,
         appName: String,
         connectionType: ConnectionScope,
@@ -55,7 +55,7 @@ public struct SessionFailurePayload: Sendable, Equatable {
     public let message: String?
     public let hint: String?
 
-    public init(
+    package init(
         code: String,
         phase: FailurePhase,
         retryable: Bool,
@@ -116,7 +116,7 @@ public struct SessionStatePayload: Sendable, Equatable {
     public let actionTimeoutSeconds: TimeInterval
     public let longActionTimeoutSeconds: TimeInterval
 
-    public init(
+    package init(
         state: SessionConnectionState,
         actionTimeoutSeconds: TimeInterval,
         longActionTimeoutSeconds: TimeInterval

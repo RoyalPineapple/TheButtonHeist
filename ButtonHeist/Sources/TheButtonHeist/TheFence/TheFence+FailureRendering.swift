@@ -7,7 +7,7 @@ extension FenceError: LocalizedError {
 
     public var errorDescription: String? {
         let failure = diagnosticFailure
-        guard let hint = failure.hint else { return failure.message }
+        guard let hint = failure.details.hint else { return failure.message }
         return """
             \(failure.message)
               Hint: \(hint)

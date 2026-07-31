@@ -266,27 +266,6 @@ public struct DiagnosticFailure: Sendable, Equatable {
     /// Structured ButtonHeist build diagnostics, when the failure comes from heist planning.
     public let buildDiagnostics: [HeistBuildDiagnostic]
 
-    /// Display-ready failure message.
-    public var displayMessage: String { message }
-
-    /// Typed machine-readable failure code.
-    public var failureCode: KnownFailureCode { details.code }
-
-    /// Broad diagnostic category for the failure.
-    public var kind: DiagnosticFailureKind { details.code.kind }
-
-    /// Raw JSON/API boundary projection of `failureCode`.
-    public var code: String { failureCode.rawValue }
-
-    /// Lifecycle phase where the failure occurred.
-    public var phase: FailurePhase { details.phase }
-
-    /// Whether retrying the same operation can reasonably succeed.
-    public var retryable: Bool { details.retryable }
-
-    /// Short recovery hint that can be surfaced separately from the message.
-    public var hint: String? { details.hint }
-
     /// Creates a diagnostic failure from fully typed metadata.
     public init(
         message: String,
@@ -314,14 +293,6 @@ extension HeistReport.Failure {
 public struct ConnectionFailure: Equatable, Sendable {
     public let message: String
     public let details: FailureDetails
-
-    /// Typed machine-readable failure code.
-    public var failureCode: KnownFailureCode { details.code }
-    /// Raw JSON/API boundary projection of `failureCode`.
-    public var errorCode: String { details.errorCode }
-    public var phase: FailurePhase { details.phase }
-    public var retryable: Bool { details.retryable }
-    public var hint: String? { details.hint }
 
     public init(
         message: String,

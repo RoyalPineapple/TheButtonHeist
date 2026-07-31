@@ -125,10 +125,7 @@ extension ActionResult {
         return ActionFailureProjection(
             message: message ?? fallbackMessage,
             errorClass: resolvedErrorKind.rawValue,
-            diagnosticFailure: DiagnosticFailure(
-                failureKind: resolvedErrorKind,
-                message: message ?? fallbackMessage
-            )
+            details: resolvedErrorKind.failureDetails
         )
     }
 }
@@ -136,13 +133,13 @@ extension ActionResult {
 struct ActionFailureProjection {
     let message: String
     let errorClass: String
-    let diagnosticFailure: DiagnosticFailure
+    let details: FailureDetails
 
-    var code: String { diagnosticFailure.code }
-    var kind: String { diagnosticFailure.kind.rawValue }
-    var phase: String { diagnosticFailure.phase.rawValue }
-    var retryable: Bool { diagnosticFailure.retryable }
-    var hint: String? { diagnosticFailure.hint }
+    var code: String { details.errorCode }
+    var kind: String { details.code.kind.rawValue }
+    var phase: String { details.phase.rawValue }
+    var retryable: Bool { details.retryable }
+    var hint: String? { details.hint }
 }
 
 struct PublicRotorResult: Encodable {
