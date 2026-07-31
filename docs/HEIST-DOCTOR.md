@@ -145,17 +145,6 @@ eligible failed recording and its newest passing match by decoded `recordedAt`,
 then invokes `heist-doctor`. Filenames and parent directories do not determine
 plan identity or outcome.
 
-For a deterministic demo that does not require manufacturing a red CI build:
-
-```bash
-scripts/heist-doctor-demo.sh
-```
-
-That demo generates two self-contained recordings through
-`HeistResultRecording`: a last pass where the target was `Checkout`, and a
-current failure where the same semantic control is now `Go to Checkout`. CI
-runs this demo in the macOS test lane as a workflow smoke test.
-
 XCTest and Swift Testing adapters may later add nicer test attachments or names,
 but artifact collection should not depend on per-test wrappers.
 
