@@ -35,7 +35,7 @@ extension HeistExecution {
         ) -> HeistExecutionStepResult {
             let observed = "could not resolve heist expectation: \(error)"
             let actionResult = ActionResult.failure(
-                payload: command.actionResultPayload,
+                payload: .empty(for: command.type),
                 failureKind: .validationError,
                 message: observed
             )
@@ -83,7 +83,7 @@ extension HeistExecution {
             action leaf: ActionLeaf
         ) -> HeistExecutionStepResult {
             let result = ActionResult.failure(
-                payload: leaf.command.actionResultPayload,
+                payload: .empty(for: leaf.command.type),
                 failureKind: .timeout,
                 message: "whole-heist deadline expired before action dispatch"
             )
@@ -247,7 +247,7 @@ extension HeistExecution.ResultProjector {
         switch outcome {
         case .timedOut, .heistTimedOut:
             return .failure(
-                payload: leaf.command.actionResultPayload,
+                payload: .empty(for: leaf.command.type),
                 failureKind: .timeout,
                 message: leaf.phase.expectation?.result.outstandingDescription.map {
                     "timed out while waiting for \($0)"
@@ -259,7 +259,7 @@ extension HeistExecution.ResultProjector {
         }
         guard let dispatch = leaf.phase.dispatch else {
             return .failure(
-                payload: leaf.command.actionResultPayload,
+                payload: .empty(for: leaf.command.type),
                 failureKind: .actionFailed,
                 message: "action dispatch did not complete",
                 observation: .observed(evidence)
@@ -370,58 +370,6 @@ extension HeistExecution.ResultProjector {
             observed: observed,
             expected: step.predicate.description
         )
-    }
-}
-
-extension ResolvedHeistActionCommand {
-    internal var actionResultPayload: ActionResult.Payload {
-        switch self {
-        case .activate: .activate
-        case .increment: .increment
-        case .decrement: .decrement
-        case .customAction: .customAction
-        case .rotor: .rotor(nil)
-        case .dismiss: .dismiss
-        case .magicTap: .magicTap
-        case .typeText: .typeText(nil)
-        case .oneFingerTap: .oneFingerTap
-        case .longPress: .longPress
-        case .swipe: .swipe
-        case .drag: .drag
-        case .scroll: .scroll
-        case .scrollToVisible: .scrollToVisible
-        case .scrollToEdge: .scrollToEdge
-        case .editAction: .editAction
-        case .setPasteboard: .setPasteboard(nil)
-        case .takeScreenshot: .screenshot(nil)
-        case .dismissKeyboard: .dismissKeyboard
-        }
-    }
-}
-
-extension HeistActionCommand {
-    internal var actionResultPayload: ActionResult.Payload {
-        switch self {
-        case .activate: .activate
-        case .increment: .increment
-        case .decrement: .decrement
-        case .customAction: .customAction
-        case .rotor: .rotor(nil)
-        case .dismiss: .dismiss
-        case .magicTap: .magicTap
-        case .typeText: .typeText(nil)
-        case .oneFingerTap: .oneFingerTap
-        case .longPress: .longPress
-        case .swipe: .swipe
-        case .drag: .drag
-        case .scroll: .scroll
-        case .scrollToVisible: .scrollToVisible
-        case .scrollToEdge: .scrollToEdge
-        case .editAction: .editAction
-        case .setPasteboard: .setPasteboard(nil)
-        case .takeScreenshot: .screenshot(nil)
-        case .dismissKeyboard: .dismissKeyboard
-        }
     }
 }
 

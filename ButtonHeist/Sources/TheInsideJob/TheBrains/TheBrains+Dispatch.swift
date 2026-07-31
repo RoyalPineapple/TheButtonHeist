@@ -100,13 +100,13 @@ extension TheBrains {
     ) -> TheSafecracker.ActionDispatchResult? {
         if Task.isCancelled {
             return .failure(
-                command.actionResultPayload,
+                .empty(for: command.type),
                 message: "action dispatch was cancelled before effect dispatch"
             )
         }
         guard deadline.hasTimeRemaining(at: RuntimeElapsed.now) else {
             return .failure(
-                command.actionResultPayload,
+                .empty(for: command.type),
                 message: "action deadline expired before effect dispatch",
                 failureKind: .timeout
             )
@@ -119,7 +119,7 @@ extension TheBrains {
         deadline: SemanticObservationDeadline,
         timing: inout ActionTiming
     ) async -> TheSafecracker.ActionDispatchResult {
-        switch command {
+        switch command.payload {
         case .activate(let target):
             return await actions.executeActivate(
                 target,
@@ -197,7 +197,7 @@ extension TheBrains {
     }
 
     private func clearRotorCursorBeforeNonRotorAction(_ command: ResolvedHeistActionCommand) {
-        if case .rotor = command {} else {
+        if case .rotor = command.payload {} else {
             vault.clearRotorCursor()
         }
     }

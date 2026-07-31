@@ -34,7 +34,7 @@ struct PublicActionResponse: Encodable {
 
     init(command: TheFence.Command, result: ActionResult, expectation: ExpectationResult?) {
         self.init(projection: ActionProjection(
-            actionMethod: .fence(command),
+            method: command.rawValue,
             result: result,
             expectation: expectation,
             expectationHint: expectation.flatMap {
@@ -76,7 +76,7 @@ extension ActionProjection: Encodable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: PublicActionResultCodingKey.self)
         try container.encode(status, forKey: .status)
-        try container.encode(actionMethod.rawValue, forKey: .method)
+        try container.encode(method, forKey: .method)
         try container.encodeIfPresent(message, forKey: .message)
         try container.encodeIfPresent(screenActionHandler, forKey: .screenActionHandler)
         try container.encodeIfPresent(warning, forKey: .warning)

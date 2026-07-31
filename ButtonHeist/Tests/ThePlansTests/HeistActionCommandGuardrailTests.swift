@@ -9,6 +9,13 @@ import Testing
     #expect(coveredTypes == allTypes)
 }
 
+@Test func `resolved action retains its authored command type`() throws {
+    for testCase in actionCommandContractCases {
+        let resolved = try testCase.command.resolve(in: .empty)
+        #expect(resolved.type == testCase.wireType)
+    }
+}
+
 @Test func `action command target traversal reports roles paths and report targets`() throws {
     let commandPath = HeistPlanPath.root.child(.body).index(0).child(.action).child(.command)
     let cases: [(String, HeistActionCommand, [TargetOccurrenceExpectation])] = [

@@ -17,10 +17,12 @@ extension TheBrainsActionTests {
             element: makeElement(label: "Cancelled Dispatch", traits: .button),
             object: liveObject
         )
-        let target = try AccessibilityTarget.label("Cancelled Dispatch").resolve(in: .empty)
+        let command = try HeistActionCommand
+            .activate(.label("Cancelled Dispatch"))
+            .resolve(in: .empty)
         let task = Task { @MainActor in
             await brains.dispatchRuntimeAction(
-                .activate(target),
+                command,
                 deadline: actionDeadline()
             )
         }
@@ -29,7 +31,10 @@ extension TheBrainsActionTests {
         let result = await task.value
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.failureKind, .actionFailed)
+        XCTAssertEqual(
+            TheBrains.actionFailureKind(for: try XCTUnwrap(result.failureKind)),
+            ActionFailure.Kind.actionFailed
+        )
         XCTAssertEqual(liveObject.activationCount, 0)
     }
 
@@ -40,10 +45,12 @@ extension TheBrainsActionTests {
             element: makeElement(label: "Expired Dispatch", traits: .button),
             object: liveObject
         )
-        let target = try AccessibilityTarget.label("Expired Dispatch").resolve(in: .empty)
+        let command = try HeistActionCommand
+            .activate(.label("Expired Dispatch"))
+            .resolve(in: .empty)
 
         let result = await brains.dispatchRuntimeAction(
-            .activate(target),
+            command,
             deadline: SemanticObservationDeadline(
                 start: RuntimeElapsed.now,
                 timeoutSeconds: 0
@@ -51,7 +58,10 @@ extension TheBrainsActionTests {
         )
 
         XCTAssertFalse(result.success)
-        XCTAssertEqual(result.failureKind, .timeout)
+        XCTAssertEqual(
+            TheBrains.actionFailureKind(for: try XCTUnwrap(result.failureKind)),
+            ActionFailure.Kind.timeout
+        )
         XCTAssertEqual(liveObject.activationCount, 0)
     }
 

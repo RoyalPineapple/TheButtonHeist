@@ -135,36 +135,11 @@ extension TheFence {
     }
 
     private func performActionTimeout(for action: HeistActionCommand) -> TimeInterval {
-        guard let timeout = performActionCommand(for: action).descriptor.timeout.singleStepBaseSeconds else {
-            preconditionFailure("Perform action command must carry single-step action timeout policy")
-        }
-        return timeout
+        Self.performActionTimeoutClass(for: action.wireType).seconds
     }
 
-    private func performActionCommand(for action: HeistActionCommand) -> Command {
-        switch action.wireType {
-        case .typeText:
-            return .typeText
-        case .oneFingerTap:
-            return .oneFingerTap
-        case .longPress:
-            return .longPress
-        case .swipe:
-            return .swipe
-        case .drag:
-            return .drag
-        case .rotor:
-            return .rotor
-        case .editAction:
-            return .editAction
-        case .setPasteboard:
-            return .setPasteboard
-        case .dismissKeyboard:
-            return .dismissKeyboard
-        case .activate, .increment, .decrement, .performCustomAction, .dismiss, .magicTap, .takeScreenshot,
-             .scroll, .scrollToVisible, .scrollToEdge:
-            return .activate
-        }
+    static func performActionTimeoutClass(for type: HeistActionCommandType) -> FenceCommandFixedTimeout {
+        type == .typeText ? .longAction : .standardAction
     }
 
     // MARK: - Session State

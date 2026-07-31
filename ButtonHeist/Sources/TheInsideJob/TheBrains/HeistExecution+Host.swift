@@ -430,7 +430,7 @@ extension HeistExecution {
             let effect = PerformedEffect.input(.dispatchCompleted(
                 id,
                 .failure(
-                    command.actionResultPayload,
+                    .empty(for: command.type),
                     message: "action dispatch timed out at the action deadline",
                     failureKind: .timeout
                 )
@@ -472,7 +472,7 @@ extension HeistExecution {
             case .dispatch(let id, let command):
                 guard let deadline = activeLeafDeadline(id: id, runtime: runtime) else {
                     return .input(.dispatchCompleted(id, .failure(
-                        command.actionResultPayload,
+                        .empty(for: command.type),
                         message: "action dispatch has no active leaf deadline",
                         failureKind: .actionFailed
                     )))

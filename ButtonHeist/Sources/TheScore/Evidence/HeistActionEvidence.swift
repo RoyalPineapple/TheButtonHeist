@@ -84,34 +84,52 @@ extension HeistActionEvidence {
         case .commandResolutionFailure:
             return true
         case .completed(let result, _):
-            return command.actionResultMethod == result.method
+            return command.wireType.actionResultMethod == result.method
         }
     }
 }
 
-extension HeistActionCommand {
+package extension HeistActionCommandType {
+    /// Projects the canonical action identity onto the public result method.
     var actionResultMethod: ActionMethod {
-        switch self {
+        if self == .performCustomAction { return .customAction }
+        guard let method = ActionMethod(rawValue: rawValue) else {
+            preconditionFailure("Every heist action command type projects to an ActionResult method")
+        }
+        return method
+    }
+}
+
+package extension ActionResult.Payload {
+    /// Empty returned-data payload for an action command before dispatch returns data.
+    static func empty(for type: HeistActionCommandType) -> Self {
+        switch type {
         case .activate: .activate
         case .increment: .increment
         case .decrement: .decrement
-        case .customAction: .customAction
-        case .rotor: .rotor
+        case .performCustomAction: .customAction
+        case .rotor: .rotor(nil)
         case .dismiss: .dismiss
         case .magicTap: .magicTap
-        case .typeText: .typeText
         case .oneFingerTap: .oneFingerTap
         case .longPress: .longPress
         case .swipe: .swipe
         case .drag: .drag
+        case .typeText: .typeText(nil)
+        case .editAction: .editAction
+        case .setPasteboard: .setPasteboard(nil)
+        case .takeScreenshot: .screenshot(nil)
         case .scroll: .scroll
         case .scrollToVisible: .scrollToVisible
         case .scrollToEdge: .scrollToEdge
-        case .editAction: .editAction
-        case .setPasteboard: .setPasteboard
-        case .takeScreenshot: .takeScreenshot
         case .dismissKeyboard: .dismissKeyboard
         }
+    }
+}
+
+package extension HeistActionCommand {
+    var actionResultPayload: ActionResult.Payload {
+        .empty(for: wireType)
     }
 }
 

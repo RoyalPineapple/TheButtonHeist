@@ -99,7 +99,7 @@ struct PublicResponseModel: Encodable {
                 FenceResponse.expectationFailureHint($0, command: command, result: result)
             }
             try PublicActionResponse(projection: ActionProjection(
-                actionMethod: .fence(command),
+                method: command.rawValue,
                 result: result,
                 expectation: expectation,
                 expectationHint: expectationHint,

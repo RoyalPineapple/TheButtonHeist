@@ -22,27 +22,8 @@ enum ActionPayloadProjection: Sendable {
     case none
 }
 
-enum ActionMethodProjection: Sendable, Equatable, CustomStringConvertible {
-    case fence(TheFence.Command)
-    case heist(HeistActionCommand)
-    case result(ActionMethod)
-
-    var rawValue: String {
-        switch self {
-        case .fence(let command):
-            return command.rawValue
-        case .heist(let command):
-            return command.wireType.rawValue
-        case .result(let method):
-            return method.rawValue
-        }
-    }
-
-    var description: String { rawValue }
-}
-
 struct ActionProjection: Sendable {
-    let actionMethod: ActionMethodProjection
+    let method: String
     let result: ActionResult
     private let surfacedExpectation: ExpectationResult?
     private let announcementOverride: String?
@@ -51,7 +32,7 @@ struct ActionProjection: Sendable {
     let publicContext: PublicActionResultContext
 
     init(
-        actionMethod: ActionMethodProjection,
+        method: String,
         result: ActionResult,
         expectation: ExpectationResult? = nil,
         announcementOverride: String? = nil,
@@ -59,7 +40,7 @@ struct ActionProjection: Sendable {
         profile: ProjectionProfile,
         publicContext: PublicActionResultContext = .standaloneAction
     ) {
-        self.actionMethod = actionMethod
+        self.method = method
         self.result = result
         self.surfacedExpectation = result.outcome.isSuccess ? expectation : nil
         self.announcementOverride = announcementOverride
@@ -134,7 +115,7 @@ struct ActionProjection: Sendable {
     }
 
     var failure: ActionFailureProjection? {
-        result.diagnosticFailureProjection(fallbackMessage: actionMethod.rawValue)
+        result.diagnosticFailureProjection(fallbackMessage: method)
     }
 
     var expectation: ExpectationProjection? {

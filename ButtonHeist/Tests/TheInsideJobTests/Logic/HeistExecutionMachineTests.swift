@@ -380,7 +380,7 @@ struct HeistMachineTestDriver {
 
         case .dispatch(let id, let command):
             let result = script.dispatchResults.isEmpty
-                ? .success(payload: command.actionResultPayload)
+                ? .success(payload: .empty(for: command.type))
                 : script.dispatchResults.removeFirst()
             return machine.advance(.dispatchCompleted(id, result))
 

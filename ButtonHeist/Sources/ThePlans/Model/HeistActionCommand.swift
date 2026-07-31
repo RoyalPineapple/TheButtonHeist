@@ -171,66 +171,80 @@ public enum HeistActionCommand: Codable, Sendable, Equatable {
 package extension HeistActionCommand {
     func resolve(in environment: HeistExecutionEnvironment) throws -> ResolvedHeistActionCommand {
         switch self {
-        case .activate(let target): return .activate(try target.resolve(in: environment))
-        case .increment(let target): return .increment(try target.resolve(in: environment))
-        case .decrement(let target): return .decrement(try target.resolve(in: environment))
+        case .activate(let target): return resolved(.activate(try target.resolve(in: environment)))
+        case .increment(let target): return resolved(.increment(try target.resolve(in: environment)))
+        case .decrement(let target): return resolved(.decrement(try target.resolve(in: environment)))
         case .customAction(let name, let target):
-            return .customAction(name: name, target: try target.resolve(in: environment))
+            return resolved(.customAction(name: name, target: try target.resolve(in: environment)))
         case .rotor(let selection, let target, let direction):
-            return .rotor(
+            return resolved(.rotor(
                 selection: selection,
                 target: try target.resolve(in: environment),
                 direction: direction
-            )
-        case .dismiss: return .dismiss
-        case .magicTap: return .magicTap
+            ))
+        case .dismiss: return resolved(.dismiss)
+        case .magicTap: return resolved(.magicTap)
         case .typeText(let payload):
-            return .typeText(ResolvedTypeTextTarget(
+            return resolved(.typeText(ResolvedTypeTextTarget(
                 text: try payload.source.resolve(in: environment),
                 target: try payload.target?.resolve(in: environment)
-            ))
+            )))
         case .oneFingerTap(let target):
-            return .oneFingerTap(try target.resolve(in: environment))
+            return resolved(.oneFingerTap(try target.resolve(in: environment)))
         case .longPress(let target):
-            return .longPress(try target.resolve(in: environment))
+            return resolved(.longPress(try target.resolve(in: environment)))
         case .swipe(let target):
-            return .swipe(try target.resolve(in: environment))
+            return resolved(.swipe(try target.resolve(in: environment)))
         case .drag(let target):
-            return .drag(try target.resolve(in: environment))
+            return resolved(.drag(try target.resolve(in: environment)))
         case .scroll(let target):
-            return .scroll(try target.resolve(in: environment))
+            return resolved(.scroll(try target.resolve(in: environment)))
         case .scrollToVisible(let target):
-            return .scrollToVisible(try target.resolve(in: environment))
+            return resolved(.scrollToVisible(try target.resolve(in: environment)))
         case .scrollToEdge(let target):
-            return .scrollToEdge(try target.resolve(in: environment))
-        case .editAction(let target): return .editAction(target)
-        case .setPasteboard(let target): return .setPasteboard(target)
-        case .takeScreenshot: return .takeScreenshot
-        case .dismissKeyboard: return .dismissKeyboard
+            return resolved(.scrollToEdge(try target.resolve(in: environment)))
+        case .editAction(let target): return resolved(.editAction(target))
+        case .setPasteboard(let target): return resolved(.setPasteboard(target))
+        case .takeScreenshot: return resolved(.takeScreenshot)
+        case .dismissKeyboard: return resolved(.dismissKeyboard)
         }
+    }
+
+    private func resolved(_ payload: ResolvedHeistActionCommand.Payload) -> ResolvedHeistActionCommand {
+        .init(type: wireType, payload: payload)
     }
 }
 
-package enum ResolvedHeistActionCommand: Sendable, Equatable {
-    case activate(ResolvedAccessibilityTarget)
-    case increment(ResolvedAccessibilityTarget)
-    case decrement(ResolvedAccessibilityTarget)
-    case customAction(name: CustomActionName, target: ResolvedAccessibilityTarget)
-    case rotor(selection: RotorSelection, target: ResolvedAccessibilityTarget, direction: RotorDirection)
-    case dismiss
-    case magicTap
-    case typeText(ResolvedTypeTextTarget)
-    case oneFingerTap(ResolvedTapTarget)
-    case longPress(ResolvedLongPressTarget)
-    case swipe(ResolvedSwipeTarget)
-    case drag(ResolvedDragTarget)
-    case scroll(ResolvedScrollTarget)
-    case scrollToVisible(ResolvedAccessibilityTarget)
-    case scrollToEdge(ResolvedScrollToEdgeTarget)
-    case editAction(EditActionTarget)
-    case setPasteboard(SetPasteboardTarget)
-    case takeScreenshot
-    case dismissKeyboard
+package struct ResolvedHeistActionCommand: Sendable, Equatable {
+    package let type: HeistActionCommandType
+    package let payload: Payload
+
+    fileprivate init(type: HeistActionCommandType, payload: Payload) {
+        self.type = type
+        self.payload = payload
+    }
+
+    package enum Payload: Sendable, Equatable {
+        case activate(ResolvedAccessibilityTarget)
+        case increment(ResolvedAccessibilityTarget)
+        case decrement(ResolvedAccessibilityTarget)
+        case customAction(name: CustomActionName, target: ResolvedAccessibilityTarget)
+        case rotor(selection: RotorSelection, target: ResolvedAccessibilityTarget, direction: RotorDirection)
+        case dismiss
+        case magicTap
+        case typeText(ResolvedTypeTextTarget)
+        case oneFingerTap(ResolvedTapTarget)
+        case longPress(ResolvedLongPressTarget)
+        case swipe(ResolvedSwipeTarget)
+        case drag(ResolvedDragTarget)
+        case scroll(ResolvedScrollTarget)
+        case scrollToVisible(ResolvedAccessibilityTarget)
+        case scrollToEdge(ResolvedScrollToEdgeTarget)
+        case editAction(EditActionTarget)
+        case setPasteboard(SetPasteboardTarget)
+        case takeScreenshot
+        case dismissKeyboard
+    }
 }
 
 package struct ResolvedTypeTextTarget: Sendable, Equatable {

@@ -49,6 +49,47 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         }
     }
 
+    func testEveryActionCommandTypeProjectsOneResultMethod() {
+        let expectedMethods: [HeistActionCommandType: ActionMethod] = [
+            .activate: .activate,
+            .increment: .increment,
+            .decrement: .decrement,
+            .performCustomAction: .customAction,
+            .rotor: .rotor,
+            .dismiss: .dismiss,
+            .magicTap: .magicTap,
+            .oneFingerTap: .oneFingerTap,
+            .longPress: .longPress,
+            .swipe: .swipe,
+            .drag: .drag,
+            .typeText: .typeText,
+            .editAction: .editAction,
+            .setPasteboard: .setPasteboard,
+            .takeScreenshot: .takeScreenshot,
+            .scroll: .scroll,
+            .scrollToVisible: .scrollToVisible,
+            .scrollToEdge: .scrollToEdge,
+            .dismissKeyboard: .dismissKeyboard,
+        ]
+
+        XCTAssertEqual(Set(expectedMethods.keys), Set(HeistActionCommandType.allCases))
+        for type in HeistActionCommandType.allCases {
+            let result = ActionResult.success(payload: .empty(for: type))
+            XCTAssertEqual(type.actionResultMethod, expectedMethods[type])
+            XCTAssertEqual(result.method, expectedMethods[type])
+        }
+    }
+
+    func testActionEvidenceRejectsMismatchedCanonicalCommandType() {
+        let evidence = HeistActionEvidence.completed(
+            result: .success(payload: .customAction),
+            expectation: nil
+        )
+
+        XCTAssertTrue(evidence.matches(command: .customAction(name: "Archive", target: .label("Mail"))))
+        XCTAssertFalse(evidence.matches(command: .activate(.label("Mail"))))
+    }
+
     func testEveryOutcomeRoundTripsWithEveryObservationCase() throws {
         let complete = observationEvidenceWithAnnouncement("Ready", coverage: .complete)
         let incomplete = observationEvidenceWithAnnouncement("Ready", coverage: .incomplete(.historyUnavailable))
