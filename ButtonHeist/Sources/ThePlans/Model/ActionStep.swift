@@ -77,16 +77,6 @@ public struct ActionExpectation: Codable, Sendable, Equatable {
         self.timeout = timeout
     }
 
-    public init(_ step: WaitStep) throws {
-        guard step.elseBody == nil else {
-            throw HeistPlanBuildError.planStructure(
-                path: "$.expectation.else_body",
-                message: "action expectations do not support an else body"
-            )
-        }
-        self.init(predicate: step.predicate, timeout: .explicit(step.timeout))
-    }
-
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "action expectation")
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -141,70 +131,6 @@ public enum ActionExpectationPolicy: Sendable, Equatable {
 
 }
 
-/// The execution meaning admitted for every action step.
-///
-/// An authored expectation keeps its authored predicate; every action still
-/// settles through a terminal no-change observation. A waiver only waives the
-/// authored predicate, never that settlement witness.
-package enum ActionExecutionExpectation: Sendable, Equatable {
-    case authoredThenNoChange(ActionExpectation)
-    case noChange
-}
-
-extension ActionExpectationPolicy: Codable {
-    private enum CodingKeys: String, CodingKey, CaseIterable {
-        case expectation
-        case waiver = "without_expectation"
-    }
-
-    public init(from decoder: Decoder) throws {
-        try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "action expectation policy")
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self = try Self.decode(
-            from: container,
-            expectationKey: .expectation,
-            waiverKey: .waiver,
-            ambiguousError: DecodingError.dataCorrupted(.init(
-                codingPath: container.codingPath,
-                debugDescription: "action expectation policy cannot include both expectation and without_expectation"
-            ))
-        )
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try encode(to: &container, expectationKey: .expectation, waiverKey: .waiver)
-    }
-
-    fileprivate static func decode<Key: CodingKey>(
-        from container: KeyedDecodingContainer<Key>,
-        expectationKey: Key,
-        waiverKey: Key,
-        ambiguousError: Error
-    ) throws -> Self {
-        let expectation = try container.decodeIfPresent(ActionExpectation.self, forKey: expectationKey)
-        let waiver = try container.decodeIfPresent(ActionExpectationWaiver.self, forKey: waiverKey)
-        switch (expectation, waiver) {
-        case (.none, .none): return .default
-        case (.some(let expectation), .none): return .expect(expectation)
-        case (.none, .some(let waiver)): return .waived(waiver)
-        case (.some, .some): throw ambiguousError
-        }
-    }
-
-    fileprivate func encode<Key: CodingKey>(
-        to container: inout KeyedEncodingContainer<Key>,
-        expectationKey: Key,
-        waiverKey: Key
-    ) throws {
-        switch self {
-        case .default: break
-        case .expect(let expectation): try container.encode(expectation, forKey: expectationKey)
-        case .waived(let waiver): try container.encode(waiver, forKey: waiverKey)
-        }
-    }
-}
-
 public struct ActionStep: Codable, Sendable, Equatable {
     public let command: HeistActionCommand
     public let expectationPolicy: ActionExpectationPolicy
@@ -217,17 +143,6 @@ public struct ActionStep: Codable, Sendable, Equatable {
         self.expectationPolicy = expectationPolicy
     }
 
-    /// The one execution expectation for this action. Runtime resolves this
-    /// admitted shape; it does not infer a missing action expectation.
-    package var executionExpectation: ActionExecutionExpectation {
-        switch expectationPolicy {
-        case .expect(let expectation):
-            .authoredThenNoChange(expectation)
-        case .default, .waived:
-            .noChange
-        }
-    }
-
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case command, expectation
         case expectationWaiver = "without_expectation"
@@ -236,15 +151,22 @@ public struct ActionStep: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "action step")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let expectationPolicy = try ActionExpectationPolicy.decode(
-            from: container,
-            expectationKey: .expectation,
-            waiverKey: .expectationWaiver,
-            ambiguousError: DecodingError.dataCorrupted(.init(
+        let expectation = try container.decodeIfPresent(ActionExpectation.self, forKey: .expectation)
+        let waiver = try container.decodeIfPresent(ActionExpectationWaiver.self, forKey: .expectationWaiver)
+        let expectationPolicy: ActionExpectationPolicy
+        switch (expectation, waiver) {
+        case (.none, .none):
+            expectationPolicy = .default
+        case (.some(let expectation), .none):
+            expectationPolicy = .expect(expectation)
+        case (.none, .some(let waiver)):
+            expectationPolicy = .waived(waiver)
+        case (.some, .some):
+            throw DecodingError.dataCorrupted(.init(
                 codingPath: container.codingPath,
                 debugDescription: "action step cannot include both expectation and without_expectation"
             ))
-        )
+        }
         self.init(
             command: try container.decode(HeistActionCommand.self, forKey: .command),
             expectationPolicy: expectationPolicy
@@ -254,11 +176,14 @@ public struct ActionStep: Codable, Sendable, Equatable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(command, forKey: .command)
-        try expectationPolicy.encode(
-            to: &container,
-            expectationKey: .expectation,
-            waiverKey: .expectationWaiver
-        )
+        switch expectationPolicy {
+        case .default:
+            break
+        case .expect(let expectation):
+            try container.encode(expectation, forKey: .expectation)
+        case .waived(let waiver):
+            try container.encode(waiver, forKey: .expectationWaiver)
+        }
     }
 
     public static func == (lhs: ActionStep, rhs: ActionStep) -> Bool {

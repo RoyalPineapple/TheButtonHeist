@@ -25,15 +25,15 @@ extension HeistExecution.Machine {
         let observationTimeout: Duration
         do {
             expectation = try HeistExecution.ActionObservationExpectation(
-                step.executionExpectation,
+                step.expectationPolicy,
                 bindings: environment
             )
-            switch step.executionExpectation {
-            case .authoredThenNoChange(let authored):
+            switch step.expectationPolicy {
+            case .expect(let authored):
                 observationTimeout = HeistExecution.duration(
                     authored.waitStep(using: actionExpectationTimeoutPolicy).timeout
                 )
-            case .noChange:
+            case .default, .waived:
                 observationTimeout = HeistExecution.duration(actionExpectationTimeoutPolicy.standard)
             }
         } catch {
