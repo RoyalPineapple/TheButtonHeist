@@ -41,14 +41,14 @@ final class DeltaProjectionTests: XCTestCase {
             evidence: evidence,
             profile: .full
         ))
-        guard case .elementsChanged(_, let edits) = projection else {
+        guard case .elementsChanged(_, let projectedEdits) = projection else {
             return XCTFail("Expected elementsChanged, got \(projection.kind)")
         }
 
-        XCTAssertEqual(edits.added.values, [])
-        XCTAssertEqual(edits.updated.values, [])
+        XCTAssertEqual(projectedEdits.added.values, [])
+        XCTAssertEqual(projectedEdits.updated.values, [])
         XCTAssertEqual(
-            edits.removed.values.compactMap(\.semantics.assertable.identifier),
+            projectedEdits.removed.values.compactMap(\.semantics.assertable.identifier),
             removalOrder.map { "row_\($0)" }
         )
         let compact = FenceResponse.compactDelta(projection, method: "activate")
@@ -99,16 +99,16 @@ final class DeltaProjectionTests: XCTestCase {
             evidence: makeObservationEvidence(before: before, after: after),
             profile: .full
         ))
-        guard case .elementsChanged(_, let edits) = projection else {
+        guard case .elementsChanged(_, let projectedEdits) = projection else {
             return XCTFail("Expected elementsChanged, got \(projection.kind)")
         }
 
-        let removed = try XCTUnwrap(edits.removed.values.first)
-        XCTAssertEqual(edits.removed.values.count, 1)
+        let removed = try XCTUnwrap(projectedEdits.removed.values.first)
+        XCTAssertEqual(projectedEdits.removed.values.count, 1)
         XCTAssertEqual(removed.semantics.assertable.identifier, "duplicate")
         XCTAssertEqual(removed.semantics.assertable.actions, [.custom("Archive")])
-        XCTAssertTrue(edits.added.values.isEmpty)
-        XCTAssertTrue(edits.updated.values.isEmpty)
+        XCTAssertTrue(projectedEdits.added.values.isEmpty)
+        XCTAssertTrue(projectedEdits.updated.values.isEmpty)
     }
 
     func testScreenBoundaryDominatesEarlierElementFacts() throws {

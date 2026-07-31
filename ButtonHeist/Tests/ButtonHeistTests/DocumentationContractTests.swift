@@ -180,7 +180,8 @@ final class DocumentationContractTests: XCTestCase {
             _ = try TheFence.ExpectationPayload.parseRequiredPredicate(value)
         }
 
-        let result = try onlyJSONBlock(
+        let result = try jsonBlock(
+            at: 0,
             startingAt: "Raw heist result steps contain only",
             endingAt: "## Action Results",
             in: wireProtocol

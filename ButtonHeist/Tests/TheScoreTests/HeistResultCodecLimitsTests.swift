@@ -254,7 +254,8 @@ import ThePlans
             )) as? [String: Any]
         )
         legacyCapture["path"] = "$.body[0].failure.actions[0]"
-        let failedStep = try #require(try #require(receipt["steps"] as? [Any]).first)
+        let steps = try #require(receipt["steps"] as? [Any])
+        let failedStep = try #require(steps.first)
         receipt["steps"] = [
             failedStep,
             legacyCapture,

@@ -133,7 +133,7 @@ final class HeistMachineInvocationTests: XCTestCase {
         XCTAssertEqual(invocation.status, .failed)
         XCTAssertEqual(invocation.children.map(\.status), [.failed, .skipped])
         XCTAssertEqual(completion.steps.last?.status, .skipped)
-        XCTAssertEqual(completion.steps.first(where: { $0.status == .failed })?.path, invocation.children.first?.path)
+        XCTAssertEqual(completion.steps.firstFailedStepInResultOrder?.path, invocation.children.first?.path)
     }
 
     func testInvocationReferenceMustResolveBeforeMachineConstruction() throws {

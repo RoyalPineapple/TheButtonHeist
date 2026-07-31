@@ -245,7 +245,7 @@ extension TheFenceHandlerTests {
     }
 
     @ButtonHeistActor
-    func testRunHeistRejectsRawJSONIRFieldsInsteadOfDecodingThem() async throws {
+    func testRunHeistRejectsRawJSONIRFieldsAsMissingCanonicalSource() async throws {
         let fence = TheFence(configuration: .init())
         XCTAssertThrowsError(try fence.decodeRunHeistRequest(
             TheFence.CommandArgumentEnvelope(values: [
@@ -253,14 +253,14 @@ extension TheFenceHandlerTests {
                 "body": .array([.object(["type": .string("warn"), "warn": .object(["message": .string("x")])])]),
             ])
         )) { error in
-            XCTAssertTrue(String(describing: error).contains("raw JSON HeistPlan IR field"), "\(error)")
+            XCTAssertTrue(String(describing: error).contains("requires exactly one plan source"), "\(error)")
             XCTAssertTrue(String(describing: error).contains("ButtonHeist DSL"), "\(error)")
             XCTAssertTrue(String(describing: error).contains(".heist"), "\(error)")
         }
         XCTAssertThrowsError(try fence.decodeRunHeistRequest(
             TheFence.CommandArgumentEnvelope(values: ["version": .int(1), "body": .array([])])
         )) { error in
-            XCTAssertTrue(String(describing: error).contains("raw JSON HeistPlan IR field"), "\(error)")
+            XCTAssertTrue(String(describing: error).contains("requires exactly one plan source"), "\(error)")
         }
     }
 
