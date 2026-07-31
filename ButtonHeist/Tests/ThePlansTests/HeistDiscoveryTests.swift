@@ -11,10 +11,6 @@ private func invocation(_ dottedName: String) -> HeistInvocationPath {
     }
 }
 
-private func exactSemanticString(_ value: String) -> HeistSemanticStringMatch {
-    HeistSemanticStringMatch(mode: .exact, value: .literal(value))
-}
-
 private func existsLabel(_ label: String) -> AccessibilityPredicate {
     .exists(.label(label))
 }
@@ -39,7 +35,6 @@ private let screenChangePredicate = AccessibilityPredicate.screenChanged
     #expect(catalog[0].waitCount == nil)
     #expect(catalog[0].expectationCount == nil)
     #expect(catalog[0].semanticSurfaces == nil)
-    #expect(catalog[0].validationStatus == nil)
 }
 
 @Test func `list heists includes unparameterized definition`() throws {
@@ -123,7 +118,6 @@ private let screenChangePredicate = AccessibilityPredicate.screenChanged
     #expect(checkout.waitCount == nil)
     #expect(checkout.expectationCount == nil)
     #expect(checkout.semanticSurfaces == nil)
-    #expect(checkout.validationStatus == nil)
 }
 
 @Test func testDiscoveryPreservesFirstOccurrenceOrder() throws {
@@ -143,13 +137,12 @@ private let screenChangePredicate = AccessibilityPredicate.screenChanged
     #expect(checkout.waitCount == 1)
     #expect(checkout.expectationCount == 1)
     #expect(checkout.semanticSurfaces == [
-        .label(exactSemanticString("Checkout")),
-        .label(exactSemanticString("Done")),
-        .label(exactSemanticString("Confirm")),
-        .identifier(exactSemanticString("confirmation_button")),
+        .label(.exact("Checkout")),
+        .label(.exact("Done")),
+        .label(.exact("Confirm")),
+        .identifier(.exact("confirmation_button")),
         .traits([.button]),
     ])
-    #expect(checkout.validationStatus == .validated)
 
     let description = try plan.describeHeist(at: "checkout")
     #expect(description.identity == .capability("checkout"))
@@ -207,7 +200,7 @@ private let screenChangePredicate = AccessibilityPredicate.screenChanged
     let pay = try #require(catalog.first)
     #expect(pay.actionCommands == [.activate])
     #expect(pay.semanticSurfaces == [
-        .label(exactSemanticString("Pay")),
+        .label(.exact("Pay")),
         .traits([.button, .link]),
     ])
     #expect(pay.tags == [.entry, .semanticAction])
@@ -223,7 +216,7 @@ private let screenChangePredicate = AccessibilityPredicate.screenChanged
     ).describeHeist(at: "pay")
 
     #expect(description.semanticSurface.targetPredicates == [.predicate(.label("Pay"))])
-    #expect(description.semanticSurface.semanticSurfaces == [.label(exactSemanticString("Pay"))])
+    #expect(description.semanticSurface.semanticSurfaces == [.label(.exact("Pay"))])
 }
 
 @Test func `target discovery dedupes typed facts after ordinal projection`() throws {
@@ -296,7 +289,6 @@ private let screenChangePredicate = AccessibilityPredicate.screenChanged
     #expect(description.role == .entry)
     #expect(description.parameterKind == .none)
     #expect(description.requiresArgument == false)
-    #expect(description.validationStatus == .validated)
 }
 
 @Test func `describe parameterized capability`() throws {
@@ -363,9 +355,9 @@ private let screenChangePredicate = AccessibilityPredicate.screenChanged
         .predicate(.identifier("save_status")),
     ])
     #expect(description.semanticSurface.semanticSurfaces == [
-        .label(exactSemanticString("Submit")),
-        .label(exactSemanticString("Done")),
-        .identifier(exactSemanticString("save_status")),
+        .label(.exact("Submit")),
+        .label(.exact("Done")),
+        .identifier(.exact("save_status")),
     ])
 }
 

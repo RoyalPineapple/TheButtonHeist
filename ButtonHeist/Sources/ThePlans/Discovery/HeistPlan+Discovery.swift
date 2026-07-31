@@ -5,10 +5,6 @@ public enum HeistCatalogRole: String, Codable, Sendable, Equatable {
     case capability
 }
 
-public enum HeistValidationStatus: String, Codable, Sendable, Equatable {
-    case validated
-}
-
 public enum HeistCatalogDetail: String, Codable, CaseIterable, Sendable, Equatable {
     case summary
     case detailed
@@ -30,65 +26,6 @@ public enum HeistTargetPredicateFact: Sendable, Equatable, Hashable {
     case predicate(ElementPredicate)
     case container(ContainerPredicate)
     case targetReference(HeistReferenceName)
-}
-
-public enum HeistSemanticSurfaceFact: Sendable, Equatable, Hashable {
-    case label(HeistSemanticStringMatch)
-    case identifier(HeistSemanticStringMatch)
-    case value(HeistSemanticStringMatch)
-    case hint(HeistSemanticStringMatch)
-    case traits([HeistTrait])
-    case actions([ElementAction])
-    case customContent(HeistSemanticCustomContentMatch)
-    case rotors([HeistSemanticStringMatch])
-    indirect case exclude(HeistSemanticSurfaceFact)
-}
-
-public struct HeistSemanticCustomContentMatch: Sendable, Equatable, Hashable {
-    public let label: HeistSemanticStringMatch?
-    public let value: HeistSemanticStringMatch?
-    public let isImportant: Bool?
-
-    public init(label: HeistSemanticStringMatch? = nil, value: HeistSemanticStringMatch? = nil, isImportant: Bool? = nil) {
-        self.label = label
-        self.value = value
-        self.isImportant = isImportant
-    }
-
-    init(_ match: CustomContentMatch) {
-        self.label = match.label.map(HeistSemanticStringMatch.init)
-        self.value = match.value.map(HeistSemanticStringMatch.init)
-        self.isImportant = match.isImportant
-    }
-}
-
-public struct HeistSemanticStringMatch: Sendable, Equatable, Hashable {
-    public let mode: StringMatch.Mode
-    public let value: HeistSemanticStringValue?
-
-    public init(mode: StringMatch.Mode, value: HeistSemanticStringValue?) {
-        self.mode = mode
-        self.value = value
-    }
-
-    init(_ match: StringMatch) {
-        mode = match.mode
-        value = match.value.map(HeistSemanticStringValue.init)
-    }
-}
-
-public enum HeistSemanticStringValue: Sendable, Equatable, Hashable {
-    case literal(String)
-    case reference(HeistReferenceName)
-
-    init(_ expression: AuthoredString) {
-        switch expression {
-        case .literal(let literal):
-            self = .literal(literal)
-        case .ref(let reference):
-            self = .reference(reference)
-        }
-    }
 }
 
 public enum HeistCatalogIdentity: Sendable, Equatable, Hashable {
@@ -121,7 +58,7 @@ public struct HeistCatalogEntry: Sendable, Equatable {
     public let identity: HeistCatalogIdentity
     public var role: HeistCatalogRole { identity.role }
     public let parameterKind: HeistParameterKind
-    public let requiresArgument: Bool
+    public var requiresArgument: Bool { parameterKind.requiresArgument }
     public let summary: String?
     public let tags: [HeistCatalogTag]
     public let parameterName: HeistReferenceName?
@@ -129,13 +66,11 @@ public struct HeistCatalogEntry: Sendable, Equatable {
     public let actionCommands: [HeistActionCommandType]?
     public let waitCount: Int?
     public let expectationCount: Int?
-    public let semanticSurfaces: [HeistSemanticSurfaceFact]?
-    public let validationStatus: HeistValidationStatus?
+    public let semanticSurfaces: [ElementPredicateCheck]?
 
     public init(
         identity: HeistCatalogIdentity,
         parameterKind: HeistParameterKind,
-        requiresArgument: Bool,
         summary: String? = nil,
         tags: [HeistCatalogTag] = [],
         parameterName: HeistReferenceName? = nil,
@@ -143,12 +78,10 @@ public struct HeistCatalogEntry: Sendable, Equatable {
         actionCommands: [HeistActionCommandType]? = nil,
         waitCount: Int? = nil,
         expectationCount: Int? = nil,
-        semanticSurfaces: [HeistSemanticSurfaceFact]? = nil,
-        validationStatus: HeistValidationStatus? = nil
+        semanticSurfaces: [ElementPredicateCheck]? = nil
     ) {
         self.identity = identity
         self.parameterKind = parameterKind
-        self.requiresArgument = requiresArgument
         self.summary = summary
         self.tags = tags
         self.parameterName = parameterName
@@ -157,7 +90,6 @@ public struct HeistCatalogEntry: Sendable, Equatable {
         self.waitCount = waitCount
         self.expectationCount = expectationCount
         self.semanticSurfaces = semanticSurfaces
-        self.validationStatus = validationStatus
     }
 }
 
@@ -186,7 +118,7 @@ public struct HeistSemanticSurface: Sendable, Equatable {
     package let expectations: [AccessibilityPredicate]
     public let nestedRunHeists: [HeistInvocationPath]
     package let expectedEffects: [AccessibilityPredicate]
-    public let semanticSurfaces: [HeistSemanticSurfaceFact]
+    public let semanticSurfaces: [ElementPredicateCheck]
 
     package init(
         actionCommands: [HeistActionCommandType] = [],
@@ -195,7 +127,7 @@ public struct HeistSemanticSurface: Sendable, Equatable {
         expectations: [AccessibilityPredicate] = [],
         nestedRunHeists: [HeistInvocationPath] = [],
         expectedEffects: [AccessibilityPredicate] = [],
-        semanticSurfaces: [HeistSemanticSurfaceFact] = []
+        semanticSurfaces: [ElementPredicateCheck] = []
     ) {
         self.actionCommands = actionCommands
         self.targetPredicates = targetPredicates
@@ -212,26 +144,21 @@ public struct HeistDescription: Sendable, Equatable {
     public var role: HeistCatalogRole { identity.role }
     public let parameterKind: HeistParameterKind
     public let parameterName: HeistReferenceName?
-    public let requiresArgument: Bool
+    public var requiresArgument: Bool { parameterKind.requiresArgument }
     public let summary: String?
-    public let validationStatus: HeistValidationStatus
     public let semanticSurface: HeistSemanticSurface
 
     public init(
         identity: HeistCatalogIdentity,
         parameterKind: HeistParameterKind,
         parameterName: HeistReferenceName?,
-        requiresArgument: Bool,
         summary: String?,
-        validationStatus: HeistValidationStatus,
         semanticSurface: HeistSemanticSurface
     ) {
         self.identity = identity
         self.parameterKind = parameterKind
         self.parameterName = parameterName
-        self.requiresArgument = requiresArgument
         self.summary = summary
-        self.validationStatus = validationStatus
         self.semanticSurface = semanticSurface
     }
 }
@@ -297,20 +224,19 @@ public extension HeistPlan {
             identities.append(identity)
 
             let parameterKind = plan.parameter.kind
-            let requiresArgument = parameterKind != .none
             let surface = semanticSurface(
                 plan: plan,
                 context: context,
                 definitionComponents: definitionComponents
             )
             var summary = identity.role == .entry ? "Root entry heist" : "Reusable heist capability"
-            if requiresArgument {
+            if parameterKind.requiresArgument {
                 summary += " requiring \(parameterKind.rawValue) argument"
             }
 
             var tags = [identity.role == .entry ? HeistCatalogTag.entry : .capability]
             var tagSet = Set(tags)
-            if requiresArgument, tagSet.insert(.parameterized).inserted { tags.append(.parameterized) }
+            if parameterKind.requiresArgument, tagSet.insert(.parameterized).inserted { tags.append(.parameterized) }
             if !surface.nestedRunHeists.isEmpty, tagSet.insert(.composed).inserted { tags.append(.composed) }
             if !surface.waits.isEmpty || !surface.expectations.isEmpty,
                tagSet.insert(.assertion).inserted { tags.append(.assertion) }
@@ -338,7 +264,6 @@ public extension HeistPlan {
                 entries.append(HeistCatalogEntry(
                     identity: identity,
                     parameterKind: parameterKind,
-                    requiresArgument: requiresArgument,
                     summary: summary,
                     tags: tags
                 ))
@@ -347,7 +272,6 @@ public extension HeistPlan {
             entries.append(HeistCatalogEntry(
                 identity: identity,
                 parameterKind: parameterKind,
-                requiresArgument: requiresArgument,
                 summary: summary,
                 tags: tags,
                 parameterName: plan.parameter.name,
@@ -355,8 +279,7 @@ public extension HeistPlan {
                 actionCommands: surface.actionCommands.isEmpty ? nil : surface.actionCommands,
                 waitCount: surface.waits.count,
                 expectationCount: surface.expectations.count,
-                semanticSurfaces: surface.semanticSurfaces.isEmpty ? nil : surface.semanticSurfaces,
-                validationStatus: .validated
+                semanticSurfaces: surface.semanticSurfaces.isEmpty ? nil : surface.semanticSurfaces
             ))
         }
         try validateUniqueCatalogPaths(identities)
@@ -397,9 +320,7 @@ public extension HeistPlan {
                 identity: identity,
                 parameterKind: plan.parameter.kind,
                 parameterName: plan.parameter.name,
-                requiresArgument: plan.parameter.kind != .none,
                 summary: nil,
-                validationStatus: .validated,
                 semanticSurface: semanticSurface(
                     plan: plan,
                     context: context,
@@ -537,32 +458,7 @@ private extension HeistPlan {
             expectations: expectations,
             nestedRunHeists: nestedRunHeists,
             expectedEffects: expectedEffects,
-            semanticSurfaces: semanticFacets.map(HeistSemanticSurfaceFact.init)
+            semanticSurfaces: semanticFacets
         )
-    }
-}
-
-private extension HeistSemanticSurfaceFact {
-    init(_ check: ElementPredicateCheck) {
-        switch check {
-        case .label(let match):
-            self = .label(HeistSemanticStringMatch(match))
-        case .identifier(let match):
-            self = .identifier(HeistSemanticStringMatch(match))
-        case .value(let match):
-            self = .value(HeistSemanticStringMatch(match))
-        case .hint(let match):
-            self = .hint(HeistSemanticStringMatch(match))
-        case .traits(let traits):
-            self = .traits(traits.canonicalHeistTraitArray)
-        case .actions(let actions):
-            self = .actions(actions.canonicalElementActionArray)
-        case .customContent(let match):
-            self = .customContent(HeistSemanticCustomContentMatch(match))
-        case .rotors(let matches):
-            self = .rotors(matches.map(HeistSemanticStringMatch.init))
-        case .exclude(let check):
-            self = .exclude(HeistSemanticSurfaceFact(check))
-        }
     }
 }

@@ -14,10 +14,6 @@ func invocationPath(_ dottedName: String) -> HeistInvocationPath {
     }
 }
 
-func exactSemanticString(_ value: String) -> HeistSemanticStringMatch {
-    HeistSemanticStringMatch(mode: .exact, value: .literal(value))
-}
-
 func existsLabel(_ label: String) -> AccessibilityPredicate {
     .exists(.label(label))
 }

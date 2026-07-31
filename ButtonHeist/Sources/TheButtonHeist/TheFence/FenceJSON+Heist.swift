@@ -130,7 +130,6 @@ private struct PublicHeistCatalogEntry: Encodable {
     let waitCount: Int?
     let expectationCount: Int?
     let semanticSurfaces: [String]?
-    let validationStatus: HeistValidationStatus?
 
     init(_ entry: HeistCatalogEntry) {
         name = entry.identity.displayName
@@ -145,7 +144,6 @@ private struct PublicHeistCatalogEntry: Encodable {
         waitCount = entry.waitCount
         expectationCount = entry.expectationCount
         semanticSurfaces = entry.semanticSurfaces?.map(\.heistDiscoveryDisplayValue)
-        validationStatus = entry.validationStatus
     }
 }
 
@@ -156,8 +154,7 @@ private struct PublicHeistDescription: Encodable {
     let parameterName: HeistReferenceName?
     let requiresArgument: Bool
     let summary: String?
-    let validationStatus: HeistValidationStatus
-    let semanticSurface: PublicHeistSemanticSurface
+    let semanticSurface: PublicHeistSurface
 
     init(_ description: HeistDescription) {
         name = description.identity.displayName
@@ -166,12 +163,11 @@ private struct PublicHeistDescription: Encodable {
         parameterName = description.parameterName
         requiresArgument = description.requiresArgument
         summary = description.summary
-        validationStatus = description.validationStatus
-        semanticSurface = PublicHeistSemanticSurface(description.semanticSurface)
+        semanticSurface = PublicHeistSurface(description.semanticSurface)
     }
 }
 
-private struct PublicHeistSemanticSurface: Encodable {
+private struct PublicHeistSurface: Encodable {
     let actionCommands: [String]
     let targetPredicates: [String]
     let waits: [String]

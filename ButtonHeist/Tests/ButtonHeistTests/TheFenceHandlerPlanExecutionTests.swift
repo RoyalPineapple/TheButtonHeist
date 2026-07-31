@@ -318,7 +318,6 @@ extension TheFenceHandlerTests {
         XCTAssertNil(catalog[1].waitCount)
         XCTAssertNil(catalog[1].expectationCount)
         XCTAssertNil(catalog[1].semanticSurfaces)
-        XCTAssertNil(catalog[1].validationStatus)
     }
 
     @ButtonHeistActor
@@ -364,7 +363,6 @@ extension TheFenceHandlerTests {
         let addItem = try XCTUnwrap(catalog.first { $0.identity.displayName == "Cart.addItem" })
         XCTAssertEqual(addItem.parameterKind, .string)
         XCTAssertEqual(addItem.actionCommands, [.activate])
-        XCTAssertEqual(addItem.validationStatus, .validated)
 
         let describeResponse = try await fence.execute(
             command: .describeHeist,
@@ -447,12 +445,11 @@ extension TheFenceHandlerTests {
         XCTAssertEqual(checkout.waitCount, 1)
         XCTAssertEqual(checkout.expectationCount, 1)
         XCTAssertEqual(checkout.semanticSurfaces, [
-            .label(exactSemanticString("Checkout")),
-            .label(exactSemanticString("Done")),
-            .label(exactSemanticString("Receipt")),
-            .identifier(exactSemanticString("confirm_button")),
+            .label(.exact("Checkout")),
+            .label(.exact("Done")),
+            .label(.exact("Receipt")),
+            .identifier(.exact("confirm_button")),
         ])
-        XCTAssertEqual(checkout.validationStatus, .validated)
     }
 
     @ButtonHeistActor

@@ -16,7 +16,7 @@ extension FenceResponse {
     func compactHeistDescription(_ description: HeistDescription) -> String {
         var lines = [
             "heist \(description.identity.displayName) [\(description.role.rawValue)] "
-                + "\(parameterSummary(description)) validation=\(description.validationStatus.rawValue)",
+                + "\(parameterSummary(description))",
         ]
         if let summary = description.summary, !summary.isEmpty {
             lines.append("summary: \(summary)")
@@ -39,7 +39,6 @@ extension FenceResponse {
             "Heist: \(description.identity.displayName)",
             "Role: \(description.role.rawValue)",
             "Parameter: \(parameterSummary(description))",
-            "Validation: \(description.validationStatus.rawValue)",
         ]
         if let summary = description.summary, !summary.isEmpty {
             lines.append("Summary: \(summary)")
@@ -83,9 +82,6 @@ extension FenceResponse {
         }
         if let semanticSurfaces = entry.semanticSurfaces, !semanticSurfaces.isEmpty {
             lines.append("\(indent)  semantic surfaces: \(semanticSurfaces.map(\.heistDiscoveryDisplayValue).joined(separator: ", "))")
-        }
-        if let validationStatus = entry.validationStatus {
-            lines.append("\(indent)  validation=\(validationStatus.rawValue)")
         }
         return lines
     }
@@ -163,7 +159,7 @@ extension HeistTargetPredicateFact {
     }
 }
 
-extension HeistSemanticSurfaceFact {
+extension ElementPredicateCheck {
     var heistDiscoveryDisplayValue: String {
         switch self {
         case .label(let match):
@@ -175,20 +171,20 @@ extension HeistSemanticSurfaceFact {
         case .hint(let match):
             return "hint=\(match.heistDiscoveryDisplayValue)"
         case .traits(let traits):
-            return "traits=\(traits.map(\.rawValue).joined(separator: "|"))"
+            return "traits=\(traits.canonicalHeistTraitArray.map(\.rawValue).joined(separator: "|"))"
         case .actions(let actions):
-            return "actions=\(actions.map(\.heistDiscoveryDisplayValue).joined(separator: "|"))"
+            return "actions=\(actions.canonicalElementActionArray.map(\.heistDiscoveryDisplayValue).joined(separator: "|"))"
         case .customContent(let match):
             return "customContent=\(match.heistDiscoveryDisplayValue)"
         case .rotors(let matches):
             return "rotors=\(matches.map(\.heistDiscoveryDisplayValue).joined(separator: "|"))"
-        case .exclude(let fact):
-            return "exclude(\(fact.heistDiscoveryDisplayValue))"
+        case .exclude(let check):
+            return "exclude(\(check.heistDiscoveryDisplayValue))"
         }
     }
 }
 
-extension HeistSemanticCustomContentMatch {
+extension CustomContentMatch {
     var heistDiscoveryDisplayValue: String {
         [
             label.map { "label=\($0.heistDiscoveryDisplayValue)" },
@@ -198,7 +194,7 @@ extension HeistSemanticCustomContentMatch {
     }
 }
 
-extension HeistSemanticStringMatch {
+extension StringMatch {
     var heistDiscoveryDisplayValue: String {
         guard let value else { return mode.rawValue }
         guard mode != .exact else { return value.heistDiscoveryDisplayValue }
@@ -206,12 +202,12 @@ extension HeistSemanticStringMatch {
     }
 }
 
-extension HeistSemanticStringValue {
+extension AuthoredString {
     var heistDiscoveryDisplayValue: String {
         switch self {
         case .literal(let literal):
             return literal
-        case .reference(let reference):
+        case .ref(let reference):
             return "\(reference.rawValue)_ref"
         }
     }

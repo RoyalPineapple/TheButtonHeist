@@ -107,7 +107,6 @@ struct RenderResponseTests {
             HeistCatalogEntry(
                 identity: .capability("checkout"),
                 parameterKind: .string,
-                requiresArgument: true,
                 summary: "Reusable heist capability requiring string argument",
                 tags: [.capability, .parameterized, .semanticAction]
             ),
@@ -134,7 +133,6 @@ struct RenderResponseTests {
             HeistCatalogEntry(
                 identity: .capability("checkout"),
                 parameterKind: .none,
-                requiresArgument: false,
                 summary: "Reusable heist capability",
                 tags: [.capability, .composed, .assertion, .semanticAction],
                 nestedRunHeists: ["checkout.confirm"],
@@ -142,11 +140,11 @@ struct RenderResponseTests {
                 waitCount: 1,
                 expectationCount: 1,
                 semanticSurfaces: [
-                    .label(HeistSemanticStringMatch(mode: .exact, value: .literal("Checkout"))),
-                    .identifier(HeistSemanticStringMatch(mode: .exact, value: .literal("confirm_button"))),
-                    .traits([.button]),
-                ],
-                validationStatus: .validated
+                    .label(.exact("Checkout")),
+                    .identifier(.exact("confirm_button")),
+                    .traits([.link, .button]),
+                    .actions([.custom("Menu"), .activate]),
+                ]
             ),
         ])
 
@@ -159,11 +157,23 @@ struct RenderResponseTests {
         #expect(text.contains("nested RunHeist: checkout.confirm"))
         #expect(text.contains("actions: activate"))
         #expect(text.contains("waits=1 expectations=1"))
-        #expect(text.contains("semantic surfaces: label=Checkout, identifier=confirm_button, traits=button"))
-        #expect(text.contains("validation=validated"))
+        #expect(text.contains("semantic surfaces: label=Checkout, identifier=confirm_button, traits=button|link, actions=activate|custom(Menu)"))
+        #expect(!text.contains("validation="))
         #expect(!text.contains("predicate("))
         #expect(!text.contains("point("))
         #expect(!text.contains("heistId"))
+
+        let root = try #require(result.structuredContent?.objectValue)
+        let heists = try #require(root["heists"]?.arrayValue)
+        let entry = try #require(heists.first?.objectValue)
+        #expect(entry["requiresArgument"] == .bool(false))
+        #expect(entry["validationStatus"] == nil)
+        #expect(entry["semanticSurfaces"] == .array([
+            .string("label=Checkout"),
+            .string("identifier=confirm_button"),
+            .string("traits=button|link"),
+            .string("actions=activate|custom(Menu)"),
+        ]))
     }
 
     @Test("error render uses canonical public failure mapping")
