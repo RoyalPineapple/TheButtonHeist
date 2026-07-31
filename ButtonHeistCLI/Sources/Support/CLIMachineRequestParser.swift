@@ -24,7 +24,7 @@ struct CLIMachineRequestError: Error, CustomStringConvertible {
     }
 
     var message: String { diagnosticFailure.message }
-    var description: String { diagnosticFailure.displayMessage }
+    var description: String { diagnosticFailure.message }
 }
 
 enum CLIMachineRequestParser {

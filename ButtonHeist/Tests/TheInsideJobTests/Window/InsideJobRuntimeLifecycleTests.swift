@@ -318,7 +318,7 @@ final class InsideJobRuntimeLifecycleTests: XCTestCase {
         XCTAssertNil(job.transport, file: file, line: line)
         XCTAssertTrue(job.lifecycleObservationIsInstalled, file: file, line: line)
         XCTAssertNotNil(job.retainedIdleTimerBaseline, file: file, line: line)
-        XCTAssertTrue(job.lifecycleBoundaryTasks.isEmpty, file: file, line: line)
+        XCTAssertEqual(job.lifecycleBoundaryTasks.snapshot.taskCount, 0, file: file, line: line)
     }
 
     private func assertStoppedClearingLifecycleState(

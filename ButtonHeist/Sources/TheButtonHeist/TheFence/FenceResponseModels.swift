@@ -4,17 +4,17 @@ import ThePlans
 import TheScore
 
 /// Level of detail for interface responses.
-public enum InterfaceDetail: String, CaseIterable, Sendable {
+@_spi(ButtonHeistTooling) public enum InterfaceDetail: String, CaseIterable, Sendable {
     case summary
     case full
 }
 
-public enum HeistCatalogDetail: String, CaseIterable, Sendable, Equatable {
+@_spi(ButtonHeistTooling) public enum HeistCatalogDetail: String, CaseIterable, Sendable, Equatable {
     case summary
     case detailed
 }
 
-public struct ScreenshotResponseOptions: Sendable, Equatable {
+@_spi(ButtonHeistTooling) public struct ScreenshotResponseOptions: Sendable, Equatable {
     public let includeInterface: Bool
 
     public init(includeInterface: Bool = true) {
@@ -22,20 +22,13 @@ public struct ScreenshotResponseOptions: Sendable, Equatable {
     }
 }
 
-public enum SessionConnectionPhase: String, Sendable, Equatable {
-    case disconnected
-    case connecting
-    case connected
-    case failed
-}
-
-public struct SessionDevicePayload: Sendable, Equatable {
+@_spi(ButtonHeistTooling) public struct SessionDevicePayload: Sendable, Equatable {
     public let deviceName: String
     public let appName: String
     public let connectionType: ConnectionScope
     public let shortId: String?
 
-    public init(
+    package init(
         deviceName: String,
         appName: String,
         connectionType: ConnectionScope,
@@ -48,14 +41,14 @@ public struct SessionDevicePayload: Sendable, Equatable {
     }
 }
 
-public struct SessionFailurePayload: Sendable, Equatable {
+@_spi(ButtonHeistTooling) public struct SessionFailurePayload: Sendable, Equatable {
     public let code: String
     public let phase: FailurePhase
     public let retryable: Bool
     public let message: String?
     public let hint: String?
 
-    public init(
+    package init(
         code: String,
         phase: FailurePhase,
         retryable: Bool,
@@ -70,53 +63,19 @@ public struct SessionFailurePayload: Sendable, Equatable {
     }
 }
 
-public enum SessionConnectionState: Sendable, Equatable {
+@_spi(ButtonHeistTooling) public enum SessionConnectionState: Sendable, Equatable {
     case disconnected(lastFailure: SessionFailurePayload?)
     case connecting(lastFailure: SessionFailurePayload?)
     case connected(device: SessionDevicePayload)
     case failed(SessionFailurePayload)
-
-    public var connected: Bool {
-        if case .connected = self { return true }
-        return false
-    }
-
-    public var phase: SessionConnectionPhase {
-        switch self {
-        case .disconnected:
-            return .disconnected
-        case .connecting:
-            return .connecting
-        case .connected:
-            return .connected
-        case .failed:
-            return .failed
-        }
-    }
-
-    public var device: SessionDevicePayload? {
-        guard case .connected(let device) = self else { return nil }
-        return device
-    }
-
-    public var lastFailure: SessionFailurePayload? {
-        switch self {
-        case .disconnected(let failure), .connecting(let failure):
-            return failure
-        case .failed(let failure):
-            return failure
-        case .connected:
-            return nil
-        }
-    }
 }
 
-public struct SessionStatePayload: Sendable, Equatable {
+@_spi(ButtonHeistTooling) public struct SessionStatePayload: Sendable, Equatable {
     public let state: SessionConnectionState
     public let actionTimeoutSeconds: TimeInterval
     public let longActionTimeoutSeconds: TimeInterval
 
-    public init(
+    package init(
         state: SessionConnectionState,
         actionTimeoutSeconds: TimeInterval,
         longActionTimeoutSeconds: TimeInterval
@@ -126,10 +85,6 @@ public struct SessionStatePayload: Sendable, Equatable {
         self.longActionTimeoutSeconds = longActionTimeoutSeconds
     }
 
-    public var connected: Bool { state.connected }
-    public var phase: SessionConnectionPhase { state.phase }
-    public var device: SessionDevicePayload? { state.device }
-    public var lastFailure: SessionFailurePayload? { state.lastFailure }
 }
 
 extension DiagnosticFailure {
@@ -246,7 +201,7 @@ extension DiagnosticFailure {
 /// Screenshot data is opt-in.
 /// Cases without the `Data` suffix carry a filesystem path where the artifact
 /// has been written.
-public enum FenceResponse {
+@_spi(ButtonHeistTooling) public enum FenceResponse {
     case ok(message: String)
     case error(DiagnosticFailure)
     case status(connected: Bool, deviceName: String?)
@@ -270,22 +225,10 @@ public enum FenceResponse {
     case sessionState(payload: SessionStatePayload)
     case targets([TargetName: TargetConfig], defaultTarget: TargetName?)
 
-    /// Extract the ActionResult if this response wraps one (for expectation checking).
-    var actionResult: ActionResult? {
-        if case .action(_, let result, _) = self { return result }
-        return nil
-    }
-
     /// Builds an error response with typed metadata when the error belongs to TheFence.
     public static func failure(_ error: Error) -> FenceResponse {
         let failure = DiagnosticFailure(error)
         return .error(failure)
-    }
-
-    /// Canonical public failure payload when this response is an error.
-    public var diagnosticFailure: DiagnosticFailure? {
-        guard case .error(let failure) = self else { return nil }
-        return failure
     }
 
     /// Whether callers should treat this response as a failed command.

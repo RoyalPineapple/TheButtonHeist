@@ -29,6 +29,14 @@ private enum PublicActionResultCodingKey: String, CodingKey {
     case omitted
 }
 
+private enum PublicActionResultOmissionCodingKey: String, CodingKey {
+    case subjectEvidence
+}
+
+private enum PublicActionResultSubjectEvidenceOmissionCodingKey: String, CodingKey {
+    case reason
+}
+
 enum PublicActionResultContext: Sendable, Equatable {
     case standaloneAction
     case heistReportEvidence
@@ -67,8 +75,19 @@ extension ActionProjection: Encodable {
         try container.encodeIfPresent(expectation, forKey: .expectation)
         try container.encodeIfPresent(activationTrace, forKey: .activationTrace)
         try container.encodeIfPresent(timing, forKey: .timing)
-        if publicContext.includesOmissions {
-            try container.encodeIfPresent(omitted, forKey: .omitted)
+        if publicContext.includesOmissions, result.subjectEvidence != nil {
+            var omitted = container.nestedContainer(
+                keyedBy: PublicActionResultOmissionCodingKey.self,
+                forKey: .omitted
+            )
+            var subjectEvidence = omitted.nestedContainer(
+                keyedBy: PublicActionResultSubjectEvidenceOmissionCodingKey.self,
+                forKey: .subjectEvidence
+            )
+            try subjectEvidence.encode(
+                ProjectionOmissionReason.rawSubjectEvidence.rawValue,
+                forKey: .reason
+            )
         }
     }
 
@@ -86,13 +105,15 @@ extension ActionProjection: Encodable {
     }
 
     private func encodeFailure(to container: inout KeyedEncodingContainer<PublicActionResultCodingKey>) throws {
-        guard let failure else { return }
-        try container.encode(failure.errorClass, forKey: .errorClass)
-        try container.encode(failure.code, forKey: .code)
-        try container.encode(failure.kind, forKey: .kind)
-        try container.encode(failure.phase, forKey: .phase)
-        try container.encode(failure.retryable, forKey: .retryable)
-        try container.encodeIfPresent(failure.hint, forKey: .hint)
+        guard let failure,
+              let failureKind = result.outcome.failureKind
+        else { return }
+        try container.encode(failureKind.rawValue, forKey: .errorClass)
+        try container.encode(failure.details.errorCode, forKey: .code)
+        try container.encode(failure.details.code.kind.rawValue, forKey: .kind)
+        try container.encode(failure.details.phase.rawValue, forKey: .phase)
+        try container.encode(failure.details.retryable, forKey: .retryable)
+        try container.encodeIfPresent(failure.details.hint, forKey: .hint)
     }
 }
 
@@ -118,31 +139,15 @@ extension ActionResult {
         return .ok
     }
 
-    /// Canonical public failure projection shared by JSON and compact renderers.
-    func diagnosticFailureProjection(fallbackMessage: String) -> ActionFailureProjection? {
+    /// Canonical diagnostic failure shared by JSON and compact renderers.
+    func diagnosticFailure(fallbackMessage: String) -> DiagnosticFailure? {
         guard !outcome.isSuccess else { return nil }
         let resolvedErrorKind = outcome.failureKind ?? .actionFailed
-        return ActionFailureProjection(
+        return DiagnosticFailure(
             message: message ?? fallbackMessage,
-            errorClass: resolvedErrorKind.rawValue,
-            diagnosticFailure: DiagnosticFailure(
-                failureKind: resolvedErrorKind,
-                message: message ?? fallbackMessage
-            )
+            details: resolvedErrorKind.failureDetails
         )
     }
-}
-
-struct ActionFailureProjection {
-    let message: String
-    let errorClass: String
-    let diagnosticFailure: DiagnosticFailure
-
-    var code: String { diagnosticFailure.code }
-    var kind: String { diagnosticFailure.kind.rawValue }
-    var phase: String { diagnosticFailure.phase.rawValue }
-    var retryable: Bool { diagnosticFailure.retryable }
-    var hint: String? { diagnosticFailure.hint }
 }
 
 struct PublicRotorResult: Encodable {
@@ -244,8 +249,15 @@ struct PublicElementEdits: Encodable {
             : projection.removed.values.map { PublicElement(element: $0, detail: .summary) }
         self.updated = projection.updated.values.isEmpty
             ? nil
-            : projection.updated.values.compactMap(PublicElementUpdate.init(update:))
-        let omitted = PublicHeistElementEditOmissions(projection: projection)
+            : projection.updated.values.map(PublicElementUpdate.init(update:))
+        let omitted = PublicHeistElementEditOmissions(
+            added: projection.added.omittedCount,
+            removed: projection.removed.omittedCount,
+            updated: projection.updated.omittedCount,
+            addedKeys: projection.added.omittedKeys,
+            removedKeys: projection.removed.omittedKeys,
+            updatedKeys: projection.updated.omittedKeys
+        )
         self.omitted = omitted.isEmpty ? nil : omitted
     }
 }
@@ -255,12 +267,10 @@ struct PublicElementUpdate: Encodable {
     let after: PublicElement
     let changes: [PublicPropertyChange]
 
-    init?(update: ElementUpdate) {
-        let meaningfulChanges = update.changes.filter { !$0.property.isGeometry }
-        guard !meaningfulChanges.isEmpty else { return nil }
+    init(update: ElementUpdate) {
         self.before = PublicElement(element: update.before, detail: .summary)
         self.after = PublicElement(element: update.after, detail: .summary)
-        self.changes = meaningfulChanges.map(PublicPropertyChange.init(change:))
+        self.changes = update.changes.map(PublicPropertyChange.init(change:))
     }
 }
 

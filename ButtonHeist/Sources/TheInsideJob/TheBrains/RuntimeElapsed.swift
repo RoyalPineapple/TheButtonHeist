@@ -10,13 +10,6 @@ enum RuntimeElapsed {
         ContinuousClock.now
     }
 
-    static func seconds(
-        since start: Instant,
-        endedAt end: Instant = now
-    ) -> Double {
-        start.duration(to: end) / .seconds(1)
-    }
-
     static func milliseconds(
         since start: Instant,
         endedAt end: Instant = now

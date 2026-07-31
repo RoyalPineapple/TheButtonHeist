@@ -88,35 +88,6 @@ struct InterfaceTree: Sendable, Equatable {
         return frames
     }
 
-    var summaryElement: AccessibilityElement? {
-        let viewportElements = viewportCapture.hierarchy.sortedElements.filter { $0.visibility == .onscreen }
-        if let explicit = viewportElements.first(where: { $0.traits.contains(.summaryElement) }) {
-            return explicit
-        }
-        return viewportElements
-            .enumerated()
-            .compactMap { index, element -> (index: Int, element: AccessibilityElement)? in
-                guard element.traits.contains(.header), element.label != nil else { return nil }
-                return (index, element)
-            }
-            .min { left, right in
-                let leftFrame = left.element.shape.frame
-                let rightFrame = right.element.shape.frame
-                if leftFrame.minY != rightFrame.minY { return leftFrame.minY < rightFrame.minY }
-                if leftFrame.minX != rightFrame.minX { return leftFrame.minX < rightFrame.minX }
-                return left.index < right.index
-            }?
-            .element
-    }
-
-    var name: String? {
-        summaryElement?.label
-    }
-
-    var id: String? {
-        TheScore.slugify(name)
-    }
-
     var orderedContainers: [Container] {
         topology.orderedContainers
     }

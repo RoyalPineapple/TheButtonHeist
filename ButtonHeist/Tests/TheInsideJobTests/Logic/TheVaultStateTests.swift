@@ -252,7 +252,6 @@ final class TheVaultStateTests: XCTestCase {
         XCTAssertEqual(state.notificationIndex, priorNotificationIndex)
         XCTAssertEqual(state.current, priorCurrent)
         XCTAssertEqual(state.interfaceObservation?.tree, priorObservation?.tree)
-        XCTAssertEqual(state.interfaceObservation?.captureID, priorObservation?.captureID)
         XCTAssertEqual(initial.current, priorCurrent)
     }
 

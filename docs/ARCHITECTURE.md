@@ -89,9 +89,10 @@ projection. `AccessibilityElement.projectedCustomContent` is likewise shared by
 matching, diagnostics, and wire conversion. Those consumers do not independently
 reinterpret parser fields.
 
-`InterfaceObservation` pairs an `InterfaceTree` with the viewport-local
-`LiveCapture` from one parser read. Raw parser samples remain live or diagnostic
-evidence; they never append temporal history and
+`InterfaceObservation` pairs an `InterfaceTree`, including its value-only
+viewport capture, with viewport-local `LiveCapture` dispatch references from
+one parser read. Raw parser samples remain live or diagnostic evidence; they
+never append temporal history and
 do not become targetable semantic truth by themselves. Capture admission
 normalizes the sample into `Observation.Snapshot`; UIKit objects remain
 capture-boundary evidence and are never durable identity.
@@ -631,8 +632,8 @@ scoped `screenChanged` sequence covered by the committed claim. A later scoped
 as current.
 
 TheVault owns first-responder capture. A parser read converts responder state
-to a capture-local `HeistId`, and `LiveCapture.Snapshot` retains that value with
-the capture. Vault snapshots never retain a UIKit object as responder identity;
+to a capture-local `HeistId`, and `InterfaceTree.viewportCapture` retains that
+value with the tree. Vault snapshots never retain a UIKit object as responder identity;
 TheVault alone projects the captured id once to a semantic `AccessibilityTarget`
 through the shared minimum-predicate selector used by semantic and post-action
 observation context. First-responder actions pin the captured id before inflation and

@@ -52,7 +52,9 @@ extension TheFenceHandlerTests {
         guard case .sessionState(let payload) = response else {
             return XCTFail("Expected sessionState response, got \(response)")
         }
-        XCTAssertEqual(payload.connected, true)
+        guard case .connected = payload.state else {
+            return XCTFail("Expected connected session state, got \(payload.state)")
+        }
         XCTAssertEqual(mockConn.connectCount, 1)
 
         for (message, _) in mockConn.sent {

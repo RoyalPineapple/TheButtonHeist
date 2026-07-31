@@ -175,7 +175,7 @@ import ThePlans
         #expect(try wait.replayExpectation()?.met == true)
         #expect(conditional.abortedAtChildPath == failed.path)
         #expect(iteration.abortedAtChildPath == failed.path)
-        #expect(HeistResultFixture.result(steps: [failed]).abortedAtPath == failed.path)
+        #expect(HeistResultFixture.result(steps: [failed]).outcome == .failed(abortedAtPath: failed.path))
     }
 
     @Test func `eventually uses a bounded ContinuousClock poll`() async {

@@ -4,11 +4,6 @@ import Foundation
 
 import ButtonHeistSupport
 
-enum InsideJobRuntimeStartPhase: Equatable, Sendable {
-    case startup
-    case resume
-}
-
 @MainActor
 extension TheInsideJob {
     enum ServerPhase: Equatable {
@@ -115,7 +110,6 @@ extension TheInsideJob {
 
     struct InsideJobTransportStartRequest: Equatable {
         let id: UUID
-        let phase: InsideJobRuntimeStartPhase
         let transport: ServerTransport
         let idleTimerBaseline: Bool
 
@@ -124,19 +118,14 @@ extension TheInsideJob {
             rhs: InsideJobTransportStartRequest
         ) -> Bool {
             lhs.id == rhs.id
-                && lhs.phase == rhs.phase
                 && lhs.transport === rhs.transport
                 && lhs.idleTimerBaseline == rhs.idleTimerBaseline
         }
     }
 
-    struct LifecycleObservation: Equatable, Sendable {
-        let id: UUID
-    }
-
     enum LifecycleObservationState: Equatable, Sendable {
         case uninstalled
-        case installed(LifecycleObservation)
+        case installed
 
         var isInstalled: Bool {
             switch self {
@@ -147,37 +136,19 @@ extension TheInsideJob {
             }
         }
 
-        mutating func installIfNeeded() -> LifecycleObservation? {
-            guard case .uninstalled = self else { return nil }
-            let observation = LifecycleObservation(id: UUID())
-            self = .installed(observation)
-            return observation
+        mutating func installIfNeeded() -> Bool {
+            guard case .uninstalled = self else { return false }
+            self = .installed
+            return true
         }
 
-        mutating func uninstallIfNeeded() -> LifecycleObservation? {
-            guard case .installed(let observation) = self else { return nil }
+        mutating func uninstallIfNeeded() -> Bool {
+            guard case .installed = self else { return false }
             self = .uninstalled
-            return observation
+            return true
         }
     }
 
-    /// Tracks @objc lifecycle bridge Tasks that must finish before start/resume reads `serverPhase`.
-    @MainActor
-    final class LifecycleBoundaryTasks {
-        private let tasks = TaskTracker()
-
-        var isEmpty: Bool { tasks.snapshot.taskCount == 0 }
-
-        func spawn(_ body: @escaping @MainActor @Sendable () async -> Void) {
-            tasks.spawn {
-                await body()
-            }
-        }
-
-        func drain() async {
-            await tasks.waitForIdle()
-        }
-    }
 }
 
 struct InsideJobLifecycleReducer: @MainActor StateReducer {

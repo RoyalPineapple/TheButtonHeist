@@ -25,7 +25,7 @@ struct LiveCaptureBoundaryAdversarialTests {
 
         #expect(captured.liveCapture.object(for: heistId) === object)
         #expect(later.liveCapture.object(for: heistId) == nil)
-        #expect(later.liveCapture.heistId(matching: object) == nil)
+        #expect(later.liveCapture.dispatchReferences.elementRefs.isEmpty)
         #expect(later.tree == captured.tree)
     }
 

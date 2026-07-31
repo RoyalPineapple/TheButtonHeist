@@ -69,7 +69,6 @@ import TheScore
         )
 
         #expect(result.isFailure)
-        #expect(result.abortedAtPath == "$.body[0]")
         #expect(result.steps.first?.failure?.observed == "stop")
     }
 }

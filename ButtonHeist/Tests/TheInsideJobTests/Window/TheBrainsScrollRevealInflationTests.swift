@@ -203,7 +203,8 @@ extension TheBrainsScrollTests {
         let mismatchedObservation = InterfaceObservation.makeForTests(
             tree: InterfaceTree(
                 elements: mismatchedElements,
-                containers: matchingObservation.tree.containers
+                containers: matchingObservation.tree.containers,
+                viewportCapture: matchingObservation.tree.viewportCapture
             ),
             liveCapture: matchingObservation.liveCapture
         )
@@ -907,7 +908,7 @@ extension TheBrainsScrollTests {
     private func inflateSemanticDuplicate(
         postRevealObservation: InterfaceObservation
     ) async throws -> ElementInflation.ElementInflationResult {
-        brains.stopSemanticObservation()
+        brains.vault.semanticObservationStream.stop()
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         await installScreenWithOffViewport(

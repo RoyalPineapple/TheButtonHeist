@@ -15,15 +15,42 @@ struct PublicSessionStateResponse: Encodable {
     let lastFailure: PublicSessionFailure?
 
     init(payload: SessionStatePayload) {
-        self.connected = payload.connected
-        self.phase = payload.phase.rawValue
         self.actionTimeoutSeconds = payload.actionTimeoutSeconds
         self.longActionTimeoutSeconds = payload.longActionTimeoutSeconds
-        self.deviceName = payload.device?.deviceName
-        self.appName = payload.device?.appName
-        self.connectionType = payload.device?.connectionType.rawValue
-        self.shortId = payload.device?.shortId?.description
-        self.lastFailure = payload.lastFailure.map { PublicSessionFailure(payload: $0) }
+        switch payload.state {
+        case .disconnected(let failure):
+            connected = false
+            phase = "disconnected"
+            deviceName = nil
+            appName = nil
+            connectionType = nil
+            shortId = nil
+            lastFailure = failure.map(PublicSessionFailure.init)
+        case .connecting(let failure):
+            connected = false
+            phase = "connecting"
+            deviceName = nil
+            appName = nil
+            connectionType = nil
+            shortId = nil
+            lastFailure = failure.map(PublicSessionFailure.init)
+        case .connected(let device):
+            connected = true
+            phase = "connected"
+            deviceName = device.deviceName
+            appName = device.appName
+            connectionType = device.connectionType.rawValue
+            shortId = device.shortId?.description
+            lastFailure = nil
+        case .failed(let failure):
+            connected = false
+            phase = "failed"
+            deviceName = nil
+            appName = nil
+            connectionType = nil
+            shortId = nil
+            lastFailure = PublicSessionFailure(payload: failure)
+        }
     }
 }
 

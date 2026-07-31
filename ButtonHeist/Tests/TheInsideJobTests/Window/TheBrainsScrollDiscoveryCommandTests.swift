@@ -176,10 +176,13 @@ extension TheBrainsScrollTests {
             ),
             element: staleRootRow
         )
+        var staleElements = visibleScreen.tree.elements
+        staleElements[staleEntry.heistId] = staleEntry
         let staleScreen = InterfaceObservation.makeForTests(
             tree: InterfaceTree(
-                elements: [staleEntry.heistId: staleEntry],
-                containers: visibleScreen.tree.containers
+                elements: staleElements,
+                containers: visibleScreen.tree.containers,
+                viewportCapture: visibleScreen.tree.viewportCapture
             ),
             liveCapture: visibleScreen.liveCapture
         )
@@ -675,7 +678,7 @@ extension TheBrainsScrollTests {
     }
 
     func testStaleKnownRevealWaitsForSettledRecoveryWithoutRediscovery() async throws {
-        brains.stopSemanticObservation()
+        brains.vault.semanticObservationStream.stop()
         let staleScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
@@ -752,7 +755,7 @@ extension TheBrainsScrollTests {
     }
 
     func testKnownTargetWithMissingLiveScrollAncestorRecapturesVisibleActionableTarget() async throws {
-        brains.stopSemanticObservation()
+        brains.vault.semanticObservationStream.stop()
         let targetId: HeistId = "known_coke_button"
         let staleScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)

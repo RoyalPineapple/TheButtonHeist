@@ -7,7 +7,7 @@ extension TheInsideJob {
     // MARK: - App Lifecycle
 
     func installLifecycleObservationIfNeeded() {
-        guard lifecycleObservation.installIfNeeded() != nil else { return }
+        guard lifecycleObservation.installIfNeeded() else { return }
         NotificationCenter.default.addObserver(
             self, selector: #selector(appWillResignActive),
             name: UIApplication.willResignActiveNotification, object: nil
@@ -31,7 +31,7 @@ extension TheInsideJob {
     }
 
     func stopLifecycleObservationIfNeeded() {
-        guard lifecycleObservation.uninstallIfNeeded() != nil else { return }
+        guard lifecycleObservation.uninstallIfNeeded() else { return }
         NotificationCenter.default.removeObserver(self, name: UIApplication.willResignActiveNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.willEnterForegroundNotification, object: nil)
@@ -76,14 +76,16 @@ extension TheInsideJob {
     /// retained in `lifecycleBoundaryTasks` so callers that resume the server
     /// (`start()` / `resume()`) can await prior shutdowns before they begin.
     func spawnLifecycleTask(_ body: @escaping @MainActor @Sendable () async -> Void) {
-        lifecycleBoundaryTasks.spawn(body)
+        lifecycleBoundaryTasks.spawn {
+            await body()
+        }
     }
 
     /// Wait for any in-flight lifecycle tasks (suspend/stop wrappers spawned
     /// from @objc handlers) to finish before mutating server phase. Loops so
     /// observer-spawned Tasks that arrive during the drain are also awaited.
     func awaitPendingLifecycleTasks() async {
-        await lifecycleBoundaryTasks.drain()
+        await lifecycleBoundaryTasks.waitForIdle()
     }
 
     // MARK: - Suspend / Resume
@@ -126,7 +128,6 @@ extension TheInsideJob {
 
                 let request = InsideJobTransportStartRequest(
                     id: resumeID,
-                    phase: .resume,
                     transport: transport,
                     idleTimerBaseline: suspendedRuntime.idleTimerBaseline
                 )

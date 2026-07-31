@@ -9,41 +9,15 @@ import AccessibilitySnapshotParser
 
 // MARK: - Live Capture
 
-/// Visible live view from the latest observed capture.
+/// Weak UIKit references from the latest observed viewport.
 ///
-/// **Ownership.** Owned by `TheVault` as viewport-tied live state; carried by
-/// `InterfaceObservation` only as part of an observed capture. `Snapshot` owns
-/// raw parser hierarchy and path identity; `DispatchReferences` owns viewport-local weak
-/// UIKit references. Neither is unioned across exploration pages or treated as
-/// stable identity. `Snapshot` records viewport hierarchy and path identity;
-/// `InterfaceTree` remains the sole owner of semantic element and container
-/// values. See `docs/ARCHITECTURE.md#state-has-one-owner`.
+/// `InterfaceTree.viewportCapture` owns the value-only viewport evidence.
+/// `LiveCapture` retains only disposable references used to dispatch actions
+/// against that semantic evidence.
 struct LiveCapture {
-    let snapshot: Snapshot
     let dispatchReferences: DispatchReferences
 
-    var hierarchy: [AccessibilityHierarchy] {
-        snapshot.hierarchy
-    }
-
-    var elementRefs: [HeistId: ElementRef] {
-        dispatchReferences.elementRefs
-    }
-
-    var containerRefsByPath: [TreePath: ContainerRef] {
-        dispatchReferences.containerRefsByPath
-    }
-
-    var firstResponderHeistId: HeistId? {
-        snapshot.firstResponderHeistId
-    }
-
-    var scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] {
-        dispatchReferences.scrollableContainerViewsByPath
-    }
-
-    private init(snapshot: Snapshot, dispatchReferences: DispatchReferences) {
-        self.snapshot = snapshot
+    private init(dispatchReferences: DispatchReferences) {
         self.dispatchReferences = dispatchReferences
     }
 
@@ -55,67 +29,23 @@ struct LiveCapture {
             validating: tree,
             dispatchReferences: dispatchReferences
         )
-        return LiveCapture(
-            snapshot: tree.viewportCapture,
-            dispatchReferences: dispatchReferences
-        )
-    }
-
-    var heistIds: Set<HeistId> {
-        snapshot.heistIds
-    }
-
-    func contains(heistId: HeistId) -> Bool {
-        snapshot.contains(heistId: heistId)
-    }
-
-    func heistId(forPath path: TreePath) -> HeistId? {
-        snapshot.heistId(forPath: path)
+        return LiveCapture(dispatchReferences: dispatchReferences)
     }
 
     func object(for heistId: HeistId) -> NSObject? {
         dispatchReferences.elementRefs[heistId]?.object
     }
 
-    func heistId(matching object: NSObject) -> HeistId? {
-        snapshot.orderedHeistIds.first { heistId in
-            dispatchReferences.elementRefs[heistId]?.object === object
-        }
-    }
-
     func scrollView(for heistId: HeistId) -> UIScrollView? {
         dispatchReferences.elementRefs[heistId]?.scrollView
-    }
-
-    func scrollView(for container: InterfaceTree.Container) -> UIScrollView? {
-        scrollView(forContainerPath: container.path)
     }
 
     func containerObject(forPath path: TreePath) -> NSObject? {
         dispatchReferences.containerRefsByPath[path]?.object
     }
 
-    func scrollView(for element: InterfaceTree.Element) -> UIScrollView? {
-        let visibleScrollView = contains(heistId: element.heistId) ? scrollView(for: element.heistId) : nil
-        let pathScrollView = element.scrollContainerPath
-            .flatMap { scrollView(forContainerPath: $0) }
-        return visibleScrollView
-            ?? pathScrollView
-    }
-
     func scrollView(forContainerPath path: TreePath) -> UIScrollView? {
         dispatchReferences.scrollableContainerViewsByPath[path]?.view
-    }
-
-    func nearestScrollEntry(for path: TreePath) -> ScrollEntry? {
-        var candidate: TreePath? = path
-        while let current = candidate {
-            if let view = scrollView(forContainerPath: current) {
-                return ScrollEntry(path: current, view: view)
-            }
-            candidate = current.parent
-        }
-        return nil
     }
 
     func scrollEntries() -> [ScrollEntry] {
@@ -184,22 +114,18 @@ struct LiveCapture {
             hierarchy: []
         )
 
-        var heistIds: Set<HeistId> {
-            Set(hierarchy.pathIndexedElements.compactMap { entry in
-                guard entry.element.visibility == .onscreen else { return nil }
-                return heistIdsByPath[entry.path]
-            })
-        }
-
         func contains(heistId: HeistId) -> Bool {
-            heistIds.contains(heistId)
+            hierarchy.pathIndexedElements.contains { entry in
+                entry.element.visibility == .onscreen
+                    && heistIdsByPath[entry.path] == heistId
+            }
         }
 
         func heistId(forPath path: TreePath) -> HeistId? {
             heistIdsByPath[path]
         }
 
-        fileprivate var orderedHeistIds: [HeistId] {
+        var orderedHeistIds: [HeistId] {
             hierarchy.pathIndexedElements.compactMap { heistIdsByPath[$0.path] }
         }
     }

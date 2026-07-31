@@ -52,7 +52,7 @@ final class TheVaultObservationBuildingTests: XCTestCase {
 
         let observation = TheVault.buildObservation(from: result)
 
-        XCTAssertEqual(observation.liveCapture.heistId(forPath: TreePath([0])), "ok_button")
+        XCTAssertEqual(observation.tree.viewportCapture.heistId(forPath: TreePath([0])), "ok_button")
     }
 
     func testBuildObservationKeepsDistinctEntriesForValueEqualElements() {
@@ -85,7 +85,7 @@ final class TheVaultObservationBuildingTests: XCTestCase {
 
         let observation = TheVault.buildObservation(from: result)
 
-        XCTAssertEqual(observation.liveCapture.hierarchy.count, 1)
+        XCTAssertEqual(observation.tree.viewportCapture.hierarchy.count, 1)
     }
 
     func testBuildObservationKeepsOffscreenFactsOutOfViewportEvidence() {
@@ -106,9 +106,8 @@ final class TheVaultObservationBuildingTests: XCTestCase {
 
         XCTAssertEqual(observation.tree.elementIDs, ["visible_button", "offscreen_button"])
         XCTAssertEqual(observation.tree.viewportElementIDs, ["visible_button"])
-        XCTAssertEqual(observation.liveCapture.heistIds, ["visible_button"])
-        XCTAssertFalse(observation.liveCapture.contains(heistId: "offscreen_button"))
-        XCTAssertEqual(observation.viewportOnly.tree.elementIDs, ["visible_button"])
+        XCTAssertFalse(observation.tree.viewportCapture.contains(heistId: "offscreen_button"))
+        XCTAssertEqual(observation.tree.viewportOnly.elementIDs, ["visible_button"])
         XCTAssertNotNil(observation.tree.findElement(heistId: "offscreen_button"))
         guard let visibleGeometry = observation.tree.elements["visible_button"]?.geometry.screen,
               let offscreenGeometry = observation.tree.elements["offscreen_button"]?.geometry.screen
@@ -173,9 +172,9 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         XCTAssertEqual(target.geometry.view, viewSpace)
         XCTAssertEqual(target.geometry.screen, .offscreen)
         XCTAssertFalse(observation.tree.viewportElementIDs.contains(target.heistId))
-        XCTAssertFalse(observation.liveCapture.contains(heistId: target.heistId))
+        XCTAssertFalse(observation.tree.viewportCapture.contains(heistId: target.heistId))
         XCTAssertNil(observation.liveCapture.object(for: target.heistId))
-        XCTAssertEqual(observation.viewportOnly.tree.elementIDs, ["visible_button"])
+        XCTAssertEqual(observation.tree.viewportOnly.elementIDs, ["visible_button"])
 
         let interface = TheVault.WireConversion.discoveryProjection(from: observation.tree).interface
         XCTAssertEqual(
@@ -316,68 +315,13 @@ final class TheVaultObservationBuildingTests: XCTestCase {
             initialWorkHighId
         )
         XCTAssertEqual(
-            reorderedObservation.liveCapture.heistId(forPath: reorderedWorkHighPath),
+            reorderedObservation.tree.viewportCapture.heistId(forPath: reorderedWorkHighPath),
             initialWorkHighId
         )
         XCTAssertEqual(
             reviewID(in: reorderedObservation, category: "Work", priority: "Low"),
             "review_pr_button_2"
         )
-    }
-
-    // MARK: - InterfaceObservation name derivation
-
-    func testScreenNameFromFirstHeader() {
-        let header = makeElement(label: "Settings", traits: .header)
-        let button = makeElement(label: "Save", traits: .button)
-        let result = TheVault.CaptureResult(
-            hierarchy: [
-                .element(header, traversalIndex: 0),
-                .element(button, traversalIndex: 1),
-            ]
-        )
-
-        let observation = TheVault.buildObservation(from: result)
-
-        XCTAssertEqual(observation.tree.name, "Settings")
-    }
-
-    func testScreenIdIsSlugifiedName() {
-        let header = makeElement(label: "My Profile", traits: .header)
-        let result = TheVault.CaptureResult(
-            hierarchy: [.element(header, traversalIndex: 0)]
-        )
-
-        let observation = TheVault.buildObservation(from: result)
-
-        XCTAssertEqual(observation.tree.id, TheScore.slugify("My Profile"))
-    }
-
-    func testScreenNameNilWhenNoHeaders() {
-        let button = makeElement(label: "OK", traits: .button)
-        let result = TheVault.CaptureResult(
-            hierarchy: [.element(button, traversalIndex: 0)]
-        )
-
-        let observation = TheVault.buildObservation(from: result)
-
-        XCTAssertNil(observation.tree.name)
-        XCTAssertNil(observation.tree.id)
-    }
-
-    func testScreenNameIgnoresHeaderWithNilLabel() {
-        let headerNoLabel = makeElement(label: nil, traits: .header)
-        let button = makeElement(label: "OK", traits: .button)
-        let result = TheVault.CaptureResult(
-            hierarchy: [
-                .element(headerNoLabel, traversalIndex: 0),
-                .element(button, traversalIndex: 1),
-            ]
-        )
-
-        let observation = TheVault.buildObservation(from: result)
-
-        XCTAssertNil(observation.tree.name)
     }
 
     // MARK: - First responder detection
@@ -397,7 +341,7 @@ final class TheVaultObservationBuildingTests: XCTestCase {
 
         let observation = TheVault.buildObservation(from: result)
 
-        XCTAssertNotNil(observation.liveCapture.firstResponderHeistId)
+        XCTAssertNotNil(observation.tree.viewportCapture.firstResponderHeistId)
 
         textField.resignFirstResponder()
         window.isHidden = true
@@ -414,7 +358,7 @@ final class TheVaultObservationBuildingTests: XCTestCase {
 
         let observation = TheVault.buildObservation(from: result)
 
-        XCTAssertNil(observation.liveCapture.firstResponderHeistId)
+        XCTAssertNil(observation.tree.viewportCapture.firstResponderHeistId)
     }
 
     func testBuildObservationUsesSyntheticFirstResponderFacts() {
@@ -439,8 +383,8 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         let observation = TheVault.buildObservation(from: result, facts: facts)
 
         XCTAssertEqual(
-            observation.liveCapture.firstResponderHeistId,
-            observation.liveCapture.heistId(forPath: secondPath)
+            observation.tree.viewportCapture.firstResponderHeistId,
+            observation.tree.viewportCapture.heistId(forPath: secondPath)
         )
     }
 
@@ -496,8 +440,8 @@ final class TheVaultObservationBuildingTests: XCTestCase {
 
         let observation = TheVault.buildObservation(from: result)
 
-        XCTAssertEqual(observation.liveCapture.heistId(forPath: TreePath([1])), "row_button_1")
-        XCTAssertEqual(observation.liveCapture.heistId(forPath: TreePath([0])), "row_button_2")
+        XCTAssertEqual(observation.tree.viewportCapture.heistId(forPath: TreePath([1])), "row_button_1")
+        XCTAssertEqual(observation.tree.viewportCapture.heistId(forPath: TreePath([0])), "row_button_2")
     }
 
     func testBuildObservationRestoresScreenCoordinateGeometryFromParseRootOffset() throws {
@@ -522,7 +466,7 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         )
 
         let observation = TheVault.buildObservation(from: result)
-        let element = try XCTUnwrap(observation.liveCapture.hierarchy.sortedElements.first)
+        let element = try XCTUnwrap(observation.tree.viewportCapture.hierarchy.sortedElements.first)
         let treeElement = try XCTUnwrap(observation.tree.orderedElements.first)
         let projected = TheVault.WireConversion.convert(
             element,
@@ -571,7 +515,7 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         )
 
         let observation = TheVault.buildObservation(from: result)
-        let translated = try XCTUnwrap(observation.liveCapture.hierarchy.sortedElements.first)
+        let translated = try XCTUnwrap(observation.tree.viewportCapture.hierarchy.sortedElements.first)
 
         guard case .path(let elements) = translated.shape else {
             return XCTFail("Expected translated path")
@@ -606,7 +550,7 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         )
 
         let observation = TheVault.buildObservation(from: result)
-        let translated = try XCTUnwrap(observation.liveCapture.hierarchy.first)
+        let translated = try XCTUnwrap(observation.tree.viewportCapture.hierarchy.first)
         guard case .container(let translatedContainer, _) = translated else {
             return XCTFail("Expected translated container")
         }
@@ -684,7 +628,7 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         )
 
         let observation = TheVault.buildObservation(from: result)
-        let viewportHeistId = try XCTUnwrap(observation.liveCapture.heistId(forPath: viewportElementPath))
+        let viewportHeistId = try XCTUnwrap(observation.tree.viewportCapture.heistId(forPath: viewportElementPath))
         let viewportViewSpace = try XCTUnwrap(
             observation.tree.elements[viewportHeistId]?.geometry.view
         )
@@ -794,7 +738,7 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         )
 
         let observation = TheVault.buildObservation(from: result, facts: facts)
-        let heistId = try XCTUnwrap(observation.liveCapture.heistId(forPath: childPath))
+        let heistId = try XCTUnwrap(observation.tree.viewportCapture.heistId(forPath: childPath))
         let element = try XCTUnwrap(observation.tree.findElement(heistId: heistId))
 
         XCTAssertEqual(

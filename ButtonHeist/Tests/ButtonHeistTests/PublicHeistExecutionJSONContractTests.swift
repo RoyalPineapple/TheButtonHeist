@@ -1,6 +1,6 @@
 import ButtonHeistTestSupport
 import TheScore
-@_spi(ButtonHeistInternals) @testable import ButtonHeist
+@_spi(ButtonHeistInternals) @_spi(ButtonHeistTooling) @testable import ButtonHeist
 import XCTest
 
 final class PublicHeistExecutionJSONContractTests: XCTestCase {

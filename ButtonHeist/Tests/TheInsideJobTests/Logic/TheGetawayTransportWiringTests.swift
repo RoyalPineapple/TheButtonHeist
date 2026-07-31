@@ -483,7 +483,6 @@ final class TheGetawayTransportWiringTests: XCTestCase {
         }
         let request = TheInsideJob.InsideJobTransportStartRequest(
             id: UUID(),
-            phase: .startup,
             transport: transport,
             idleTimerBaseline: false
         )

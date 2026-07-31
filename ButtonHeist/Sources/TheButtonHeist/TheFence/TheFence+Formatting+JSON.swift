@@ -6,11 +6,13 @@ extension FenceResponse {
 
     // MARK: - JSON Encoding
 
-    public func jsonData(outputFormatting: JSONEncoder.OutputFormatting = [.sortedKeys]) throws -> Data {
+    @_spi(ButtonHeistTooling) public func jsonData(
+        outputFormatting: JSONEncoder.OutputFormatting = [.sortedKeys]
+    ) throws -> Data {
         try jsonData(profile: .summary, outputFormatting: outputFormatting)
     }
 
-    @_spi(ButtonHeistInternals) public func jsonData(
+    @_spi(ButtonHeistTooling) public func jsonData(
         profile: ProjectionProfile,
         outputFormatting: JSONEncoder.OutputFormatting = [.sortedKeys]
     ) throws -> Data {
@@ -21,7 +23,7 @@ extension FenceResponse {
         )
     }
 
-    public func jsonData(
+    @_spi(ButtonHeistTooling) public func jsonData(
         requestId: PublicRequestId?,
         outputFormatting: JSONEncoder.OutputFormatting = [.sortedKeys]
     ) throws -> Data {

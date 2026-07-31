@@ -118,12 +118,5 @@ extension Navigation {
     }
 }
 
-extension TheBrains {
-
-    func startSemanticObservation() async {
-        vault.semanticObservationStream.start()
-    }
-}
-
 #endif // DEBUG
 #endif // canImport(UIKit)

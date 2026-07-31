@@ -10,7 +10,7 @@ struct PublicErrorResponse: Encodable {
 
     init(failure: DiagnosticFailure) {
         self.message = failure.message
-        self.code = failure.failureCode
+        self.code = failure.details.code
         self.details = PublicErrorDetails(failure: failure)
     }
 }
@@ -23,7 +23,7 @@ struct PublicErrorDetails: Encodable {
     let buildDiagnostics: [PublicHeistBuildDiagnostic]?
 
     init(failure: DiagnosticFailure) {
-        self.kind = failure.kind
+        self.kind = failure.details.code.kind
         self.phase = failure.details.phase
         self.retryable = failure.details.retryable
         self.hint = failure.details.hint

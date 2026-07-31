@@ -12,8 +12,6 @@ public struct HeistReport: Sendable, Equatable {
         public let expectations: Expectations?
         public let finalScreenId: String?
 
-        public var expectationsChecked: Int { expectations?.checked ?? 0 }
-        public var expectationsMet: Int { expectations?.met ?? 0 }
     }
 
     public struct Expectations: Sendable, Equatable {

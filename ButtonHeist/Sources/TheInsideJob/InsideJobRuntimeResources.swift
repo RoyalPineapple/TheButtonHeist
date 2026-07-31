@@ -11,7 +11,7 @@ extension TheInsideJob {
         engageIdleTimerProtection()
 
         tripwire.startPulse()
-        await brains.startSemanticObservation()
+        brains.vault.semanticObservationStream.start()
         brains.safecracker.startKeyboardObservation()
     }
 
@@ -24,7 +24,7 @@ extension TheInsideJob {
             restoreIdleTimerProtection(to: idleTimerBaseline)
         }
 
-        brains.stopSemanticObservation()
+        brains.vault.semanticObservationStream.stop()
         tripwire.stopPulse()
         brains.safecracker.stopKeyboardObservation()
     }

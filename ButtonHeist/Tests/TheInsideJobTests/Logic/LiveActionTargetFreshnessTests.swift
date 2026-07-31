@@ -18,29 +18,24 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
             object: oldObject,
             fixture: try TargetGeometryFixture()
         )
-        let originalCaptureToken = liveTarget.captureID
         let replacementObject = ActivationTrackingView()
-        let replacement = try await installTarget(
+        _ = try await installTarget(
             in: vault,
             heistId: "checkout",
             object: replacementObject,
             fixture: try TargetGeometryFixture()
         )
-        XCTAssertNotEqual(replacement.captureID, originalCaptureToken)
-
         switch vault.dispatchOnFreshLiveActionTarget(liveTarget, operation: { target in
             (
                 target.object.accessibilityActivate(),
                 ObjectIdentifier(target.object),
-                target.captureID,
                 target.treeElement.heistId
             )
         }) {
         case .success(let evidence):
             XCTAssertTrue(evidence.0)
             XCTAssertEqual(evidence.1, ObjectIdentifier(replacementObject))
-            XCTAssertEqual(evidence.2, replacement.captureID)
-            XCTAssertEqual(evidence.3, liveTarget.treeElement.heistId)
+            XCTAssertEqual(evidence.2, liveTarget.treeElement.heistId)
         case .failure(let staleness):
             XCTFail("Expected current-target reacquisition, got \(staleness)")
         }
@@ -104,8 +99,7 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
             PreparedGeometryEvidence(
                 geometry: target.treeElement.geometry,
                 liveFrame: target.frame,
-                liveActivationPoint: target.activationPoint,
-                captureID: target.captureID
+                liveActivationPoint: target.activationPoint
             )
         }
 
@@ -119,10 +113,10 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
                 evidence.liveActivationPoint,
                 replacement.element.bhResolvedActivationPoint
             )
-            XCTAssertEqual(evidence.captureID, replacementTarget.captureID)
         case .failure(let staleness):
             XCTFail("Expected current-geometry preparation, got \(staleness)")
         }
+        withExtendedLifetime(replacementTarget) {}
     }
 
     func testContainerCaptureReplacementReacquiresCurrentFrameBeforeDispatch() async throws {
@@ -144,8 +138,7 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
             ContainerDispatchEvidence(
                 objectID: ObjectIdentifier(current.object),
                 viewSpace: current.containerTarget.viewSpace,
-                liveFrame: current.frame,
-                captureID: current.captureID
+                liveFrame: current.frame
             )
         }
 
@@ -156,7 +149,6 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
             XCTAssertNotEqual(evidence.viewSpace, original.containerTarget.viewSpace)
             XCTAssertEqual(evidence.liveFrame, replacement.frame)
             XCTAssertNotEqual(evidence.liveFrame, original.frame)
-            XCTAssertEqual(evidence.captureID, replacement.captureID)
         case .failure(let staleness):
             XCTFail("Expected current-container reacquisition, got \(staleness)")
         }
@@ -205,12 +197,11 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
             element: fixture.element
         )
         await vault.installObservationForTesting(InterfaceObservation.makeForTests(
-            tree: InterfaceTree(elements: [heistId: treeElement]),
-            liveCapture: LiveCapture.makeForTests(
-                hierarchy: [.element(fixture.element, traversalIndex: 0)],
-                heistIdsByPath: [path: heistId],
-                elementRefs: [heistId: .init(object: object, scrollView: nil)]
-            )
+            elements: [heistId: treeElement],
+            hierarchy: [.element(fixture.element, traversalIndex: 0)],
+            heistIdsByPath: [path: heistId],
+            elementRefs: [heistId: .init(object: object, scrollView: nil)],
+            firstResponderHeistId: nil
         ))
         let installedElement = try XCTUnwrap(
             vault.currentInterfaceObservation.tree.findElement(heistId: heistId)
@@ -246,15 +237,12 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
             viewSpace: viewSpace
         )
         await vault.installObservationForTesting(InterfaceObservation.makeForTests(
-            tree: InterfaceTree(elements: [:], containers: [path: semanticContainer]),
-            liveCapture: LiveCapture.makeForTests(
-                hierarchy: [.container(container, children: [])],
-                containerNamesByPath: [path: identifier],
-                elementRefs: [:],
-                containerRefsByPath: [path: .init(object: object)],
-                containerViewSpacesByPath: [path: viewSpace],
-                firstResponderHeistId: nil
-            )
+            elements: [:],
+            hierarchy: [.container(container, children: [])],
+            containerNamesByPath: [path: identifier],
+            containerRefsByPath: [path: .init(object: object)],
+            containerViewSpacesByPath: [path: viewSpace],
+            firstResponderHeistId: nil
         ))
         guard case .resolved(let target) = vault.resolveLiveContainerTarget(for: semanticContainer) else {
             throw LiveActionTargetFixtureError.unavailable
@@ -267,14 +255,12 @@ private struct PreparedGeometryEvidence: Sendable {
     let geometry: HeistElement.Geometry
     let liveFrame: CGRect
     let liveActivationPoint: CGPoint
-    let captureID: InterfaceCaptureID
 }
 
 private struct ContainerDispatchEvidence: Sendable {
     let objectID: ObjectIdentifier
     let viewSpace: HeistElement.Geometry.ViewSpace
     let liveFrame: CGRect
-    let captureID: InterfaceCaptureID
 }
 
 private struct TargetGeometryFixture {

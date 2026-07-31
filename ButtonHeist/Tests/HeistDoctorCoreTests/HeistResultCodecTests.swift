@@ -76,7 +76,7 @@ import TheScore
         let decoded = try HeistResultCodec.decode(data, format: .json).result
 
         #expect(decoded.isFailure)
-        #expect(decoded.abortedAtPath == "$.body[0]")
+        #expect(decoded.outcome == .failed(abortedAtPath: "$.body[0]"))
         #expect(decoded.firstFailedStep?.failure?.observed == "stop")
     }
 

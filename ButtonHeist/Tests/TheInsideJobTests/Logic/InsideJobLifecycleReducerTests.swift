@@ -311,7 +311,6 @@ final class InsideJobLifecycleReducerTests: XCTestCase {
 
         let staleRequest = TheInsideJob.InsideJobTransportStartRequest(
             id: fixture.otherID,
-            phase: .resume,
             transport: fixture.transport,
             idleTimerBaseline: false
         )
@@ -336,6 +335,17 @@ final class InsideJobLifecycleReducerTests: XCTestCase {
             ),
             .rejected(.staleResumeAttempt, stayingIn: .resuming(fixture.resumeAttempt))
         )
+    }
+
+    func testLifecycleObservationTransitionsOnlyOnce() {
+        var state = TheInsideJob.LifecycleObservationState.uninstalled
+
+        XCTAssertTrue(state.installIfNeeded())
+        XCTAssertEqual(state, .installed)
+        XCTAssertFalse(state.installIfNeeded())
+        XCTAssertTrue(state.uninstallIfNeeded())
+        XCTAssertEqual(state, .uninstalled)
+        XCTAssertFalse(state.uninstallIfNeeded())
     }
 
 }
@@ -370,7 +380,6 @@ private struct Fixture {
         self.resources = resources
         self.startRequest = TheInsideJob.InsideJobTransportStartRequest(
             id: id,
-            phase: .startup,
             transport: transport,
             idleTimerBaseline: false
         )
@@ -384,7 +393,6 @@ private struct Fixture {
         self.stopAttempt = TheInsideJob.InsideJobStopAttempt(id: id)
         self.resumeRequest = TheInsideJob.InsideJobTransportStartRequest(
             id: id,
-            phase: .resume,
             transport: transport,
             idleTimerBaseline: false
         )

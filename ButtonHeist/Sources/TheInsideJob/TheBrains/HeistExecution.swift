@@ -88,16 +88,16 @@ extension HeistExecution {
         case noChange
 
         internal init(
-            _ expectation: ActionExecutionExpectation,
+            _ policy: ActionExpectationPolicy,
             bindings: HeistExecutionEnvironment
         ) throws {
-            switch expectation {
-            case .authoredThenNoChange(let expectation):
+            switch policy {
+            case .expect(let expectation):
                 self = .authoredThenNoChange(try Predicate(
                     authored: expectation.predicate,
                     bindings: bindings
                 ))
-            case .noChange:
+            case .default, .waived:
                 self = .noChange
             }
         }

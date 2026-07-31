@@ -91,9 +91,13 @@ struct ToolRoutingTests {
             return
         }
 
-        let failure = try #require(FenceResponse.failure(error).diagnosticFailure)
-        #expect(failure.code == "request.invalid")
-        #expect(failure.kind == .request)
+        let response = FenceResponse.failure(error)
+        guard case .error(let failure) = response else {
+            Issue.record("Expected error response")
+            return
+        }
+        #expect(failure.details.errorCode == "request.invalid")
+        #expect(failure.details.code.kind == .request)
         #expect(failure.message == "Unknown tool: not_a_tool")
         #expect(failure.details.phase == .request)
         #expect(failure.details.retryable == false)

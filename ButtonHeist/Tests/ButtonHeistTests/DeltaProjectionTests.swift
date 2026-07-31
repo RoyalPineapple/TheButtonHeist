@@ -4,7 +4,7 @@ import Foundation
 import ThePlans
 import TheScore
 import XCTest
-@_spi(ButtonHeistInternals) @testable import ButtonHeist
+@_spi(ButtonHeistInternals) @_spi(ButtonHeistTooling) @testable import ButtonHeist
 
 final class DeltaProjectionTests: XCTestCase {
 

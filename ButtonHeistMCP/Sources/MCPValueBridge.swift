@@ -69,15 +69,11 @@ enum MCPValueBridge {
         }
     }
 
-    static func value(decodingJSONData data: Data) throws -> Value {
-        try JSONDecoder().decode(Value.self, from: data)
-    }
-
     static func structuredContent(
         for response: FenceResponse
     ) throws -> Value {
         let data = try response.jsonData(profile: .mcp, outputFormatting: [])
-        return try value(decodingJSONData: data)
+        return try JSONDecoder().decode(Value.self, from: data)
     }
 
     static func jsonValueNode(_ value: Value) -> PublicJSONValueNode<Value> {

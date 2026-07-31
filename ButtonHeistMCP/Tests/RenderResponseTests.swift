@@ -185,7 +185,10 @@ struct RenderResponseTests {
     @Test("error render uses canonical public failure mapping")
     func errorRenderUsesCanonicalDiagnosticFailureMapping() throws {
         let response = FenceResponse.failure(FenceError.connectionTimeout)
-        let expected = try #require(response.diagnosticFailure)
+        guard case .error(let expected) = response else {
+            Issue.record("Expected error response")
+            return
+        }
 
         let result = ButtonHeistMCPServer.renderResponse(response)
         let root = try #require(result.structuredContent?.objectValue)
@@ -194,14 +197,14 @@ struct RenderResponseTests {
         #expect(result.isError == true)
         #expect(root["status"]?.stringValue == "error")
         #expect(root["message"]?.stringValue == expected.message)
-        #expect(root["code"]?.stringValue == expected.code)
+        #expect(root["code"]?.stringValue == expected.details.errorCode)
         #expect(root["errorCode"] == nil)
         #expect(root["kind"] == nil)
         #expect(root["phase"] == nil)
         #expect(root["retryable"] == nil)
         #expect(root["hint"] == nil)
         #expect(details["code"] == nil)
-        #expect(details["kind"]?.stringValue == expected.kind.rawValue)
+        #expect(details["kind"]?.stringValue == expected.details.code.kind.rawValue)
         #expect(details["phase"]?.stringValue == expected.details.phase.rawValue)
         #expect(details["retryable"] == Value.bool(expected.details.retryable))
         #expect(details["hint"]?.stringValue == expected.details.hint)

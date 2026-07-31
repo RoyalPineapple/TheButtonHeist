@@ -7,11 +7,11 @@ extension FenceResponse {
     // MARK: - Compact Text Format
 
     /// Token-efficient tree output for LLM agents. Omits geometry.
-    public func compactFormatted() -> String {
+    @_spi(ButtonHeistTooling) public func compactFormatted() -> String {
         compactFormatted(profile: .summary)
     }
 
-    @_spi(ButtonHeistInternals) public func compactFormatted(profile: ProjectionProfile) -> String {
+    @_spi(ButtonHeistTooling) public func compactFormatted(profile: ProjectionProfile) -> String {
         switch self {
         case .ok(let message):
             return message

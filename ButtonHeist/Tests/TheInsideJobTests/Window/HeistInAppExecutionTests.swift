@@ -19,7 +19,7 @@ final class HeistInAppExecutionTests: XCTestCase {
         let invocation = try XCTUnwrap(heist.result.steps.first)
         let report = HeistReport.project(result: heist.result)
         XCTAssertEqual(heist.result.steps.map(\.kind), [.invoke])
-        XCTAssertEqual(invocation.reportDisplayName, #"RunHeist("PublicFacade.warn")"#)
+        XCTAssertEqual(report.nodes.first?.invocationDisplayName, #"RunHeist("PublicFacade.warn")"#)
         XCTAssertEqual(invocation.children.map(\.kind), [.warn])
         XCTAssertEqual(invocation.children.first?.reportMessage, "ok")
         XCTAssertEqual(report.warnings, [
@@ -118,8 +118,9 @@ final class HeistInAppExecutionTests: XCTestCase {
         }
 
         let invocation = try XCTUnwrap(heist.result.steps.first)
+        let report = HeistReport.project(result: heist.result)
         XCTAssertEqual(heist.result.steps.map(\.kind), [.invoke])
-        XCTAssertEqual(invocation.reportDisplayName, #"RunHeist("addToCart", input)"#)
+        XCTAssertEqual(report.nodes.first?.invocationDisplayName, #"RunHeist("addToCart", input)"#)
         XCTAssertEqual(invocation.children.map(\.kind), [.warn])
         XCTAssertEqual(invocation.children.first?.reportMessage, "adding")
         XCTAssertEqual(request.argument, .string("Milk"))

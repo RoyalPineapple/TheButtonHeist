@@ -65,10 +65,6 @@ final class TheVault {
         currentInterfaceObservation.liveCapture
     }
 
-    var captureID: InterfaceCaptureID {
-        currentInterfaceObservation.captureID
-    }
-
     // MARK: - Observation Scheduling
 
     lazy var semanticObservationStream = Observation.Stream(
@@ -110,7 +106,7 @@ final class TheVault {
     /// a live scroll view.
     var scrollableContainerViewsByPath: [TreePath: UIScrollView] {
         Dictionary(
-            uniqueKeysWithValues: currentLiveCapture.scrollableContainerViewsByPath.compactMap { path, reference in
+            uniqueKeysWithValues: currentLiveCapture.dispatchReferences.scrollableContainerViewsByPath.compactMap { path, reference in
                 reference.view.map { (path, $0) }
             }
         )
@@ -132,12 +128,7 @@ final class TheVault {
 
     /// HeistId captured for the current viewport's first responder.
     var firstResponderHeistId: HeistId? {
-        currentLiveCapture.firstResponderHeistId
-    }
-
-    /// Current screen name derived from the interface tree's viewport capture.
-    var lastScreenName: String? {
-        interfaceTree.name
+        interfaceTree.firstResponderHeistId
     }
 
     static func captureVisibleObservation(from vault: TheVault) -> InterfaceObservation? {

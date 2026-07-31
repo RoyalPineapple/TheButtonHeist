@@ -3,6 +3,7 @@ import XCTest
 
 import ButtonHeistHostedTestSupport
 import ButtonHeistTesting
+@_spi(ButtonHeistInternals) @testable import TheScore
 
 private enum MenuScreen {
     static let addItem = HeistDef<String>("MenuScreen.addItem", parameter: "item") { item in
@@ -75,15 +76,14 @@ final class MenuOrderDogfoodHeistTests: XCTestCase {
         }
 
         let root = try XCTUnwrap(heist.result.steps.first)
+        let reportRoot = try XCTUnwrap(HeistReport.project(result: heist.result).nodes.first)
         XCTAssertEqual(heist.result.steps.map(\.kind), [.invoke])
-        XCTAssertEqual(root.reportDisplayName, #"RunHeist("MenuOrderDogfood_orderTwoItems")"#)
+        XCTAssertEqual(reportRoot.invocationDisplayName, #"RunHeist("MenuOrderDogfood_orderTwoItems")"#)
         XCTAssertEqual(root.children.map(\.kind), [.invoke, .forEachString, .invoke])
 
-        let openMenu = try XCTUnwrap(root.children.first)
         let items = try XCTUnwrap(root.children.dropFirst().first)
-        let checkout = try XCTUnwrap(root.children.last)
-        XCTAssertEqual(openMenu.reportDisplayName, #"RunHeist("DemoNavigation.openMenu")"#)
-        XCTAssertEqual(checkout.reportDisplayName, #"RunHeist("MenuScreen.checkout")"#)
+        XCTAssertEqual(reportRoot.children.first?.invocationDisplayName, #"RunHeist("DemoNavigation.openMenu")"#)
+        XCTAssertEqual(reportRoot.children.last?.invocationDisplayName, #"RunHeist("MenuScreen.checkout")"#)
         XCTAssertEqual(items.forEachStringEvidence?.iterationCount, DemoOrder.itemLabels.count)
     }
 }

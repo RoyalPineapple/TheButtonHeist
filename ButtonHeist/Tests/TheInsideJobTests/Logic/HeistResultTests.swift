@@ -139,7 +139,6 @@ final class HeistResultTests: XCTestCase {
             Warn("bootstrapped")
         })
 
-        XCTAssertEqual(job.brains.vault.lastScreenName, "ButtonHeist Demo")
         XCTAssertEqual(job.brains.vault.interfaceElementIDs, ["buttonheist_demo"])
         XCTAssertNil(job.brains.vault.interfaceElement(heistId: "stale_row"))
     }

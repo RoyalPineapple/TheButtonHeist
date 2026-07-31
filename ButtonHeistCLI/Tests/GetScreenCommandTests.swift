@@ -52,7 +52,10 @@ final class GetScreenCommandTests: XCTestCase {
         guard case .response(let failureResponse) = result else {
             return XCTFail("expected failure to stay on semantic response path")
         }
-        XCTAssertEqual(failureResponse.diagnosticFailure, failure)
+        guard case .error(let renderedFailure) = failureResponse else {
+            return XCTFail("expected error response, got \(failureResponse)")
+        }
+        XCTAssertEqual(renderedFailure, failure)
         XCTAssertEqual(
             CLIRunner.renderedOutput(for: result, format: .human),
             .failedText("Error: screenshot failed")

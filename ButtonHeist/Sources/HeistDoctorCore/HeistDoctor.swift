@@ -1,12 +1,12 @@
 import Foundation
 import TheScore
 
-public enum HeistDoctor {
-    public static func diagnosis(for request: HeistRepairRequest) -> HeistRepairDiagnosis {
+package enum HeistDoctor {
+    package static func diagnosis(for request: HeistRepairRequest) -> HeistRepairDiagnosis {
         RepairDiagnosisPipeline.run(request)
     }
 
-    public static func diagnosis(
+    package static func diagnosis(
         lastPass: HeistResult,
         newFail: HeistResult,
         stepPath requestedStepPath: HeistExecutionPath? = nil
@@ -66,10 +66,10 @@ public enum HeistDoctor {
 
 }
 
-public enum HeistResultPairSelection {
-    public struct Warning: Sendable, Equatable {
-        public let recording: URL
-        public let reason: String
+package enum HeistResultPairSelection {
+    package struct Warning: Sendable, Equatable {
+        package let recording: URL
+        package let reason: String
     }
 
     case selected(
@@ -80,14 +80,14 @@ public enum HeistResultPairSelection {
     )
     case unavailable(warnings: [Warning])
 
-    public var warnings: [Warning] {
+    package var warnings: [Warning] {
         switch self {
         case .selected(_, _, _, let warnings), .unavailable(let warnings):
             warnings
         }
     }
 
-    public static func select(
+    package static func select(
         lastPassDirectory: URL,
         newFailDirectory: URL
     ) throws -> Self {
@@ -185,7 +185,7 @@ public enum HeistResultPairSelection {
     }
 }
 
-public enum HeistDoctorError: Error, Sendable, Equatable, CustomStringConvertible, LocalizedError {
+package enum HeistDoctorError: Error, Sendable, Equatable, CustomStringConvertible, LocalizedError {
     case noFailedStep
     case resultDirectoryNotFound(path: String)
     case stepNotFound(path: HeistExecutionPath)
@@ -200,7 +200,7 @@ public enum HeistDoctorError: Error, Sendable, Equatable, CustomStringConvertibl
     case missingActionResult(path: HeistExecutionPath)
     case missingObservationEvidence(path: HeistExecutionPath)
 
-    public var description: String {
+    package var description: String {
         switch self {
         case .noFailedStep:
             return "new failing result does not contain a failed step"
@@ -223,7 +223,7 @@ public enum HeistDoctorError: Error, Sendable, Equatable, CustomStringConvertibl
         }
     }
 
-    public var errorDescription: String? {
+    package var errorDescription: String? {
         description
     }
 }

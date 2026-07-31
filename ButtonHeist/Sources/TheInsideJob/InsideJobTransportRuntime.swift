@@ -65,12 +65,6 @@ extension TheInsideJob {
             bonjourServiceName: serviceName,
             idleTimerBaseline: request.idleTimerBaseline
         )
-        if request.phase == .startup {
-            logStartupSummary(
-                actualPort: resources.actualPort,
-                bonjourServiceName: resources.bonjourServiceName
-            )
-        }
         return resources
     }
 

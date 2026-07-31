@@ -227,7 +227,11 @@ final class TheVaultCustomRotorTests: ButtonHeistTestCase {
             element: cachedElement
         )
         await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
-            tree: InterfaceTree(elements: elements, containers: observation.tree.containers),
+            tree: InterfaceTree(
+                elements: elements,
+                containers: observation.tree.containers,
+                viewportCapture: observation.tree.viewportCapture
+            ),
             liveCapture: observation.liveCapture
         ))
 

@@ -118,7 +118,7 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertEqual(try publicJSONProbe(response).string("announcement"), "Ticket saved.")
     }
 
-    func testActionFailureProjectionFeedsJSONAndCompactRendering() throws {
+    func testActionFailureDetailsFeedJSONAndCompactRendering() throws {
         let response = FenceResponse.action(
             command: .activate,
             result: HeistResultFixture.actionResult(

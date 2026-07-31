@@ -18,15 +18,14 @@ extension TheFenceHandlerTests {
         let diagnostic = DiagnosticFailure(message: "Invalid request", details: details)
         let diagnosticFailure: DiagnosticFailure = diagnostic
 
-        XCTAssertEqual(diagnosticFailure.failureCode, .requestValidationError)
-        XCTAssertEqual(diagnosticFailure.code, "request.validation_error")
-        XCTAssertEqual(diagnosticFailure.kind, .request)
         XCTAssertEqual(diagnosticFailure.message, "Invalid request")
-        XCTAssertEqual(diagnosticFailure.displayMessage, "Invalid request")
         XCTAssertEqual(diagnosticFailure.details, details)
-        XCTAssertEqual(diagnosticFailure.phase, .request)
-        XCTAssertEqual(diagnosticFailure.retryable, false)
-        XCTAssertEqual(diagnosticFailure.hint, "Fix the request.")
+        XCTAssertEqual(diagnosticFailure.details.code, .requestValidationError)
+        XCTAssertEqual(diagnosticFailure.details.errorCode, "request.validation_error")
+        XCTAssertEqual(diagnosticFailure.details.code.kind, .request)
+        XCTAssertEqual(diagnosticFailure.details.phase, .request)
+        XCTAssertFalse(diagnosticFailure.details.retryable)
+        XCTAssertEqual(diagnosticFailure.details.hint, "Fix the request.")
     }
 
     func testHandoffConnectionFailureProjectsOnceToDiagnosticFailure() {
@@ -40,16 +39,16 @@ extension TheFenceHandlerTests {
 
         XCTAssertEqual(diagnostic.message, "Ambiguous device target 'Demo' (matches: Demo#one, Demo#two)")
         XCTAssertEqual(diagnostic.details, compatibilityFailure.details)
-        XCTAssertEqual(diagnostic.failureCode, .discoveryAmbiguousDeviceTarget)
-        XCTAssertEqual(diagnostic.phase, .discovery)
-        XCTAssertFalse(diagnostic.retryable)
-        XCTAssertEqual(diagnostic.hint, KnownFailureCode.discoveryAmbiguousDeviceTarget.defaultHint)
+        XCTAssertEqual(diagnostic.details.code, .discoveryAmbiguousDeviceTarget)
+        XCTAssertEqual(diagnostic.details.phase, .discovery)
+        XCTAssertFalse(diagnostic.details.retryable)
+        XCTAssertEqual(diagnostic.details.hint, KnownFailureCode.discoveryAmbiguousDeviceTarget.defaultHint)
     }
 
     func testFenceErrorRendersTypedHintAtDisplayBoundary() throws {
         let error = FenceError.connectionTimeout
         let diagnostic = error.diagnosticFailure
-        let hint = try XCTUnwrap(diagnostic.hint)
+        let hint = try XCTUnwrap(diagnostic.details.hint)
 
         XCTAssertEqual(diagnostic.message, "Connection timed out")
         XCTAssertEqual(error.errorDescription, "Connection timed out\n  Hint: \(hint)")
@@ -67,7 +66,6 @@ extension TheFenceHandlerTests {
             return XCTFail("Expected typed error response")
         }
         XCTAssertEqual(encodedFailure, failure)
-        XCTAssertEqual(response.diagnosticFailure, failure)
 
         let data = try response.jsonData()
         let encoded = try JSONDecoder().decode(JSONValue.self, from: data)
@@ -80,11 +78,10 @@ extension TheFenceHandlerTests {
         XCTAssertEqual(Set(detailsObject.keys), ["kind", "phase", "retryable", "hint"])
 
         let json = try JSONProbe(data: data).object()
-        XCTAssertEqual(failure.failureCode, .requestInvalid)
         XCTAssertEqual(failure.details.code, .requestInvalid)
         XCTAssertEqual(try json.string("status"), "error")
-        XCTAssertEqual(try json.string("message"), failure.displayMessage)
-        XCTAssertEqual(try json.string("code"), failure.code)
+        XCTAssertEqual(try json.string("message"), failure.message)
+        XCTAssertEqual(try json.string("code"), failure.details.errorCode)
         try json.assertMissing("errorCode")
         try json.assertMissing("kind")
         try json.assertMissing("phase")
@@ -94,10 +91,10 @@ extension TheFenceHandlerTests {
         let detailsJSON = try json.object("details")
         try detailsJSON.assertMissing("code")
         try detailsJSON.assertMissing("errorCode")
-        XCTAssertEqual(try detailsJSON.string("kind"), failure.kind.rawValue)
-        XCTAssertEqual(try detailsJSON.string("phase"), failure.phase.rawValue)
-        XCTAssertEqual(try detailsJSON.bool("retryable"), failure.retryable)
-        XCTAssertEqual(try detailsJSON.string("hint"), failure.hint)
+        XCTAssertEqual(try detailsJSON.string("kind"), failure.details.code.kind.rawValue)
+        XCTAssertEqual(try detailsJSON.string("phase"), failure.details.phase.rawValue)
+        XCTAssertEqual(try detailsJSON.bool("retryable"), failure.details.retryable)
+        XCTAssertEqual(try detailsJSON.string("hint"), failure.details.hint)
         try detailsJSON.assertMissing("buildDiagnostics")
     }
 
@@ -125,15 +122,17 @@ extension TheFenceHandlerTests {
             ),
         ]
         let response = FenceResponse.failure(FenceError.heistBuildDiagnostics(diagnostics))
-        let failure = try XCTUnwrap(response.diagnosticFailure)
+        guard case .error(let failure) = response else {
+            return XCTFail("Expected typed error response")
+        }
         let expectedFailureCode = KnownFailureCode.requestInvalid.rawValue
 
-        XCTAssertEqual(failure.failureCode, .requestInvalid)
-        XCTAssertEqual(failure.code, expectedFailureCode)
-        XCTAssertEqual(failure.kind, .request)
-        XCTAssertEqual(failure.phase, .request)
-        XCTAssertFalse(failure.retryable)
-        XCTAssertEqual(failure.hint, diagnostics[0].hint)
+        XCTAssertEqual(failure.details.code, .requestInvalid)
+        XCTAssertEqual(failure.details.errorCode, expectedFailureCode)
+        XCTAssertEqual(failure.details.code.kind, .request)
+        XCTAssertEqual(failure.details.phase, .request)
+        XCTAssertFalse(failure.details.retryable)
+        XCTAssertEqual(failure.details.hint, diagnostics[0].hint)
         XCTAssertEqual(failure.buildDiagnostics, diagnostics)
         XCTAssertTrue(failure.message.contains("expected an identifier"), failure.message)
 
@@ -218,23 +217,21 @@ extension TheFenceHandlerTests {
 
     func testKnownFailuresExposeCompleteDiagnosticFields() throws {
         for expected in Self.expectedDiagnosticFailures {
-            let failure = try XCTUnwrap(expected.response.diagnosticFailure, expected.name)
+            guard case .error(let failure) = expected.response else {
+                return XCTFail("Expected typed error response: \(expected.name)")
+            }
             let json = try publicJSONProbe(expected.response).object()
             let detailsJSON = try json.object("details")
 
-            XCTAssertEqual(failure.failureCode, expected.code, expected.name)
-            XCTAssertEqual(failure.failureCode.rawValue, expected.code.rawValue, expected.name)
-            XCTAssertEqual(failure.code, expected.code.rawValue, expected.name)
-            XCTAssertEqual(failure.kind, expected.kind, expected.name)
-            XCTAssertEqual(failure.phase, expected.phase, expected.name)
             XCTAssertEqual(failure.message, expected.message, expected.name)
-            XCTAssertEqual(failure.displayMessage, expected.message, expected.name)
-            XCTAssertEqual(failure.retryable, expected.retryable, expected.name)
             XCTAssertEqual(failure.details.code, expected.code, expected.name)
+            XCTAssertEqual(failure.details.code.rawValue, expected.code.rawValue, expected.name)
+            XCTAssertEqual(failure.details.errorCode, expected.code.rawValue, expected.name)
+            XCTAssertEqual(failure.details.code.kind, expected.kind, expected.name)
             XCTAssertEqual(failure.details.phase, expected.phase, expected.name)
             XCTAssertEqual(failure.details.retryable, expected.retryable, expected.name)
-            XCTAssertFalse(failure.code.isEmpty, expected.name)
-            XCTAssertFalse(failure.kind.rawValue.isEmpty, expected.name)
+            XCTAssertFalse(failure.details.errorCode.isEmpty, expected.name)
+            XCTAssertFalse(failure.details.code.kind.rawValue.isEmpty, expected.name)
             XCTAssertFalse(failure.message.isEmpty, expected.name)
             XCTAssertEqual(try json.string("status"), "error", expected.name)
             XCTAssertEqual(try json.string("message"), expected.message, expected.name)
@@ -257,15 +254,17 @@ extension TheFenceHandlerTests {
             filter: "Demo",
             matches: ["Demo#one", "Demo#two"]
         ))
-        let failure = try XCTUnwrap(response.diagnosticFailure)
+        guard case .error(let failure) = response else {
+            return XCTFail("Expected typed error response")
+        }
 
-        XCTAssertEqual(failure.failureCode, .discoveryAmbiguousDeviceTarget)
-        XCTAssertNotEqual(failure.failureCode, .discoveryNoMatchingDevice)
-        XCTAssertEqual(failure.code, KnownFailureCode.discoveryAmbiguousDeviceTarget.rawValue)
-        XCTAssertEqual(failure.kind, .discovery)
-        XCTAssertEqual(failure.phase, .discovery)
-        XCTAssertFalse(failure.retryable)
-        XCTAssertEqual(failure.hint, KnownFailureCode.discoveryAmbiguousDeviceTarget.defaultHint)
+        XCTAssertEqual(failure.details.code, .discoveryAmbiguousDeviceTarget)
+        XCTAssertNotEqual(failure.details.code, .discoveryNoMatchingDevice)
+        XCTAssertEqual(failure.details.errorCode, KnownFailureCode.discoveryAmbiguousDeviceTarget.rawValue)
+        XCTAssertEqual(failure.details.code.kind, .discovery)
+        XCTAssertEqual(failure.details.phase, .discovery)
+        XCTAssertFalse(failure.details.retryable)
+        XCTAssertEqual(failure.details.hint, KnownFailureCode.discoveryAmbiguousDeviceTarget.defaultHint)
         XCTAssertEqual(failure.message, "Ambiguous device target 'Demo' (matches: Demo#one, Demo#two)")
 
         let json = try publicJSONProbe(response).object()
@@ -279,14 +278,16 @@ extension TheFenceHandlerTests {
     func testTransportDisconnectFailureUsesNetworkDiagnosticShape() throws {
         let transportFailure = NetworkTransportFailure(.posix(.ECONNRESET))
         let response = FenceResponse.failure(HandoffConnectionError.disconnected(.networkError(transportFailure)))
-        let failure = try XCTUnwrap(response.diagnosticFailure)
+        guard case .error(let failure) = response else {
+            return XCTFail("Expected typed error response")
+        }
 
-        XCTAssertEqual(failure.failureCode, .transportNetworkError)
-        XCTAssertEqual(failure.code, KnownFailureCode.transportNetworkError.rawValue)
-        XCTAssertEqual(failure.kind, .connection)
-        XCTAssertEqual(failure.phase, .transport)
-        XCTAssertTrue(failure.retryable)
-        XCTAssertEqual(failure.hint, KnownFailureCode.transportNetworkError.defaultHint)
+        XCTAssertEqual(failure.details.code, .transportNetworkError)
+        XCTAssertEqual(failure.details.errorCode, KnownFailureCode.transportNetworkError.rawValue)
+        XCTAssertEqual(failure.details.code.kind, .connection)
+        XCTAssertEqual(failure.details.phase, .transport)
+        XCTAssertTrue(failure.details.retryable)
+        XCTAssertEqual(failure.details.hint, KnownFailureCode.transportNetworkError.defaultHint)
         XCTAssertTrue(failure.message.contains("posix"), failure.message)
         XCTAssertTrue(failure.message.contains("connection failed in transport"), failure.message)
     }
@@ -295,14 +296,15 @@ extension TheFenceHandlerTests {
         let response = FenceResponse.failure(HandoffConnectionError.disconnected(
             .authFailed("Invalid token", hint: hint)
         ))
-        let failure = try XCTUnwrap(response.diagnosticFailure)
+        guard case .error(let failure) = response else {
+            return XCTFail("Expected typed error response")
+        }
 
-        XCTAssertEqual(failure.failureCode, .authFailed)
-        XCTAssertEqual(failure.code, KnownFailureCode.authFailed.rawValue)
-        XCTAssertEqual(failure.kind, .authentication)
-        XCTAssertEqual(failure.phase, .authentication)
-        XCTAssertEqual(failure.retryable, false)
-        XCTAssertEqual(failure.hint, hint)
+        XCTAssertEqual(failure.details.code, .authFailed)
+        XCTAssertEqual(failure.details.errorCode, KnownFailureCode.authFailed.rawValue)
+        XCTAssertEqual(failure.details.code.kind, .authentication)
+        XCTAssertEqual(failure.details.phase, .authentication)
+        XCTAssertFalse(failure.details.retryable)
         XCTAssertEqual(failure.details.hint, hint)
 
         let json = try publicJSONProbe(response).object()
@@ -324,11 +326,13 @@ extension TheFenceHandlerTests {
         let response = FenceResponse.failure(HandoffConnectionError.disconnected(
             .authFailed(reason, hint: "Retry with the configured token.")
         ))
-        let failure = try XCTUnwrap(response.diagnosticFailure)
+        guard case .error(let failure) = response else {
+            return XCTFail("Expected typed error response")
+        }
 
-        XCTAssertEqual(failure.failureCode, .authFailed)
+        XCTAssertEqual(failure.details.code, .authFailed)
         XCTAssertTrue(failure.message.contains(reason), failure.message)
-        XCTAssertEqual(failure.hint, "Retry with the configured token.")
+        XCTAssertEqual(failure.details.hint, "Retry with the configured token.")
 
         let json = try publicJSONProbe(response).object()
         XCTAssertEqual(try json.string("code"), KnownFailureCode.authFailed.rawValue)
@@ -350,15 +354,17 @@ extension TheFenceHandlerTests {
         } catch {
             response = FenceResponse.failure(error)
         }
-        let failure = try XCTUnwrap(response.diagnosticFailure)
+        guard case .error(let failure) = response else {
+            return XCTFail("Expected typed error response")
+        }
 
-        XCTAssertEqual(failure.failureCode, .transportNetworkError)
-        XCTAssertNotEqual(failure.failureCode, .requestActionFailed)
-        XCTAssertEqual(failure.code, KnownFailureCode.transportNetworkError.rawValue)
-        XCTAssertEqual(failure.kind, .connection)
-        XCTAssertEqual(failure.phase, .transport)
-        XCTAssertEqual(failure.retryable, true)
-        XCTAssertEqual(failure.hint, KnownFailureCode.transportNetworkError.defaultHint)
+        XCTAssertEqual(failure.details.code, .transportNetworkError)
+        XCTAssertNotEqual(failure.details.code, .requestActionFailed)
+        XCTAssertEqual(failure.details.errorCode, KnownFailureCode.transportNetworkError.rawValue)
+        XCTAssertEqual(failure.details.code.kind, .connection)
+        XCTAssertEqual(failure.details.phase, .transport)
+        XCTAssertTrue(failure.details.retryable)
+        XCTAssertEqual(failure.details.hint, KnownFailureCode.transportNetworkError.defaultHint)
         XCTAssertTrue(failure.message.contains("posix"), failure.message)
         XCTAssertFalse(failure.message.contains(KnownFailureCode.requestActionFailed.rawValue), failure.message)
 
@@ -401,11 +407,13 @@ extension TheFenceHandlerTests {
             expected: "object"
         )
         let response = FenceResponse.failure(validationError)
-        let failure = try XCTUnwrap(response.diagnosticFailure)
+        guard case .error(let failure) = response else {
+            return XCTFail("Expected typed error response")
+        }
 
-        XCTAssertEqual(failure.failureCode, .requestValidationError)
-        XCTAssertEqual(failure.code, KnownFailureCode.requestValidationError.rawValue)
-        XCTAssertEqual(failure.kind, .request)
+        XCTAssertEqual(failure.details.code, .requestValidationError)
+        XCTAssertEqual(failure.details.errorCode, KnownFailureCode.requestValidationError.rawValue)
+        XCTAssertEqual(failure.details.code.kind, .request)
         XCTAssertEqual(failure.message, validationError.message)
         XCTAssertEqual(failure.details.phase, .request)
         XCTAssertEqual(failure.details.retryable, false)

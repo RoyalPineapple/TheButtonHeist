@@ -106,11 +106,11 @@ struct PublicHeistExecutionResponse: Encodable {
         try container.encode(failure.detail.contract, forKey: .contract)
         try container.encode(failure.detail.observed, forKey: .observed)
         try container.encodeIfPresent(failure.detail.expected, forKey: .expected)
-        try container.encode(diagnostic.code, forKey: .code)
-        try container.encode(diagnostic.kind.rawValue, forKey: .kind)
-        try container.encode(diagnostic.phase.rawValue, forKey: .phase)
-        try container.encode(diagnostic.retryable, forKey: .retryable)
-        try container.encodeIfPresent(diagnostic.hint, forKey: .hint)
+        try container.encode(diagnostic.details.errorCode, forKey: .code)
+        try container.encode(diagnostic.details.code.kind.rawValue, forKey: .kind)
+        try container.encode(diagnostic.details.phase.rawValue, forKey: .phase)
+        try container.encode(diagnostic.details.retryable, forKey: .retryable)
+        try container.encodeIfPresent(diagnostic.details.hint, forKey: .hint)
     }
 }
 
@@ -149,17 +149,6 @@ struct PublicHeistElementEditOmissions: Encodable {
         self.addedKeys = addedKeys
         self.removedKeys = removedKeys
         self.updatedKeys = updatedKeys
-    }
-
-    init(projection: DeltaEditsProjection) {
-        self.init(
-            added: projection.added.omittedCount,
-            removed: projection.removed.omittedCount,
-            updated: projection.updated.omittedCount,
-            addedKeys: projection.added.omittedKeys,
-            removedKeys: projection.removed.omittedKeys,
-            updatedKeys: projection.updated.omittedKeys
-        )
     }
 
     var isEmpty: Bool {

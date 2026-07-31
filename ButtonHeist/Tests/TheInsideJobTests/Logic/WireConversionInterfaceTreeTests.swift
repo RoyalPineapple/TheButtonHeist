@@ -123,17 +123,15 @@ extension WireConverterTests {
                         containerName: "container_order_entry",
                         viewSpace: interfaceTreeViewSpace(for: container)
                     ),
-                ]
+                ],
+                viewportCapture: .init(
+                    hierarchy: [.container(container, children: [
+                        .element(second, traversalIndex: 0),
+                    ])],
+                    heistIdsByPath: [recycledElementPath: "second_row_staticText"]
+                )
             ),
-            liveCapture: LiveCapture.makeForTests(
-                hierarchy: [.container(container, children: [
-                    .element(second, traversalIndex: 0),
-                ])],
-                containerNamesByPath: [containerPath: "container_order_entry"],
-                heistIdsByPath: [recycledElementPath: "second_row_staticText"],
-                elementRefs: [:],
-                firstResponderHeistId: nil
-            )
+            liveCapture: LiveCapture.makeForTests()
         )
 
         let interface = screen.tree.semanticInterface(timestamp: Date())
@@ -228,14 +226,12 @@ extension WireConverterTests {
                         containerName: "library",
                         viewSpace: interfaceTreeViewSpace(for: library)
                     ),
-                ]
+                ],
+                viewportCapture: .init(
+                    hierarchy: [.container(root, children: [])]
+                )
             ),
-            liveCapture: LiveCapture.makeForTests(
-                hierarchy: [.container(root, children: [])],
-                containerNamesByPath: [rootPath: "root"],
-                elementRefs: [:],
-                firstResponderHeistId: nil
-            )
+            liveCapture: LiveCapture.makeForTests()
         )
 
         let interface = screen.tree.semanticInterface(timestamp: Date())
@@ -668,17 +664,12 @@ extension WireConverterTests {
                         containerName: "transactions_list",
                         viewSpace: interfaceTreeViewSpace(for: rootContainer)
                     ),
-                ]
-            ),
-            liveCapture: LiveCapture.makeForTests(
-                hierarchy: [.container(rootContainer, children: [])],
-                containerNamesByPath: [TreePath([0]): "transactions_list"],
-                elementRefs: [:],
-                containerViewSpacesByPath: [
-                    TreePath([0]): interfaceTreeViewSpace(for: rootContainer),
                 ],
-                firstResponderHeistId: nil,
-            )
+                viewportCapture: .init(
+                    hierarchy: [.container(rootContainer, children: [])]
+                )
+            ),
+            liveCapture: LiveCapture.makeForTests()
         )
 
         let interface = WireConversion.discoveryProjection(from: screen.tree).interface
@@ -758,17 +749,12 @@ extension WireConverterTests {
                         containerName: "transactions_list",
                         viewSpace: interfaceTreeViewSpace(for: rootContainer)
                     ),
-                ]
-            ),
-            liveCapture: LiveCapture.makeForTests(
-                hierarchy: [.container(rootContainer, children: [])],
-                containerNamesByPath: [TreePath([0]): "transactions_list"],
-                elementRefs: [:],
-                containerViewSpacesByPath: [
-                    TreePath([0]): interfaceTreeViewSpace(for: rootContainer),
                 ],
-                firstResponderHeistId: nil,
-            )
+                viewportCapture: .init(
+                    hierarchy: [.container(rootContainer, children: [])]
+                )
+            ),
+            liveCapture: LiveCapture.makeForTests()
         )
 
         let interface = WireConversion.discoveryProjection(from: screen.tree).interface
@@ -837,17 +823,12 @@ extension WireConverterTests {
                         ),
                         scrollMembership: InterfaceTree.ScrollMembership(containerPath: TreePath([0]), index: 1)
                     ),
-                ]
-            ),
-            liveCapture: LiveCapture.makeForTests(
-                hierarchy: [.container(rootContainer, children: [])],
-                containerNamesByPath: [TreePath([0]): "transactions_list"],
-                elementRefs: [:],
-                containerViewSpacesByPath: [
-                    TreePath([0]): interfaceTreeViewSpace(for: rootContainer),
                 ],
-                firstResponderHeistId: nil,
-            )
+                viewportCapture: .init(
+                    hierarchy: [.container(rootContainer, children: [])]
+                )
+            ),
+            liveCapture: LiveCapture.makeForTests()
         )
 
         let interface = WireConversion.discoveryProjection(from: screen.tree).interface
