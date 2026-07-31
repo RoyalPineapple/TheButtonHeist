@@ -105,13 +105,15 @@ extension ActionProjection: Encodable {
     }
 
     private func encodeFailure(to container: inout KeyedEncodingContainer<PublicActionResultCodingKey>) throws {
-        guard let failure else { return }
-        try container.encode(failure.errorClass, forKey: .errorClass)
-        try container.encode(failure.code, forKey: .code)
-        try container.encode(failure.kind, forKey: .kind)
-        try container.encode(failure.phase, forKey: .phase)
-        try container.encode(failure.retryable, forKey: .retryable)
-        try container.encodeIfPresent(failure.hint, forKey: .hint)
+        guard let failure,
+              let failureKind = result.outcome.failureKind
+        else { return }
+        try container.encode(failureKind.rawValue, forKey: .errorClass)
+        try container.encode(failure.details.errorCode, forKey: .code)
+        try container.encode(failure.details.code.kind.rawValue, forKey: .kind)
+        try container.encode(failure.details.phase.rawValue, forKey: .phase)
+        try container.encode(failure.details.retryable, forKey: .retryable)
+        try container.encodeIfPresent(failure.details.hint, forKey: .hint)
     }
 }
 
@@ -137,28 +139,15 @@ extension ActionResult {
         return .ok
     }
 
-    /// Canonical public failure projection shared by JSON and compact renderers.
-    func diagnosticFailureProjection(fallbackMessage: String) -> ActionFailureProjection? {
+    /// Canonical diagnostic failure shared by JSON and compact renderers.
+    func diagnosticFailure(fallbackMessage: String) -> DiagnosticFailure? {
         guard !outcome.isSuccess else { return nil }
         let resolvedErrorKind = outcome.failureKind ?? .actionFailed
-        return ActionFailureProjection(
+        return DiagnosticFailure(
             message: message ?? fallbackMessage,
-            errorClass: resolvedErrorKind.rawValue,
             details: resolvedErrorKind.failureDetails
         )
     }
-}
-
-struct ActionFailureProjection {
-    let message: String
-    let errorClass: String
-    let details: FailureDetails
-
-    var code: String { details.errorCode }
-    var kind: String { details.code.kind.rawValue }
-    var phase: String { details.phase.rawValue }
-    var retryable: Bool { details.retryable }
-    var hint: String? { details.hint }
 }
 
 struct PublicRotorResult: Encodable {

@@ -113,8 +113,8 @@ struct ActionProjection: Sendable {
         }
     }
 
-    var failure: ActionFailureProjection? {
-        result.diagnosticFailureProjection(fallbackMessage: method)
+    var failure: DiagnosticFailure? {
+        result.diagnosticFailure(fallbackMessage: method)
     }
 
     var expectation: ExpectationProjection? {
