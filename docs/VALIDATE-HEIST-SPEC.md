@@ -675,7 +675,7 @@ have plan-build errors.
         "severity": "error",
         "path": "body[0]",
         "message": "Semantic action has no expectation",
-        "suggestion": "Attach .expect(...) or .withoutExpectation(\"reason\")"
+        "suggestion": "Attach .expect(...) or .withoutExpectation(\"reason\") to state the authored outcome; every action still proves terminal no-change."
       }
     ]
   },

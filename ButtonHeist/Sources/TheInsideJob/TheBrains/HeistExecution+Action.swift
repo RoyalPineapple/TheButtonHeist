@@ -21,18 +21,19 @@ extension HeistExecution.Machine {
             ))
         }
 
-        let predicate: HeistExecution.Predicate?
+        let expectation: HeistExecution.ActionObservationExpectation
         let observationTimeout: Duration
         do {
-            if let authored = step.expectationPolicy.expectedExpectation?
-                .waitStep(using: actionExpectationTimeoutPolicy) {
-                predicate = try HeistExecution.Predicate(
-                    authored: authored.predicate,
-                    bindings: environment
+            expectation = try HeistExecution.ActionObservationExpectation(
+                step.executionExpectation,
+                bindings: environment
+            )
+            switch step.executionExpectation {
+            case .authoredThenNoChange(let authored):
+                observationTimeout = HeistExecution.duration(
+                    authored.waitStep(using: actionExpectationTimeoutPolicy).timeout
                 )
-                observationTimeout = HeistExecution.duration(authored.timeout)
-            } else {
-                predicate = nil
+            case .noChange:
                 observationTimeout = HeistExecution.duration(actionExpectationTimeoutPolicy.standard)
             }
         } catch {
@@ -49,14 +50,14 @@ extension HeistExecution.Machine {
             id: id,
             step: step,
             command: command,
-            predicate: predicate,
+            expectation: expectation,
             path: path,
             phase: .beginningObservation
         ))
         return .perform(.beginObservation(
             id,
             HeistExecution.ObservationRequest(
-                scope: predicate?.observationScope ?? .visible,
+                scope: expectation.observationScope,
                 timeout: observationTimeout
             )
         ))

@@ -430,7 +430,7 @@ HeistPlan("cart") {
 ## Authoring rules
 
 Durable heist source MUST use Button Heist DSL constructs: actions, targets,
-expectations, expectation waivers, `WaitFor`, `RepeatUntil`, `If`, `Case`,
+expectations, authored-outcome waivers, `WaitFor`, `RepeatUntil`, `If`, `Case`,
 `Else`, `ForEach`, `RunHeist`, `HeistDef`, `Warn`, and `Fail`.
 
 Durable heist source MUST use the canonical rendered spelling for each

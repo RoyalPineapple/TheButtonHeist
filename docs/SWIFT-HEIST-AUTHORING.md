@@ -217,12 +217,12 @@ HeistPlan {
 }
 ```
 
-When a semantic action intentionally has no durable outcome, make that waiver
-explicit in source:
+When a semantic action has no additional durable outcome, make that waiver
+explicit in source. The action still proves its terminal no-change observation:
 
 ```swift
 Activate(.label("Optional"))
-    .withoutExpectation("No durable semantic outcome")
+    .withoutExpectation("No additional durable outcome")
 ```
 
 Runtime admission and lint are separate:

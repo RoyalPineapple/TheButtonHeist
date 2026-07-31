@@ -141,6 +141,16 @@ public enum ActionExpectationPolicy: Sendable, Equatable {
 
 }
 
+/// The execution meaning admitted for every action step.
+///
+/// An authored expectation keeps its authored predicate; every action still
+/// settles through a terminal no-change observation. A waiver only waives the
+/// authored predicate, never that settlement witness.
+package enum ActionExecutionExpectation: Sendable, Equatable {
+    case authoredThenNoChange(ActionExpectation)
+    case noChange
+}
+
 extension ActionExpectationPolicy: Codable {
     private enum CodingKeys: String, CodingKey, CaseIterable {
         case expectation
@@ -205,6 +215,17 @@ public struct ActionStep: Codable, Sendable, Equatable {
     ) {
         self.command = command
         self.expectationPolicy = expectationPolicy
+    }
+
+    /// The one execution expectation for this action. Runtime resolves this
+    /// admitted shape; it does not infer a missing action expectation.
+    package var executionExpectation: ActionExecutionExpectation {
+        switch expectationPolicy {
+        case .expect(let expectation):
+            .authoredThenNoChange(expectation)
+        case .default, .waived:
+            .noChange
+        }
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {

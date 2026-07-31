@@ -41,7 +41,7 @@ extension HeistExecution {
             )
             let evidence = HeistActionEvidence.completed(
                 result: actionResult,
-                expectation: nil
+                expectation: unavailableExpectationEvidence()
             )
             return .action(
                 path: path,
@@ -89,7 +89,9 @@ extension HeistExecution {
             )
             let evidence = HeistActionEvidence.completed(
                 result: result,
-                expectation: nil
+                expectation: unavailableExpectationEvidence(
+                    predicate: leaf.expectation.authoredPredicate
+                )
             )
             return .action(
                 path: leaf.path,
@@ -136,15 +138,12 @@ extension HeistExecution {
                 evidence: evidence,
                 outcome: outcome
             )
-            let expectation = leaf.predicate.flatMap { predicate -> HeistExpectationEvidence? in
-                guard leaf.phase.dispatch?.success == true else { return nil }
-                return expectationEvidence(
-                    predicate,
-                    observation: evidence,
-                    outcome: outcome,
-                    timing: timing
-                )
-            }
+            let expectation = expectationEvidence(
+                leaf.expectation.authoredPredicate,
+                observation: evidence,
+                outcome: outcome,
+                timing: timing
+            )
             let evidence = HeistActionEvidence.completed(
                 result: actionResult,
                 expectation: expectation
@@ -155,7 +154,8 @@ extension HeistExecution {
                     command: leaf.step.command,
                     evidence: .init(admitted: evidence)
                 )
-            } else if leaf.predicate != nil, expectation != nil {
+            } else if leaf.expectation.authoredPredicate != nil,
+                      leaf.phase.dispatch?.success == true {
                 execution = .failed(
                     command: leaf.step.command,
                     evidence: .init(admitted: evidence),
@@ -214,7 +214,7 @@ extension HeistExecution {
 
 extension HeistExecution.ResultProjector {
     internal static func expectationEvidence(
-        _ predicate: HeistExecution.Predicate,
+        _ predicate: HeistExecution.Predicate?,
         observation: Observation.Evidence,
         outcome: HeistExecution.LeafOutcome,
         timing: HeistExpectationTiming
@@ -228,11 +228,32 @@ extension HeistExecution.ResultProjector {
             case .viewportExitFailed: .viewportFailure
             }
             return try HeistExpectationEvidence(
-                predicate: predicate.authored,
-                bindings: predicate.bindings,
+                predicate: predicate?.authored,
+                bindings: predicate?.bindings ?? .empty,
                 observation: observation,
                 terminalCause: terminalCause,
                 timing: timing
+            )
+        } catch {
+            preconditionFailure("Machine retained invalid predicate bindings: \(error)")
+        }
+    }
+
+    private static func unavailableExpectationEvidence(
+        predicate: HeistExecution.Predicate? = nil
+    ) -> HeistExpectationEvidence {
+        do {
+            return try HeistExpectationEvidence(
+                predicate: predicate?.authored,
+                bindings: predicate?.bindings ?? .empty,
+                observation: .init(
+                    baseline: nil,
+                    events: [],
+                    current: nil,
+                    coverage: .incomplete(.captureUnavailable)
+                ),
+                terminalCause: .unavailable,
+                timing: .init(budgetMs: 0, elapsedMs: 0, lastTreeChangeElapsedMs: nil)
             )
         } catch {
             preconditionFailure("Machine retained invalid predicate bindings: \(error)")

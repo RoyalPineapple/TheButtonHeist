@@ -129,7 +129,7 @@ private struct HeistPlanLinter {
             severity: mode == .strictTest ? .error : .warning,
             path: path,
             message: "Semantic action has no expectation",
-            suggestion: "Attach .expect(...) or .withoutExpectation(\"reason\")"
+            suggestion: "Attach .expect(...) or .withoutExpectation(\"reason\") to state the authored outcome; every action still proves terminal no-change."
         )
     }
 
@@ -165,7 +165,8 @@ private struct HeistPlanLinter {
             severity: .warning,
             path: path,
             message: "Ambient action has no expectation",
-            suggestion: "Attach .expect(...) or .withoutExpectation(\"reason\") when this side effect has no durable semantic outcome"
+            suggestion: "Attach .expect(...) or .withoutExpectation(\"reason\") when this side effect has no additional durable semantic outcome; " +
+                "every action still proves terminal no-change."
         )
     }
 

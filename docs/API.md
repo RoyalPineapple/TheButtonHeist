@@ -68,7 +68,9 @@ types from `TheScore` must depend on and import that product explicitly.
 Action spellings such as `Activate(...)` and `oneFingerTap(...)` are
 constructor functions that return one `Action` value. `Action` owns the fluent
 `.expect(...)`, `.withoutExpectation(...)`, and `.until(...)` transitions and
-produces `HeistContent`; command and expectation bookkeeping are not exposed.
+produces `HeistContent`; `.withoutExpectation(...)` waives only an additional
+authored outcome and still proves terminal no-change evidence. Command and
+expectation bookkeeping are not exposed.
 `HeistContent` is an opaque authoring fragment with no public step, definition,
 diagnostic, or admission-candidate collections. Swift authoring feeds that
 fragment into `HeistBuilder`; canonical source is parsed into the same
