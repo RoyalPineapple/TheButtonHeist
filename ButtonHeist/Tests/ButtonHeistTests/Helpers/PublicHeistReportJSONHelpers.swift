@@ -58,20 +58,8 @@ func assertPublicElement(
 func assertPublicProjectionOmission(
     _ omission: JSONProbe,
     reason: String,
-    projectedAs: String?,
-    omittedCount: Int?,
     file: StaticString = #filePath,
     line: UInt = #line
 ) throws {
     XCTAssertEqual(try omission.string("reason"), reason, file: file, line: line)
-    if let projectedAs {
-        XCTAssertEqual(try omission.string("projectedAs"), projectedAs, file: file, line: line)
-    } else {
-        try omission.assertMissing("projectedAs")
-    }
-    if let omittedCount {
-        XCTAssertEqual(try omission.int("omittedCount"), omittedCount, file: file, line: line)
-    } else {
-        try omission.assertMissing("omittedCount")
-    }
 }

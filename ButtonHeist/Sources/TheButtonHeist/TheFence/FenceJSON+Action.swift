@@ -93,7 +93,6 @@ extension ActionProjection: Encodable {
         try container.encodeIfPresent(activationTrace, forKey: .activationTrace)
         try container.encodeIfPresent(timing, forKey: .timing)
         if publicContext.includesOmissions {
-            let omitted = omitted.flatMap { $0.isEmpty ? nil : $0 }
             try container.encodeIfPresent(omitted, forKey: .omitted)
         }
     }

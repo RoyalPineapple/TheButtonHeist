@@ -74,10 +74,9 @@ enum MCPValueBridge {
     }
 
     static func structuredContent(
-        for response: FenceResponse,
-        presenter: FenceResponsePresenter
+        for response: FenceResponse
     ) throws -> Value {
-        let data = try presenter.jsonData(for: response, outputFormatting: [])
+        let data = try response.jsonData(profile: .mcp, outputFormatting: [])
         return try value(decodingJSONData: data)
     }
 

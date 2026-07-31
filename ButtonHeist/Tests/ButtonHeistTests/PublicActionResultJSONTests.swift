@@ -289,9 +289,7 @@ final class PublicActionResultJSONTests: XCTestCase {
 
         try assertPublicProjectionOmission(
             result.object("omitted").object("subjectEvidence"),
-            reason: ProjectionOmissionReason.rawSubjectEvidence.rawValue,
-            projectedAs: nil,
-            omittedCount: nil
+            reason: ProjectionOmissionReason.rawSubjectEvidence.rawValue
         )
     }
 

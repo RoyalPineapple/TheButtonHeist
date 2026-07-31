@@ -8,10 +8,10 @@ extension FenceResponse {
 
     /// Token-efficient tree output for LLM agents. Omits geometry.
     public func compactFormatted() -> String {
-        FenceResponsePresenter(profile: .summary).compactText(for: self)
+        compactFormatted(profile: .summary)
     }
 
-    func compactFormatted(profile: ProjectionProfile) -> String {
+    @_spi(ButtonHeistInternals) public func compactFormatted(profile: ProjectionProfile) -> String {
         switch self {
         case .ok(let message):
             return message

@@ -175,14 +175,13 @@ enum CLIRunner {
         requestId: PublicRequestId?,
         jsonRenderer: JSONResponseRenderer
     ) -> RenderedOutput {
-        let presenter = FenceResponsePresenter(profile: .summary)
         let responseFailed = response.isFailure
         switch format {
         case .human:
-            let text = presenter.humanText(for: response)
+            let text = response.humanFormatted()
             return responseFailed ? .failedText(text) : .text(text)
         case .compact:
-            let text = presenter.compactText(for: response)
+            let text = response.compactFormatted()
             return responseFailed ? .failedText(text) : .text(text)
         case .json:
             do {
@@ -202,10 +201,7 @@ enum CLIRunner {
         _ response: FenceResponse,
         requestId: PublicRequestId?
     ) throws -> Data {
-        try FenceResponsePresenter(profile: .summary).jsonData(
-            for: response,
-            requestId: requestId
-        )
+        try response.jsonData(requestId: requestId)
     }
 
     private static func isJSONRenderingFailure(_ data: Data) -> Bool {
