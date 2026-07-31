@@ -29,31 +29,6 @@ private enum PublicActionResultCodingKey: String, CodingKey {
     case omitted
 }
 
-struct PublicActionResponse: Encodable {
-    private let projection: ActionProjection
-
-    init(command: TheFence.Command, result: ActionResult, expectation: ExpectationResult?) {
-        self.init(projection: ActionProjection(
-            method: command.rawValue,
-            result: result,
-            expectation: expectation,
-            expectationHint: expectation.flatMap {
-                FenceResponse.expectationFailureHint($0, command: command, result: result)
-            },
-            profile: .summary
-        ))
-    }
-
-    init(projection: ActionProjection) {
-        self.projection = projection
-    }
-
-    func encode(to encoder: Encoder) throws {
-        try projection.encode(to: encoder)
-    }
-
-}
-
 enum PublicActionResultContext: Sendable, Equatable {
     case standaloneAction
     case heistReportEvidence
@@ -168,7 +143,6 @@ struct ActionFailureProjection {
     var phase: String { diagnosticFailure.phase.rawValue }
     var retryable: Bool { diagnosticFailure.retryable }
     var hint: String? { diagnosticFailure.hint }
-    var compactCode: String { code }
 }
 
 struct PublicRotorResult: Encodable {

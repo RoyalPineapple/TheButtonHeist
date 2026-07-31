@@ -82,7 +82,7 @@ struct PublicHeistExecutionResponse: Encodable {
         try container.encode(node.status.rawValue, forKey: .status)
         try container.encodeIfPresent(node.message, forKey: .message)
         if let evidence = node.evidence {
-            try container.encode(PublicHeistReportEvidenceJSON(evidence: evidence, profile: profile), forKey: .evidence)
+            try evidence.encode(to: container.superEncoder(forKey: .evidence), profile: profile)
         }
         if let failure = node.failure {
             try encode(failure, to: container.superEncoder(forKey: .failure))

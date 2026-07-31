@@ -118,7 +118,7 @@ extension HeistJUnitXML {
                 lines.append(screenshot)
             }
             if let interfaceDump = report.diagnostics.failureInterfaceDump(
-                elementLimit: ProjectionProfile.junit.limits.failureInterfaceElements
+                elementLimit: HeistFailureDiagnostics.defaultElementLimit
             ) {
                 lines.append(interfaceDump)
             }

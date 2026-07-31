@@ -98,13 +98,13 @@ struct PublicResponseModel: Encodable {
             let expectationHint = expectation.flatMap {
                 FenceResponse.expectationFailureHint($0, command: command, result: result)
             }
-            try PublicActionResponse(projection: ActionProjection(
+            try ActionProjection(
                 method: command.rawValue,
                 result: result,
                 expectation: expectation,
                 expectationHint: expectationHint,
                 profile: profile
-            )).encode(to: encoder)
+            ).encode(to: encoder)
         case .screenshot(let path, let payload, let options):
             try PublicScreenshotResponse(projection: ScreenshotProjection(
                 storage: .artifact(path: path),

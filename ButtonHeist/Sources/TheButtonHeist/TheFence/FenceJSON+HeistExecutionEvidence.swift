@@ -1,16 +1,7 @@
 import ThePlans
 import TheScore
 
-struct PublicHeistReportEvidenceJSON: Encodable {
-    let evidence: HeistReport.Evidence
-    let profile: ProjectionProfile
-
-    func encode(to encoder: Encoder) throws {
-        try evidence.encode(to: encoder, profile: profile)
-    }
-}
-
-private extension HeistReport.Evidence {
+extension HeistReport.Evidence {
     private enum CodingKeys: String, CodingKey {
         case action, wait, caseSelection, forEachString, forEachElement, repeatUntil, invocation, warning
     }

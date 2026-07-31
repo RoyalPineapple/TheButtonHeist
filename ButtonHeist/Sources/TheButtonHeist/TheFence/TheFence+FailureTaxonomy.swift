@@ -75,14 +75,6 @@ public extension FenceError {
         }
     }
 
-    var coreMessage: String {
-        diagnosticFailure.message
-    }
-
-    var failureDetails: FailureDetails {
-        diagnosticFailure.details
-    }
-
 }
 
 private extension Array where Element == HeistBuildDiagnostic {
