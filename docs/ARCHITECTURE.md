@@ -517,7 +517,7 @@ pipelines are explicit:
 | Compiler process terminal outcome | `HeistCompilerProcess.Runner` in `HeistCompilerProcess.swift` | `HeistSwiftFileCompilation.swift`; diagnostic rendering lives in `HeistSwiftFileCompilationError.swift` |
 | Result construction and relationship validity | `HeistExecutionStepResult+Construction.swift` | Runtime step executors and result decoding |
 | Result aggregate admission | `HeistResult.admitStructure` in `HeistResult.swift` | Package initialization and decoding; one ordered-sequence reducer admits every root and recursively visited child sequence |
-| Terminal failure capture | `HeistFailureCapture` on `HeistResult` | The runtime records diagnostic capture separately from execution; custom result coding preserves the established auxiliary-step wire representation |
+| Terminal failure capture | `HeistFailureCapture` on `HeistResult` | The runtime records diagnostic capture separately from execution and encodes it directly as optional result evidence |
 | Result private storage codec | `HeistExecutionStepNode.swift` and `HeistExecutionStepNode+Codable.swift` | External result JSON projection only |
 | Action semantic and wire payload | `ActionResult.Payload` with `ActionResult` custom `Codable` | Runtime construction and wire encoding/decoding |
 | Heist result transport | `ServerMessage.heistResult(HeistResult)` | Fence and in-app clients consume the aggregate directly; production failures use `ServerMessage.error` |
@@ -538,13 +538,12 @@ pipelines are explicit:
 `HeistResult` is execution truth: one admitted semantic step tree, duration,
 optional terminal failure capture, and an `Outcome` derived from the execution
 tree. Failure capture is diagnostic evidence, never an execution node. Custom
-result coding projects that value into the established auxiliary-step wire
-shape and admits it back at the boundary. `HeistReport.project(result:)` walks
-the execution tree once and owns its semantic nodes, summary, metrics, failure
-and warning facts, and diagnostics. JSON, compact text, human text, JUnit,
-doctor, and metric boundaries render that report instead of interpreting
-`HeistResult` independently. There is no competing execution report or
-Fence-owned report projection.
+result coding encodes it directly in the optional `failureCapture` result field.
+`HeistReport.project(result:)` walks the execution tree once and owns its
+semantic nodes, summary, metrics, failure and warning facts, and diagnostics.
+JSON, compact text, human text, JUnit, doctor, and metric boundaries render
+that report instead of interpreting `HeistResult` independently. There is no
+competing execution report or Fence-owned report projection.
 
 Each action or wait result owns its bounded `Observation.Evidence`. Report
 projection preserves that evidence on the corresponding semantic node and does

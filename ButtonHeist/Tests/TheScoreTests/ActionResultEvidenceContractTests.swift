@@ -186,20 +186,6 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertNil(decoded.evidence.timing)
     }
 
-    func testLegacyWaitActionResultRoundTripsForReceiptCompatibility() throws {
-        let result = ActionResult.failure(
-            payload: .wait,
-            failureKind: .timeout,
-            message: "timed out"
-        )
-
-        let decoded = try JSONDecoder().decode(ActionResult.self, from: JSONEncoder().encode(result))
-
-        XCTAssertEqual(decoded, result)
-        XCTAssertEqual(decoded.method, .wait)
-        XCTAssertEqual(decoded.payload, .wait)
-    }
-
     func testScreenActionHandlerIsSuccessEvidence() throws {
         let result = ActionResult(
             outcome: .success,

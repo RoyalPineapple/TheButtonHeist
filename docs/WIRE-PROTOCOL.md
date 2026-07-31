@@ -520,6 +520,18 @@ enforce those combinations before encoding; `kind`, `intent`, `status`, and a
 top-level result outcome are not part of the contract. Run status and the abort
 path are derived from the semantic node tree.
 
+A `HeistResult` contains `steps`, `durationMs`, and optional terminal
+`failureCapture` evidence. Failure capture is not a step and never extends an
+execution path:
+
+```json
+{"steps":[{"path":"$.body[0]","node":{"type":"warning","outcome":"failed","message":"notice","failure":{"category":"explicitFailure","contract":"warning does not fail","observed":"notice"},"children":[]}}],"failureCapture":{"kind":"unavailable","failureKind":"actionFailed","message":"capture unavailable"},"durationMs":1}
+```
+
+`failureCapture.kind` is `captured`, with a required `payload` screen payload,
+or `unavailable`, with a required `failureKind` and optional `message`. Legacy
+auxiliary screenshot action steps are not part of the receipt schema.
+
 ## Action Results
 
 Action responses use `actionResult`:

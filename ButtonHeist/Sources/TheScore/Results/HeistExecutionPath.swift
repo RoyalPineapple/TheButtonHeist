@@ -9,12 +9,10 @@ public struct HeistExecutionPath: Sendable, Equatable, Hashable, Codable,
     }
 
     private enum Field: String, Sendable, Equatable, Hashable, CaseIterable {
-        case actions
         case body
         case cases
         case conditional
         case elseBody = "else_body"
-        case failure
         case forEachElement = "for_each_element"
         case forEachString = "for_each_string"
         case heist
@@ -138,10 +136,6 @@ public struct HeistExecutionPath: Sendable, Equatable, Hashable, Codable,
         appending(.field(.body))
     }
 
-    package func failureAction(at index: Int) -> Self {
-        appending(.field(.failure), .field(.actions), .index(index))
-    }
-
     package func isDescendant(of ancestor: Self) -> Bool {
         components.count > ancestor.components.count
             && components.starts(with: ancestor.components)
@@ -157,15 +151,6 @@ public struct HeistExecutionPath: Sendable, Equatable, Hashable, Codable,
               case .index(let index) = components[1]
         else { return nil }
         return index
-    }
-
-    package var isFailureActionPath: Bool {
-        guard components.count > 3,
-              case .field(.failure) = components[components.count - 3],
-              case .field(.actions) = components[components.count - 2],
-              case .index = components[components.count - 1]
-        else { return false }
-        return true
     }
 
     package func isLegalChild(

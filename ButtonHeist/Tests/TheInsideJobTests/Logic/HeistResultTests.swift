@@ -279,7 +279,7 @@ final class HeistResultTests: XCTestCase {
             description
         )
         XCTAssertTrue(
-            description.contains("failure screenshot: 12x34 result=$.body[0].failure.actions[0] interface=21 elements"),
+            description.contains("failure screenshot: 12x34 interface=21 elements"),
             description
         )
         XCTAssertTrue(description.contains("failure interface: 21 elements"), description)

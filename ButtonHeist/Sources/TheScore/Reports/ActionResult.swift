@@ -51,9 +51,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
         case scroll
         case scrollToVisible
         case scrollToEdge
-        /// Legacy wire payload retained for decoding historical action-result receipts.
-        /// Runtime wait evidence is reported directly and never constructs this case.
-        case wait
 
         package var method: ActionMethod {
             switch self {
@@ -77,7 +74,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
             case .scroll: .scroll
             case .scrollToVisible: .scrollToVisible
             case .scrollToEdge: .scrollToEdge
-            case .wait: .wait
             }
         }
     }
@@ -356,8 +352,6 @@ public struct ActionResult: Codable, Sendable, Equatable {
             return try decodePayloadWithoutData(.scrollToVisible, method: method, from: container)
         case .scrollToEdge:
             return try decodePayloadWithoutData(.scrollToEdge, method: method, from: container)
-        case .wait:
-            return try decodePayloadWithoutData(.wait, method: method, from: container)
         }
     }
 
@@ -400,8 +394,7 @@ public struct ActionResult: Codable, Sendable, Equatable {
              .dismissKeyboard,
              .scroll,
              .scrollToVisible,
-             .scrollToEdge,
-             .wait:
+             .scrollToEdge:
             break
         }
     }
