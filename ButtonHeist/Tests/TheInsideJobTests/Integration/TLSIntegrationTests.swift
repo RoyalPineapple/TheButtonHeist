@@ -143,7 +143,7 @@ final class JoinHeistIntegrationTests: XCTestCase {
         defer { client.cancel() }
 
         runHeistSyncOperation(file: #filePath, line: #line) {
-            try await client.connectExpectingRejection(timeout: 1.0)
+            try await client.connectExpectingRejection()
         }
     }
 

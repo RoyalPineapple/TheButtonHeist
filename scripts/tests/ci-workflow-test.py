@@ -123,7 +123,7 @@ class CIWorkflowTests(unittest.TestCase):
             "test-without-building TheInsideJobIntegrationTests",
         ):
             self.assertIn(f"scripts/test-runner.py {command}", WORKFLOW)
-        self.assertEqual(WORKFLOW.count("scripts/test-runner.py collect "), 5)
+        self.assertNotIn("scripts/test-runner.py collect ", WORKFLOW)
 
         self.assertNotRegex(
             WORKFLOW,

@@ -147,10 +147,6 @@ jobs:
           scripts/swift-test-gate.sh ButtonHeistCLI
           scripts/swift-test-gate.sh ButtonHeistMCP
 
-      - name: Collect macOS failure evidence
-        if: failure()
-        run: scripts/test-runner.py collect MacFrameworkTests
-
       - name: Upload macOS failure results
         if: failure()
         uses: ./.github/actions/finalize-heist-results
@@ -208,10 +204,6 @@ jobs:
           echo "IOS_LOGIC_RUN_START=$(date +%s)" >> "$GITHUB_ENV"
           scripts/test-runner.py test-without-building TheInsideJobLogicTests --retain-simulator
           echo "IOS_LOGIC_RUN_END=$(date +%s)" >> "$GITHUB_ENV"
-
-      - name: Collect logic failure evidence
-        if: failure()
-        run: scripts/test-runner.py collect TheInsideJobLogicTests
 
       - name: Delete dedicated iOS simulator
         if: always()
@@ -315,12 +307,6 @@ jobs:
             --app "$APP"
           echo "IOS_DEMO_RUN_END=$(date +%s)" >> "$GITHUB_ENV"
 
-      - name: Collect hosted failure evidence
-        if: failure()
-        run: |
-          scripts/test-runner.py collect TheInsideJobWindowTests
-          scripts/test-runner.py collect HostedBehaviorTests
-
       - name: Delete dedicated iOS simulator
         if: always()
         run: scripts/test-runner.py cleanup
@@ -409,10 +395,6 @@ jobs:
           echo "INTEGRATION_RUN_START=$(date +%s)" >> "$GITHUB_ENV"
           scripts/test-runner.py test-without-building TheInsideJobIntegrationTests --retain-simulator
           echo "INTEGRATION_RUN_END=$(date +%s)" >> "$GITHUB_ENV"
-
-      - name: Collect integration failure evidence
-        if: failure()
-        run: scripts/test-runner.py collect TheInsideJobIntegrationTests
 
       - name: Delete dedicated iOS simulator
         if: always()
