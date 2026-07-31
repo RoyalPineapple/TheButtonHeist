@@ -319,16 +319,19 @@ extension TheVaultResolutionTests {
 
     func testVisiblePublicationsAdvanceHistoryMonotonically() async {
         let first = InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
-        let firstPublication = await vault.semanticObservationStream
-            .commitVisibleObservationForTesting(first)
+        let firstReceipt = await capturePublication(in: vault) {
+            await vault.semanticObservationStream.commitVisibleObservationForTesting(first)
+        }
 
         let second = InterfaceObservation.makeForTests(elements: [(element(label: "Second"), "second")])
-        let secondPublication = await vault.semanticObservationStream
-            .commitVisibleObservationForTesting(second)
+        let secondReceipt = await capturePublication(in: vault) {
+            await vault.semanticObservationStream.commitVisibleObservationForTesting(second)
+        }
+        let secondPublication = secondReceipt.publication
 
         XCTAssertEqual(
-            firstPublication.historyRange.upperBound,
-            secondPublication.historyRange.lowerBound
+            firstReceipt.historyRange.upperBound,
+            secondReceipt.historyRange.lowerBound
         )
         XCTAssertEqual(
             secondPublication.current.snapshot.interface.projectedElements

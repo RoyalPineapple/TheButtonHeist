@@ -21,14 +21,6 @@ enum SemanticObservationScope: Int, Comparable, Sendable {
         }
     }
 
-    var fulfilledScopes: [SemanticObservationScope] {
-        switch self {
-        case .visible:
-            return [.visible]
-        case .discovery:
-            return [.discovery, .visible]
-        }
-    }
 }
 
 @MainActor

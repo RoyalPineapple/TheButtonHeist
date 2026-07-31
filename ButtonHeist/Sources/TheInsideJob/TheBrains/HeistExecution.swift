@@ -221,55 +221,55 @@ extension HeistExecution {
             }
         }
 
-        internal var expectationIsSatisfied: Bool {
-            switch self {
-            case .action(let leaf):
-                leaf.phase.expectation?.result == .satisfied
-            case .wait(let leaf):
-                leaf.phase.expectation?.result == .satisfied
-            }
-        }
-
         internal func expectationIsProven(
             by evidence: Observation.Evidence
         ) -> Bool {
-            guard expectationIsSatisfied,
-                  evidence.coverage == .complete else {
-                return false
-            }
-            let predicate: ObservationPredicate?
-            switch self {
-            case .action(let leaf):
-                predicate = leaf.predicate?.resolved
-            case .wait(let leaf):
-                predicate = leaf.predicate.resolved
-            }
-            guard let predicate else { return true }
-            return Expectation(
-                [predicate, .noChange],
+            proves(
+                predicate.map { [$0, .noChange] } ?? [.noChange],
+                by: evidence
+            )
+        }
+
+        internal func needsStabilityCapture(
+            after evidence: Observation.Evidence
+        ) -> Bool {
+            proves(predicate.map { [$0] } ?? [], by: evidence)
+                && !expectationIsProven(by: evidence)
+        }
+
+        private func proves(
+            _ predicates: [ObservationPredicate], by evidence: Observation.Evidence
+        ) -> Bool {
+            evidence.coverage == .complete && Expectation(
+                predicates,
                 baseline: evidence.baseline,
                 events: evidence.events
             ).result == .satisfied
         }
 
-        internal var finishingObservationRequestID: RequestID? {
+        private var predicate: ObservationPredicate? {
             switch self {
             case .action(let leaf):
-                guard case .finishingObservation(let requestID, _, _) = leaf.phase else {
-                    return nil
-                }
-                return requestID
+                leaf.predicate?.resolved
             case .wait(let leaf):
-                guard case .finishingObservation(let requestID, _) = leaf.phase else {
-                    return nil
-                }
-                return requestID
+                leaf.predicate.resolved
             }
         }
 
         internal func admits(_ source: ObservationFinishSource) -> Bool {
             guard case .request(let requestID) = source else { return true }
-            return finishingObservationRequestID == requestID
+            switch self {
+            case .action(let leaf):
+                guard case .finishingObservation(let activeRequestID, _, _) = leaf.phase else {
+                    return false
+                }
+                return activeRequestID == requestID
+            case .wait(let leaf):
+                guard case .finishingObservation(let activeRequestID, _) = leaf.phase else {
+                    return false
+                }
+                return activeRequestID == requestID
+            }
         }
     }
 
@@ -281,16 +281,6 @@ extension HeistExecution {
         internal let path: HeistExecutionPath
         internal var phase: ActionLeafPhase
 
-        internal var expectation: Expectation {
-            guard let expectation = phase.expectation else {
-                preconditionFailure("An action expectation exists after observation begins")
-            }
-            return expectation
-        }
-
-        internal var dispatch: TheSafecracker.ActionDispatchResult? {
-            phase.dispatch
-        }
     }
 
     internal struct WaitLeaf: Sendable {
@@ -299,13 +289,6 @@ extension HeistExecution {
         internal let predicate: Predicate
         internal let context: StepContext
         internal var phase: WaitLeafPhase
-
-        internal var expectation: Expectation {
-            guard let expectation = phase.expectation else {
-                preconditionFailure("A wait expectation exists after observation begins")
-            }
-            return expectation
-        }
     }
 
     internal enum ActionLeafPhase: Sendable {

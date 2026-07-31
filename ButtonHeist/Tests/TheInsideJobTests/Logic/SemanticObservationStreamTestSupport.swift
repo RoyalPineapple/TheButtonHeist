@@ -128,5 +128,25 @@ class SemanticObservationStreamTestCase: XCTestCase {
     }
 }
 
+@MainActor
+struct ObservationPublicationReceipt {
+    let publication: Observation.Publication
+    let historyRange: Range<Int>
+}
+
+@MainActor
+func capturePublication(
+    in vault: TheVault,
+    _ publish: () async -> Observation.Publication
+) async -> ObservationPublicationReceipt {
+    let lowerBound = vault.state.history.endIndex
+    let publication = await publish()
+    let upperBound = vault.state.history.endIndex
+    return ObservationPublicationReceipt(
+        publication: publication,
+        historyRange: lowerBound..<upperBound
+    )
+}
+
 #endif // DEBUG
 #endif // canImport(UIKit)

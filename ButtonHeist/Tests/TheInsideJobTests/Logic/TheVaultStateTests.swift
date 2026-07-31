@@ -10,7 +10,7 @@ import XCTest
 
 @MainActor
 final class TheVaultStateTests: XCTestCase {
-    func testHistoryOwnsOrderAndDerivesScreenGenerationFromPosition() throws {
+    func testHistoryOwnsOrder() throws {
         var history = Observation.History(retentionLimit: 4)
         let events: [Observation.Event] = [
             .noChange,
@@ -22,13 +22,9 @@ final class TheVaultStateTests: XCTestCase {
 
         XCTAssertEqual(recorded, 0..<3)
         XCTAssertEqual(Array(history), events)
-        XCTAssertEqual(history.screenGeneration(at: 0), 0)
-        XCTAssertEqual(history.screenGeneration(at: 1), 0)
-        XCTAssertEqual(history.screenGeneration(at: 2), 1)
-        XCTAssertEqual(history.screenGeneration(at: history.endIndex), 1)
     }
 
-    func testPruningRetainsDerivedScreenGeneration() {
+    func testPruningRetainsNewestEvents() {
         var history = Observation.History(retentionLimit: 2)
         _ = history.record([
             .screenChanged(ScreenFacts(idAfter: "Checkout")),
@@ -38,8 +34,6 @@ final class TheVaultStateTests: XCTestCase {
 
         XCTAssertEqual(history.startIndex, 1)
         XCTAssertEqual(Array(history), [.noChange, .noChange])
-        XCTAssertEqual(history.screenGeneration(at: history.startIndex), 1)
-        XCTAssertEqual(history.screenGeneration(at: history.endIndex), 1)
     }
 
     func testProtectedBoundaryPreventsEvictionUntilReleased() throws {
@@ -133,7 +127,7 @@ final class TheVaultStateTests: XCTestCase {
         XCTAssertEqual(state.current, second.current)
     }
 
-    func testReplacementPublishesNotificationDepartureBoundaryAndArrivalInOrder() {
+    func testReplacementPublishesNotificationDepartureBoundaryAndArrivalInOrder() throws {
         var state = TheVault.State()
         let baseline = commit(&state, admission(
             keyboardVisible: true,
@@ -176,11 +170,10 @@ final class TheVaultStateTests: XCTestCase {
         XCTAssertEqual(departure.context, baseline.current.snapshot.context)
         XCTAssertNotEqual(departure.context, arrival.context)
         XCTAssertEqual(arrival, replacement.current.snapshot)
-        XCTAssertEqual(state.history.screenGeneration(at: boundary), 0)
-        XCTAssertEqual(state.history.screenGeneration(at: boundary + 1), 0)
-        XCTAssertEqual(state.history.screenGeneration(at: boundary + 2), 0)
-        XCTAssertEqual(state.history.screenGeneration(at: boundary + 3), 1)
-        XCTAssertEqual(state.history.screenGeneration(at: boundary + 4), 1)
+        XCTAssertEqual(
+            Array(try state.history.events(after: boundary)),
+            replacement.events
+        )
     }
 
     func testNotificationPrecedesForcedElementChange() throws {

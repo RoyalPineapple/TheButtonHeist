@@ -8,6 +8,90 @@ import TheScore
 
 @MainActor
 extension Observation.Stream {
+    internal struct ExecutionBaseline {
+        internal let current: TheVault.State.Current?
+        internal let boundary: TheVault.State.HistoryBoundary
+    }
+
+    /// Starts an execution's no-change-only delivery before its first visible
+    /// observation has a leaf deadline.
+    internal func admitExecutionBoundary(
+        receive: @escaping @MainActor (Observation.Event) -> Void
+    ) -> ExecutionAdmission? {
+        let baseline = admittedObservation(scope: .visible, after: nil)
+        let historyIndex = executionHistoryIndex(reusing: baseline)
+        protectHistory(from: historyIndex)
+        let demand = beginActiveObservationDemand()
+        let installation = subscribe(
+            scope: .visible,
+            replayingAfter: historyIndex,
+            delivery: .noChangesUntilActivated,
+            receive: receive
+        )
+        guard case .success(let retained) = installation.replay else {
+            installation.subscription.cancel()
+            demand.cancel()
+            releaseHistory(from: historyIndex)
+            return nil
+        }
+        retained.lazy.filter {
+            if case .noChange = $0 { return true }
+            return false
+        }.forEach(receive)
+        return .init(
+            baseline: baseline,
+            retainedHistoryIndex: historyIndex,
+            subscription: installation.subscription,
+            demand: demand
+        )
+    }
+
+    /// Resolves the initial visible baseline beneath the leaf deadline and
+    /// only then admits ordinary execution event delivery.
+    internal func admitExecutionBaseline(
+        _ admission: ExecutionAdmission,
+        deadline: SemanticObservationDeadline
+    ) async -> ExecutionBaseline {
+        let current: TheVault.State.Current?
+        let historyIndex: Int
+        if let baseline = admission.baseline {
+            current = baseline
+            historyIndex = admission.retainedHistoryIndex
+        } else {
+            current = await admittedVisibleObservation(
+                boundary: .externalDeadline(deadline)
+            )
+            if case .success(let retained) = events(after: admission.retainedHistoryIndex),
+               retained.contains(where: { event in
+                   if case .noChange = event { return true }
+                   return false
+               }) {
+                historyIndex = admission.retainedHistoryIndex
+            } else {
+                historyIndex = vault.state.history.endIndex
+            }
+        }
+        let boundary = TheVault.State.HistoryBoundary(
+            baseline: current?.snapshot,
+            historyIndex: historyIndex
+        )
+        if current != nil {
+            activateExecutionDelivery(admission.subscription)
+        }
+        return .init(current: current, boundary: boundary)
+    }
+
+    internal func executionHistoryIndex(
+        reusing current: TheVault.State.Current?
+    ) -> Int {
+        let history = vault.state.history
+        guard current != nil,
+              history.endIndex > history.startIndex,
+              case .noChange = history[history.endIndex - 1]
+        else { return history.endIndex }
+        return history.endIndex - 1
+    }
+
     internal func admittedVisibleObservation(
         boundary: SemanticObservationWaitBoundary
     ) async -> TheVault.State.Current? {

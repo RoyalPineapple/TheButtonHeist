@@ -5,7 +5,7 @@ import XCTest
 @testable import TheScore
 
 extension InterfaceTreeTests {
-    func testSemanticHashIgnoresViewportGeometry() {
+    func testCanonicalElementIdentityIgnoresViewportGeometry() {
         let top = AccessibilityElement.make(
             label: "Chicken Tikka",
             traits: .button,
@@ -21,16 +21,32 @@ extension InterfaceTreeTests {
         let before = InterfaceObservation.makeForTests(elements: [(top, "chicken_tikka_button")])
         let after = InterfaceObservation.makeForTests(elements: [(scrolled, "chicken_tikka_button")])
 
-        XCTAssertEqual(before.tree.interfaceHash, after.tree.interfaceHash)
+        XCTAssertEqual(before.tree.elementIDs, after.tree.elementIDs)
+        XCTAssertEqual(
+            before.tree.findElement(heistId: "chicken_tikka_button").map {
+                TheVault.WireConversion.semantics($0.element)
+            },
+            after.tree.findElement(heistId: "chicken_tikka_button").map {
+                TheVault.WireConversion.semantics($0.element)
+            }
+        )
     }
 
-    func testSemanticHashChangesForAccessibilityState() {
+    func testCanonicalElementSemanticsChangeWithAccessibilityState() {
         let oldTotal = makeElement(label: "Total", value: "$4.00", traits: .staticText)
         let newTotal = makeElement(label: "Total", value: "$8.00", traits: .staticText)
         let before = InterfaceObservation.makeForTests(elements: [(oldTotal, "total_staticText")])
         let after = InterfaceObservation.makeForTests(elements: [(newTotal, "total_staticText")])
 
-        XCTAssertNotEqual(before.tree.interfaceHash, after.tree.interfaceHash)
+        XCTAssertEqual(before.tree.elementIDs, after.tree.elementIDs)
+        XCTAssertNotEqual(
+            before.tree.findElement(heistId: "total_staticText").map {
+                TheVault.WireConversion.semantics($0.element)
+            },
+            after.tree.findElement(heistId: "total_staticText").map {
+                TheVault.WireConversion.semantics($0.element)
+            }
+        )
     }
 
     func testNameDerivesFromFirstHeaderInHierarchy() {

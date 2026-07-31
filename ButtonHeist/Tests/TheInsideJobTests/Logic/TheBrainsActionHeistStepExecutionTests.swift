@@ -119,11 +119,14 @@ final class HeistMachineStepExecutionTests: XCTestCase {
         )) else {
             return XCTFail("A duplicate dispatch completion must be ignored")
         }
-        XCTAssertEqual(machine.activeLeaf?.expectationIsSatisfied, false)
-        guard case .action(let leaf) = machine.activeLeaf else {
+        guard case .action(let leaf) = machine.running.activeLeaf else {
             return XCTFail("The admitted action must remain active")
         }
-        XCTAssertEqual(leaf.dispatch?.success, true)
+        guard case .observing(_, let dispatch) = leaf.phase else {
+            return XCTFail("The admitted dispatch must remain attached to observation")
+        }
+        XCTAssertNotEqual(leaf.phase.expectation?.result, .satisfied)
+        XCTAssertTrue(dispatch.success)
     }
 
     func testHostBaselineStartsActionWithoutSecondSnapshotRequest() throws {

@@ -24,6 +24,7 @@ extension Navigation {
         )
         case revealViewPoint(ViewPoint, in: ScrollableTarget)
         case restoreVisualOrigin(CGPoint, in: ViewportRestorationTarget)
+        case restoreContentOffset(CGPoint, in: ViewportRestorationTarget)
 
     }
 
@@ -31,10 +32,6 @@ extension Navigation {
         case moved
         case unchanged
         case unavailable
-
-        var didMove: Bool {
-            self == .moved
-        }
     }
 
     struct ViewportTransition {
@@ -84,18 +81,25 @@ extension Navigation {
         switch primitiveOutcome {
         case .moved:
             let current: TheVault.State.Current?
-            if case .restoreVisualOrigin = intent {
+            switch intent {
+            case .restoreVisualOrigin, .restoreContentOffset:
                 current = await observeRestoredViewport(
                     boundary: observationBoundary,
                     discoveryCommitPolicy: discoveryCommitPolicy
                 )
-            } else {
+            default:
                 current = await settledExplorationPage(
                     deadline: deadline,
                     observationBoundary: observationBoundary,
                     discoveryCommitPolicy: discoveryCommitPolicy,
                     afterViewportMovement: true
                 )
+            }
+            if case .restoreContentOffset = intent {
+                let finalOffsetOutcome = await dispatchViewportMovement(intent, deadline: nil)
+                guard finalOffsetOutcome != .unavailable else {
+                    return .unavailable(previousVisibleIds: previousVisibleIds)
+                }
             }
             guard let current else {
                 return .unavailable(previousVisibleIds: previousVisibleIds)
@@ -204,6 +208,19 @@ extension Navigation {
                 else { return .unavailable }
                 return safecracker.restoreVisualOrigin(origin, in: scrollView)
             }
+        case .restoreContentOffset(let contentOffset, let target):
+            switch target {
+            case .semantic(let semantic):
+                return semantic.dispatchOnFreshScrollView(in: vault) { scrollView in
+                    safecracker.restoreContentOffset(contentOffset, in: scrollView)
+                } ?? .unavailable
+            case .original(let scrollView):
+                guard scrollView.window != nil,
+                      !scrollView.bhIsUnsafeForProgrammaticScrolling,
+                      !Navigation.isObscuredByPresentation(view: scrollView)
+                else { return .unavailable }
+                return safecracker.restoreContentOffset(contentOffset, in: scrollView)
+            }
         }
     }
 
@@ -211,8 +228,11 @@ extension Navigation {
         _ intent: ViewportMovementIntent,
         deadline: SemanticObservationDeadline?
     ) -> Bool {
-        if case .restoreVisualOrigin = intent {
+        switch intent {
+        case .restoreVisualOrigin, .restoreContentOffset:
             return true
+        default:
+            break
         }
         guard !Task.isCancelled else { return false }
         return deadline.map {

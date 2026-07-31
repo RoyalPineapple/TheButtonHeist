@@ -312,10 +312,10 @@ extension TheVaultResolutionTests {
         var history = Observation.History(retentionLimit: 8)
         _ = history.record(baseline.events, protectedBy: nil)
         let replacementRecord = history.record(replacement.events, protectedBy: nil)
-        XCTAssertEqual(history.screenGeneration(at: replacementRecord.lowerBound), 0)
-        XCTAssertEqual(history.screenGeneration(at: replacementRecord.lowerBound + 1), 0)
-        XCTAssertEqual(history.screenGeneration(at: replacementRecord.lowerBound + 2), 1)
-        XCTAssertEqual(history.screenGeneration(at: replacementRecord.upperBound), 1)
+        XCTAssertEqual(
+            Array(try history.events(after: replacementRecord.lowerBound)),
+            replacement.events
+        )
         XCTAssertEqual(
             history.evidence(
                 in: replacementRecord,

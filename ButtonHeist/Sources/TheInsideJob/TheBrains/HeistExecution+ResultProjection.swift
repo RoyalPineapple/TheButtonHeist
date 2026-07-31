@@ -136,7 +136,7 @@ extension HeistExecution {
                 outcome: outcome
             )
             let expectation = leaf.predicate.flatMap { predicate -> HeistExpectationEvidence? in
-                guard leaf.dispatch?.success == true else { return nil }
+                guard leaf.phase.dispatch?.success == true else { return nil }
                 return expectationEvidence(
                     predicate,
                     observation: evidence,
@@ -167,9 +167,13 @@ extension HeistExecution {
                 execution = .failed(
                     command: leaf.step.command,
                     evidence: .init(admitted: evidence),
-                    failure: actionDispatchFailure(
-                        command: leaf.step.command,
-                        result: actionResult
+                    failure: .init(
+                        category: actionResult.outcome.failureKind == .elementNotFound
+                            ? .targetResolution
+                            : .action,
+                        contract: "action dispatch succeeds",
+                        observed: actionResult.message ?? "action dispatch failed",
+                        expected: leaf.step.command.reportTarget.map(String.init(describing:))
                     )
                 )
             }
@@ -225,11 +229,18 @@ private extension HeistExecution.ResultProjector {
         timing: HeistExpectationTiming
     ) -> HeistExpectationEvidence {
         do {
+            let terminalCause: HeistExpectationEvidence.TerminalCause = switch outcome {
+            case .completed: .observed
+            case .timedOut, .heistTimedOut: .deadline
+            case .cancelled: .cancelled
+            case .unavailable: .unavailable
+            case .viewportExitFailed: .viewportFailure
+            }
             return try HeistExpectationEvidence(
                 predicate: predicate.authored,
                 bindings: predicate.bindings,
                 observation: observation,
-                terminalCause: outcome.expectationTerminalCause,
+                terminalCause: terminalCause,
                 timing: timing
             )
         } catch {
@@ -242,7 +253,20 @@ private extension HeistExecution.ResultProjector {
         evidence: Observation.Evidence,
         outcome: HeistExecution.LeafOutcome
     ) -> ActionResult {
-        guard let dispatch = leaf.dispatch else {
+        switch outcome {
+        case .timedOut, .heistTimedOut:
+            return .failure(
+                payload: leaf.command.actionResultPayload,
+                failureKind: .timeout,
+                message: leaf.phase.expectation?.result.outstandingDescription.map {
+                    "timed out while waiting for \($0)"
+                } ?? "timed out",
+                observation: .observed(evidence)
+            )
+        case .completed, .cancelled, .unavailable, .viewportExitFailed:
+            break
+        }
+        guard let dispatch = leaf.phase.dispatch else {
             return .failure(
                 payload: leaf.command.actionResultPayload,
                 failureKind: .actionFailed,
@@ -254,26 +278,14 @@ private extension HeistExecution.ResultProjector {
         let resultOutcome: ActionResultOutcome
         let message: String?
         switch outcome {
-        case .timedOut, .heistTimedOut:
-            resultOutcome = .failure(.timeout)
-            message = timeoutMessage(
-                outstanding: leaf.expectation.result.outstandingDescription
-            )
         case .completed:
             switch dispatch.outcome {
             case .failure(let failure):
                 resultOutcome = .failure(TheBrains.actionFailureKind(for: failure))
                 message = dispatch.message
             case .success:
-                if leaf.expectation.result == .satisfied {
-                    resultOutcome = .success
-                    message = dispatch.message
-                } else {
-                    resultOutcome = .failure(.timeout)
-                    message = timeoutMessage(
-                        outstanding: leaf.expectation.result.outstandingDescription
-                    )
-                }
+                resultOutcome = .success
+                message = dispatch.message
             }
         case .cancelled:
             resultOutcome = .failure(.actionFailed)
@@ -284,6 +296,8 @@ private extension HeistExecution.ResultProjector {
         case .viewportExitFailed:
             resultOutcome = .failure(.actionFailed)
             message = "Could not restore the accessibility viewport after observation"
+        case .timedOut, .heistTimedOut:
+            preconditionFailure("Timed-out actions return before dispatch admission")
         }
 
         return ActionResult(
@@ -294,40 +308,12 @@ private extension HeistExecution.ResultProjector {
             subjectEvidence: dispatch.subjectEvidence,
             activationTrace: dispatch.activationTrace,
             screenActionHandler: dispatch.screenActionHandler,
-            timing: timing(dispatch)
-        )
-    }
-
-    static func timing(
-        _ dispatch: TheSafecracker.ActionDispatchResult
-    ) -> ActionPerformanceTiming {
-        ActionPerformanceTiming(
-            targetResolutionMs: dispatch.timing?.targetResolutionMs,
-            actionDispatchMs: dispatch.timing?.actionDispatchMs,
-            interactionMs: dispatch.timing?.interactionMs,
-            totalMs: dispatch.timing?.totalMs
-        )
-    }
-
-    static func timeoutMessage(outstanding: String?) -> String {
-        var message = "timed out"
-        if let outstanding {
-            message += " while waiting for \(outstanding)"
-        }
-        return message
-    }
-
-    static func actionDispatchFailure(
-        command: HeistActionCommand,
-        result: ActionResult
-    ) -> HeistFailureDetail {
-        HeistFailureDetail(
-            category: result.outcome.failureKind == .elementNotFound
-                ? .targetResolution
-                : .action,
-            contract: "action dispatch succeeds",
-            observed: result.message ?? "action dispatch failed",
-            expected: command.reportTarget.map(String.init(describing:))
+            timing: ActionPerformanceTiming(
+                targetResolutionMs: dispatch.timing?.targetResolutionMs,
+                actionDispatchMs: dispatch.timing?.actionDispatchMs,
+                interactionMs: dispatch.timing?.interactionMs,
+                totalMs: dispatch.timing?.totalMs
+            )
         )
     }
 
@@ -444,23 +430,6 @@ extension HeistActionCommand {
         case .setPasteboard: .setPasteboard(nil)
         case .takeScreenshot: .screenshot(nil)
         case .dismissKeyboard: .dismissKeyboard
-        }
-    }
-}
-
-private extension HeistExecution.LeafOutcome {
-    var expectationTerminalCause: HeistExpectationEvidence.TerminalCause {
-        switch self {
-        case .completed:
-            .observed
-        case .timedOut, .heistTimedOut:
-            .deadline
-        case .cancelled:
-            .cancelled
-        case .unavailable:
-            .unavailable
-        case .viewportExitFailed:
-            .viewportFailure
         }
     }
 }

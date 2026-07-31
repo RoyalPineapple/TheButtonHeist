@@ -18,7 +18,6 @@ extension Observation {
         internal let retentionLimit: Int
         private var storage: [Observation.Event] = []
         private var firstRetainedIndex = 0
-        private var screenChangesBeforeStorage = 0
 
         internal init(retentionLimit: Int) {
             precondition(retentionLimit > 0, "Observation history retention must be positive")
@@ -58,22 +57,6 @@ extension Observation {
             return try entries(in: index..<endIndex)
         }
 
-        /// Screen generation at a position is the number of screen boundaries
-        /// preceding it. The event and snapshot do not store this projection.
-        internal func screenGeneration(at index: Int) -> Int {
-            precondition(
-                index >= startIndex && index <= endIndex,
-                "Observation history index is unavailable"
-            )
-            return screenChangesBeforeStorage + storage
-                .prefix(index - firstRetainedIndex)
-                .reduce(into: 0) { count, event in
-                    if case .screenChanged = event {
-                        count += 1
-                    }
-                }
-        }
-
         internal func evidence(
             in range: Range<Int>,
             baseline: Observation.Snapshot?,
@@ -104,11 +87,6 @@ extension Observation {
                 Swift.min(overflow, Swift.max(0, $0 - firstRetainedIndex))
             } ?? overflow
             guard removableCount > 0 else { return }
-            screenChangesBeforeStorage += storage.prefix(removableCount).reduce(into: 0) { count, entry in
-                if case .screenChanged = entry {
-                    count += 1
-                }
-            }
             storage.removeFirst(removableCount)
             firstRetainedIndex += removableCount
         }

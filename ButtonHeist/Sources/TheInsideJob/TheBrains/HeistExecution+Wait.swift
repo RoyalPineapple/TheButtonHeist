@@ -25,7 +25,7 @@ extension HeistExecution.Machine {
 
         let id = nextID()
         let timeout = HeistExecution.duration(step.timeout)
-        activeLeaf = .wait(HeistExecution.WaitLeaf(
+        running.activeLeaf = .wait(HeistExecution.WaitLeaf(
             id: id,
             step: step,
             predicate: predicate,

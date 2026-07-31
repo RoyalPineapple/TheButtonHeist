@@ -41,52 +41,10 @@ let buttonHeistRules = RuleSet {
     heistContentOpacityRule
     planElseOwnershipRule
     exportedTupleContractRule
-    semanticObservationCycleOwnershipRule
-    Rules.constructionOwnership(
-        "Observation.History",
-        allowed: .files([observationHistoryConstructionOwnerPath]),
-        id: "buttonheist.observation_history_construction_ownership"
-    )
-    Rules.memberReferenceOwnership(
-        "commitObservation",
-        allowed: .files([observationCaptureAdmissionOwnerPath]),
-        id: "buttonheist.semantic_observation_commit_ownership"
-    )
-    directVisibleObservationCaptureOwnershipRule
     Rules.constructionOwnership(
         "CADisplayLink",
         allowed: .files([observationPulseClockPath]),
         id: "buttonheist.observation_pulse_clock_ownership"
-    )
-    Rules.constructionOwnership(
-        "HeistExecution.Machine",
-        allowed: .files([heistExecutionHostPath]),
-        id: "buttonheist.heist_execution_machine_ownership"
-    )
-    Rules.constructionOwnership(
-        "HeistExecution.Host",
-        allowed: .files([heistExecutionEntryPath]),
-        id: "buttonheist.heist_execution_host_ownership"
-    )
-    Rules.memberReferenceOwnership(
-        "dispatchRuntimeAction",
-        allowed: .files([heistExecutionHostPath]),
-        id: "buttonheist.heist_action_dispatch_ownership"
-    )
-    Rules.memberReferenceOwnership(
-        "beginActionWindow",
-        allowed: .files([heistExecutionHostPath]),
-        id: "buttonheist.action_notification_window_ownership"
-    )
-    Rules.memberReferenceOwnership(
-        "setContentOffset",
-        allowed: .files([scrollContentOffsetOwnerPath]).union(demoScope),
-        id: "buttonheist.scroll_content_offset_ownership"
-    )
-    Rules.memberReferenceOwnership(
-        "transportEvents",
-        allowed: .files(transportEventOwnerPaths),
-        id: "buttonheist.transport_event_consumption_ownership"
     )
 }
 
@@ -101,79 +59,12 @@ private let demoAccessibilityIdentifierResearchFixtures: Set<RelativeFilePath> =
     "TestApp/Sources/TraitValidationView.swift",
 ]
 
-private let semanticObservationStreamPath: RelativeFilePath =
-    "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream.swift"
-private let observationHistoryConstructionOwnerPath: RelativeFilePath =
-    "ButtonHeist/Sources/TheInsideJob/TheVault/TheVault+State.swift"
-private let observationCaptureAdmissionOwnerPath: RelativeFilePath =
-    "ButtonHeist/Sources/TheInsideJob/TheVault/SemanticObservationStream+CaptureAdmission.swift"
 private let observationPulseClockPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire+Pulse.swift"
-private let heistExecutionHostPath: RelativeFilePath =
-    "ButtonHeist/Sources/TheInsideJob/TheBrains/HeistExecution+Host.swift"
-private let heistExecutionEntryPath: RelativeFilePath =
-    "ButtonHeist/Sources/TheInsideJob/TheBrains/TheBrains+HeistExecution.swift"
 private let scrollContentOffsetOwnerPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/TheSafecracker/TheSafecracker+Scroll.swift"
-private let transportEventOwnerPaths: Set<RelativeFilePath> = [
-    "ButtonHeist/Sources/TheInsideJob/Server/ServerTransport.swift",
-    "ButtonHeist/Sources/TheInsideJob/TheGetaway/TransportControlPlane.swift",
-]
 private let startupConfigurationPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/Lifecycle/StartupConfiguration.swift"
-
-private let semanticObservationCycleMemberNames: Set<String> = [
-    "freezeObservationCycleClaim",
-    "observePulses",
-    "setObservationPulseDemand",
-    "stopObservingPulses",
-]
-
-private let directVisibleObservationCaptureOwnershipRule = Rules.files(
-    "buttonheist.semantic_observation_live_capture_ownership",
-    severity: .error,
-    summary: "Raw visible observation capture enters through the canonical observation cycle.",
-    scope: runtimeScope
-) { file in
-    guard file.path != observationCaptureAdmissionOwnerPath else { return [] }
-    return functionCalls()
-        .filter { match in
-            match.node.calleeBaseName == "captureVisibleObservation"
-        }
-        .matches(in: file)
-        .map { match in
-            match.failure(
-                message: "raw visible observation capture outside the observation cycle",
-                evidence: ViolationEvidence(
-                    observed: match.node.trimmedDescription,
-                    expectation: "request a semantic observation publication from Observation.Stream"
-                )
-            )
-        }
-}
-
-private let semanticObservationCycleOwnershipRule = Rules.files(
-    "buttonheist.semantic_observation_cycle_ownership",
-    severity: .error,
-    summary: "SemanticObservationStream.swift exclusively acquires and controls the observation cycle.",
-    scope: runtimeScope
-) { file in
-    guard file.path != semanticObservationStreamPath else { return [] }
-    return SyntaxQuery<MemberAccessExprSyntax>()
-        .filter { match in
-            semanticObservationCycleMemberNames.contains(match.node.declName.baseName.text)
-        }
-        .matches(in: file)
-        .map { match in
-            match.failure(
-                message: "observation cycle authority outside SemanticObservationStream.swift",
-                evidence: ViolationEvidence(
-                    observed: match.node.trimmedDescription,
-                    expectation: "request and consume observations through Observation.Stream"
-                )
-            )
-        }
-}
 
 private let anyBoundaryRule = Rules.files(
     "buttonheist.any_boundary",

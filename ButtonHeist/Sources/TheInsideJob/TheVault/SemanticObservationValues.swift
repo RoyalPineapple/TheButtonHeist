@@ -13,7 +13,6 @@ extension TheVault.State {
         internal let scope: SemanticObservationScope
         internal let continuity: ScreenContinuity
 
-        internal var summary: String { snapshot.summary }
     }
 }
 
@@ -38,10 +37,9 @@ extension Observation {
         }
     }
 
-    /// One admitted observation's exact retained range and authored events.
+    /// One admitted observation's current state and authored events.
     internal struct Publication: Sendable {
         internal let current: TheVault.State.Current
-        internal let historyRange: Range<Int>
         internal let events: [Event]
     }
 

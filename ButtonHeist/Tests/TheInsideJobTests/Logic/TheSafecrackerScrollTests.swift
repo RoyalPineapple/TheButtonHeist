@@ -352,5 +352,20 @@ final class TheSafecrackerScrollTests: XCTestCase {
             accuracy: 0.01
         )
     }
+
+    func testPhysicalRestorationPreservesCapturedOffsetWhenInsetsChange() {
+        let scrollView = makeScrollView(
+            frame: CGRect(x: 0, y: 0, width: 390, height: 800),
+            contentSize: CGSize(width: 390, height: 1_600)
+        )
+        let capturedOffset = scrollView.contentOffset
+        scrollView.contentInset.top = 22
+        scrollView.setContentOffset(CGPoint(x: 0, y: 300), animated: false)
+
+        let result = safecracker.restoreContentOffset(capturedOffset, in: scrollView)
+
+        XCTAssertEqual(result, .moved)
+        XCTAssertEqual(scrollView.contentOffset, capturedOffset)
+    }
 }
 #endif

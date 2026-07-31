@@ -77,7 +77,10 @@ final class SemanticObservationStreamTests: XCTestCase {
 
     func testSubscriptionPublishesVaultHistoryInAuthoredOrder() async throws {
         let stream = vault.semanticObservationStream
-        let before = await stream.commitVisibleObservationForTesting(.empty)
+        let beforeReceipt = await capturePublication(in: vault) {
+            await stream.commitVisibleObservationForTesting(.empty)
+        }
+        let before = beforeReceipt.publication
         var received: [Observation.Event] = []
 
         let installation = stream.subscribe(
@@ -88,15 +91,18 @@ final class SemanticObservationStreamTests: XCTestCase {
         let subscription = installation.subscription
         received.append(contentsOf: try installation.replay.get())
         stream.discardCurrentObservation()
-        let during = await stream.commitVisibleObservationForTesting(.empty)
+        let duringReceipt = await capturePublication(in: vault) {
+            await stream.commitVisibleObservationForTesting(.empty)
+        }
+        let during = duringReceipt.publication
         let expected = before.events + during.events
         let current = vault.state.current
         let history = try stream.events(after: 0).get()
 
         XCTAssertEqual(received, expected)
         XCTAssertEqual(
-            during.historyRange,
-            before.historyRange.upperBound..<(before.historyRange.upperBound + during.events.count)
+            duringReceipt.historyRange,
+            beforeReceipt.historyRange.upperBound..<(beforeReceipt.historyRange.upperBound + during.events.count)
         )
         XCTAssertEqual(current, during.current)
         XCTAssertEqual(history, expected)

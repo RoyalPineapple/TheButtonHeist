@@ -238,6 +238,24 @@ extension TheSafecracker {
         return .moved
     }
 
+    func restoreContentOffset(
+        _ contentOffset: CGPoint,
+        in scrollView: UIScrollView
+    ) -> ScrollPrimitiveOutcome {
+        guard contentOffset.x.isFinite, contentOffset.y.isFinite else {
+            return .unavailable
+        }
+        // UIKit may apply its adjusted-content-inset correction while the
+        // terminal observation reads the restored viewport. Commit that layout
+        // first, then make the captured physical offset the final mutation.
+        scrollView.layoutIfNeeded()
+        guard !contentOffsetsEqual(contentOffset, scrollView.contentOffset) else {
+            return .alreadyInPosition
+        }
+        scrollView.setContentOffset(contentOffset, animated: false)
+        return .moved
+    }
+
     private func admittedContentOffset(
         _ proposedOffset: CGPoint,
         in scrollView: UIScrollView,

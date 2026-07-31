@@ -1,6 +1,5 @@
 #if canImport(UIKit)
 #if DEBUG
-import CryptoKit
 import UIKit
 
 import TheScore
@@ -69,11 +68,10 @@ struct InterfaceTree: Sendable, Equatable {
 
     /// Where every visible element sits, for asking whether the tree moved.
     ///
-    /// Geometry is not in `interfaceHash` and must not be: a predicate asks
-    /// about labels and values, and a scroll that reveals nothing new is not a
-    /// semantic change. But an element sliding into place *is* movement, and a
-    /// reading taken mid-slide is not a still one — so stillness needs a second
-    /// question that the semantic hash cannot answer.
+    /// Geometry is not durable identity: a predicate asks about labels and
+    /// values, and a scroll that reveals nothing new is not a semantic change.
+    /// But an element sliding into place *is* movement, and a reading taken
+    /// mid-slide is not a still one — so stillness needs a separate question.
     ///
     /// Only viewport elements carry live geometry, so only they are asked.
     /// Frames are exact here; the comparison that reads them applies a
@@ -88,24 +86,6 @@ struct InterfaceTree: Sendable, Equatable {
             frames[element.heistId] = rect.cgRect
         }
         return frames
-    }
-
-    /// Hash of semantic accessibility state. Deliberately excludes
-    /// viewport-only facts like live object refs, visible ids, current scroll
-    /// offset, and live geometry.
-    var interfaceHash: String {
-        let fingerprints = elements.values
-            .map(Self.semanticElementFingerprint)
-            .sorted { $0.heistId < $1.heistId }
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        encoder.nonConformingFloatEncodingStrategy = .convertToString(
-            positiveInfinity: "Infinity",
-            negativeInfinity: "-Infinity",
-            nan: "NaN"
-        )
-        let data = Self.stableSemanticHashData(fingerprints, encoder: encoder)
-        return "sha256:" + SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
     var summaryElement: AccessibilityElement? {
@@ -551,32 +531,6 @@ struct InterfaceTree: Sendable, Equatable {
         }
     }
 
-    // MARK: - Fingerprint
-
-    private struct SemanticFingerprintEntry: Codable, Hashable {
-        let heistId: HeistId
-        let semantics: HeistElement.Semantics
-    }
-
-    private static func semanticElementFingerprint(_ entry: Element) -> SemanticFingerprintEntry {
-        let element = TheVault.WireConversion.convert(
-            entry.element,
-            geometry: entry.geometry
-        )
-        return SemanticFingerprintEntry(
-            heistId: entry.heistId,
-            semantics: element.semantics
-        )
-    }
-
-    private static func stableSemanticHashData<T: Encodable>(_ value: T, encoder: JSONEncoder) -> Data {
-        switch Result(catching: { try encoder.encode(value) }) {
-        case .success(let data):
-            return data
-        case .failure(let error):
-            preconditionFailure("Stable semantic screen hash payload failed to encode: \(error)")
-        }
-    }
 }
 
 #endif // DEBUG

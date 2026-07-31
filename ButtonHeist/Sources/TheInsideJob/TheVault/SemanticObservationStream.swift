@@ -24,9 +24,15 @@ enum AccessibilityNotificationIngress {
 extension Observation {
 @MainActor
 internal final class Stream {
+    enum EventDelivery {
+        case all
+        case noChangesUntilActivated
+    }
+
     private struct EventReceiver {
         let subscriptionID: UInt64
         let receive: @MainActor (Event) -> Void
+        var delivery: EventDelivery
         var pending: [Event]
         var nextIndex: Int
         var isDelivering: Bool
@@ -35,6 +41,13 @@ internal final class Stream {
     internal struct EventInstallation {
         internal let subscription: SemanticObservationSubscription
         internal let replay: Result<[Event], History.ReadError>
+    }
+
+    internal struct ExecutionAdmission {
+        internal let baseline: TheVault.State.Current?
+        internal let retainedHistoryIndex: Int
+        internal let subscription: SemanticObservationSubscription
+        internal let demand: SemanticObservationDemand
     }
 
     private struct CycleResult {
@@ -134,6 +147,7 @@ internal final class Stream {
     internal func subscribe(
         scope: SemanticObservationScope,
         replayingAfter historyIndex: Int,
+        delivery: EventDelivery = .all,
         receive: @escaping @MainActor (Event) -> Void
     ) -> EventInstallation {
         precondition(
@@ -145,6 +159,7 @@ internal final class Stream {
         eventReceiver = EventReceiver(
             subscriptionID: subscription.id,
             receive: receive,
+            delivery: delivery,
             pending: [],
             nextIndex: 0,
             isDelivering: false
@@ -162,9 +177,21 @@ internal final class Stream {
 
     func publish(_ publication: Publication) {
         guard var receiver = eventReceiver else { return }
-        receiver.pending.append(contentsOf: publication.events)
+        receiver.pending.append(contentsOf: publication.events.filter {
+            if receiver.delivery == .all { return true }
+            if case .noChange = $0 { return true }
+            return false
+        })
         eventReceiver = receiver
         drain(subscriptionID: receiver.subscriptionID)
+    }
+
+    internal func activateExecutionDelivery(_ subscription: SemanticObservationSubscription) {
+        guard var receiver = eventReceiver,
+              receiver.subscriptionID == subscription.id
+        else { return }
+        receiver.delivery = .all
+        eventReceiver = receiver
     }
 
     private func drain(subscriptionID: UInt64) {
