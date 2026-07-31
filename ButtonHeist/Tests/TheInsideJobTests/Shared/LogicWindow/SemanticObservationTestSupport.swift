@@ -18,9 +18,12 @@ extension Observation.Stream {
         _ observation: InterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch
     ) async -> Observation.Publication {
-        commitVisibleObservation(
-            .admitCaptured(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
-            notificationBatch: notificationBatch
+        requireCommittedObservation(
+            commitObservation(
+                .admitCaptured(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
+                scope: .visible,
+                notificationBatch: notificationBatch
+            )
         )
     }
 
@@ -40,9 +43,12 @@ extension Observation.Stream {
         _ observation: InterfaceObservation,
         notificationBatch: AccessibilityNotificationBatch
     ) async -> Observation.Publication {
-        commitDiscoveryObservation(
-            .admitCaptured(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
-            notificationBatch: notificationBatch
+        requireCommittedObservation(
+            commitObservation(
+                .admitCaptured(observation, tripwireSignal: currentTripwireSignal(), lineage: .resting),
+                scope: .discovery,
+                notificationBatch: notificationBatch
+            )
         )
     }
 
@@ -62,26 +68,35 @@ extension Observation.Stream {
         scope: SemanticObservationScope,
         lineage: ScreenLineage
     ) async -> Observation.Publication {
-        guard let vault else {
-            preconditionFailure("A test observation cycle requires a live Vault")
-        }
         let claim = vault.accessibilityNotifications.freezeObservationCycleClaim()
         let admitted = CommittableInterfaceObservation.admitCaptured(
             observation,
             tripwireSignal: currentTripwireSignal(),
             lineage: lineage
         )
-        let publication = switch scope {
-        case .visible:
-            commitVisibleObservation(admitted, notificationBatch: claim.batch)
-        case .discovery:
-            commitDiscoveryObservation(admitted, notificationBatch: claim.batch)
-        }
+        let publication = requireCommittedObservation(
+            commitObservation(
+                admitted,
+                scope: scope,
+                notificationBatch: claim.batch
+            )
+        )
         precondition(
             claim.acknowledgeObservationCycle(),
             "A test observation cycle must acknowledge its exact notification claim"
         )
         return publication
+    }
+
+    private func requireCommittedObservation(
+        _ result: Result<Observation.Publication, Observation.CaptureFailure>
+    ) -> Observation.Publication {
+        switch result {
+        case .success(let publication):
+            publication
+        case .failure(let failure):
+            preconditionFailure("Test observation was rejected: \(failure.diagnostic)")
+        }
     }
 }
 

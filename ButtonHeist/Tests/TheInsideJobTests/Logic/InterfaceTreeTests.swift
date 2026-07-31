@@ -172,7 +172,7 @@ final class InterfaceTreeTests: XCTestCase {
         )
 
         let pruned = screen.removingElements(withIds: ["old"])
-        let interface = TheVault.WireConversion.toSemanticInterface(from: pruned.tree)
+        let interface = pruned.tree.semanticInterface(timestamp: Date())
 
         XCTAssertEqual(pruned.liveCapture.heistId(forPath: TreePath([0, 0])), "kept")
         XCTAssertNil(pruned.liveCapture.heistId(forPath: TreePath([1, 0])))

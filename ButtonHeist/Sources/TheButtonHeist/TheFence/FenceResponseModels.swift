@@ -133,7 +133,7 @@ extension DiagnosticFailure {
         case let fenceError as FenceError:
             self.init(fenceError)
         case let connectionError as HandoffConnectionError:
-            self.init(FenceError(connectionError))
+            self.init(connectionError: connectionError)
         case let configError as TargetConfigLoadError:
             self.init(
                 message: configError.displayMessage,
@@ -164,11 +164,15 @@ extension DiagnosticFailure {
     }
 
     init(_ fenceError: FenceError) {
-        self.init(
-            message: fenceError.coreMessage,
-            details: fenceError.failureDetails,
-            buildDiagnostics: fenceError.buildDiagnostics
-        )
+        self = fenceError.diagnosticFailure
+    }
+
+    init(connectionError: HandoffConnectionError) {
+        self.init(ConnectionFailure(connectionError: connectionError))
+    }
+
+    private init(_ connectionFailure: ConnectionFailure) {
+        self.init(message: connectionFailure.message, details: connectionFailure.details)
     }
 
     init(failureKind: ActionFailure.Kind, message: String) {

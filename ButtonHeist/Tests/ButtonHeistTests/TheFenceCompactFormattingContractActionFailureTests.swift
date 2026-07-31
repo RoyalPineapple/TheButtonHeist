@@ -10,7 +10,6 @@ extension TheFenceCompactFormattingContractTests {
     func testCompactActionRenderingUsesParsedCommandNames() {
         let cases: [(command: TheFence.Command, payload: ActionResult.Payload, expected: String)] = [
             (.typeText, .typeText(nil), "type_text: ok"),
-            (.wait, .wait, "wait: ok"),
             (.activate, .customAction, "activate: ok"),
             (.dismissKeyboard, .dismissKeyboard, "dismiss_keyboard: ok"),
             (.oneFingerTap, .oneFingerTap, "one_finger_tap: ok"),
@@ -103,9 +102,9 @@ extension TheFenceCompactFormattingContractTests {
             coverage: .incomplete(.historyUnavailable)
         )
         let response = FenceResponse.action(
-            command: .wait,
+            command: .activate,
             result: ActionResult.success(
-                payload: .wait,
+                payload: .activate,
                 observation: .observed(evidence)
             ),
             expectation: ExpectationResult(
@@ -121,10 +120,10 @@ extension TheFenceCompactFormattingContractTests {
 
     func testActionFailureProjectionFeedsJSONAndCompactRendering() throws {
         let response = FenceResponse.action(
-            command: .wait,
+            command: .activate,
             result: HeistResultFixture.actionResult(
                 succeeded: false,
-                payload: .wait,
+                payload: .activate,
                 message: "timed out after 2s",
                 failureKind: .timeout
             )
@@ -138,7 +137,7 @@ extension TheFenceCompactFormattingContractTests {
         XCTAssertEqual(try json.string("kind"), "request")
         XCTAssertEqual(try json.string("phase"), "request")
         XCTAssertEqual(try json.bool("retryable"), true)
-        XCTAssertEqual(response.compactFormatted(), "wait: error[request.timeout]: timed out after 2s")
+        XCTAssertEqual(response.compactFormatted(), "activate: error[request.timeout]: timed out after 2s")
     }
 
     func testActionFailureCodeAndClassAgreeAcrossPublicFormats() throws {

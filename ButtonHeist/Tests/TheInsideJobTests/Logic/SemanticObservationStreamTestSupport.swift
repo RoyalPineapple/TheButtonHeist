@@ -114,10 +114,7 @@ class SemanticObservationStreamTestCase: XCTestCase {
     }
 
     func retainedEvents(after historyIndex: Int) throws -> [Observation.Event] {
-        let result = vault.semanticObservationStream.events(
-            after: historyIndex
-        )
-        return try result.get()
+        Array(try vault.state.history.events(after: historyIndex))
     }
 
     func waitForObservationWaiterCount(_ expectedCount: Int) async {
@@ -129,6 +126,26 @@ class SemanticObservationStreamTestCase: XCTestCase {
         }
         XCTFail("Timed out waiting for \(expectedCount) observation waiters")
     }
+}
+
+@MainActor
+struct ObservationPublicationReceipt {
+    let publication: Observation.Publication
+    let historyRange: Range<Int>
+}
+
+@MainActor
+func capturePublication(
+    in vault: TheVault,
+    _ publish: () async -> Observation.Publication
+) async -> ObservationPublicationReceipt {
+    let lowerBound = vault.state.history.endIndex
+    let publication = await publish()
+    let upperBound = vault.state.history.endIndex
+    return ObservationPublicationReceipt(
+        publication: publication,
+        historyRange: lowerBound..<upperBound
+    )
 }
 
 #endif // DEBUG

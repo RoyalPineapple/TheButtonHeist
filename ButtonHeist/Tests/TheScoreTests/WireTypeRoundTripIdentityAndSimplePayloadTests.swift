@@ -139,7 +139,7 @@ final class WireTypeRoundTripTests: XCTestCase {
 
         let message = try command.resolve(in: HeistExecutionEnvironment(strings: ["item": ""]))
 
-        guard case .typeText(let payload) = message else {
+        guard case .typeText(let payload) = message.payload else {
             return XCTFail("Expected typeText runtime message, got \(message)")
         }
         XCTAssertEqual(payload.text, .replacing(""))

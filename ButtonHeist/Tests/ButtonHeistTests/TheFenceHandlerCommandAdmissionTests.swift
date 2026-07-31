@@ -214,7 +214,7 @@ extension TheFenceHandlerTests {
 
         XCTAssertTrue(response.containsAction, "Expected single-step action response, got \(response)")
         guard let message = mockConn.sent.sentPlanMessages.last,
-              case .typeText(let payload) = message else {
+              case .typeText(let payload) = message.payload else {
             return XCTFail("Expected typeText message, got \(String(describing: mockConn.sent.sentPlanMessages.last))")
         }
         XCTAssertEqual(payload.text, "hello")
@@ -234,7 +234,7 @@ extension TheFenceHandlerTests {
 
         XCTAssertTrue(response.containsAction, "Expected single-step action response, got \(response)")
         guard let message = mockConn.sent.sentPlanMessages.last,
-              case .typeText(let payload) = message else {
+              case .typeText(let payload) = message.payload else {
             return XCTFail("Expected typeText message, got \(String(describing: mockConn.sent.sentPlanMessages.last))")
         }
         XCTAssertEqual(payload.text, .replacing(""))
@@ -669,7 +669,7 @@ extension TheFenceHandlerTests {
             ]),
         ])
         guard let message = mockConn.sent.sentPlanMessages.last,
-              case .swipe(let target) = message,
+              case .swipe(let target) = message.payload,
               case .elementDirection(let target, let direction) = target.selection else {
             XCTFail("Expected element direction swipe to lower to element direction swipe")
             return
@@ -688,7 +688,7 @@ extension TheFenceHandlerTests {
                 ]),
             ])
         guard let message = mockConn.sent.sentPlanMessages.last,
-              case .drag(let target) = message,
+              case .drag(let target) = message.payload,
               case .pointToPoint(let start, let end) = target.selection else {
             XCTFail("Expected drag message")
             return

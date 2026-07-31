@@ -89,10 +89,6 @@ final class InterfaceGraphTests: XCTestCase {
             TreePath([0, 2]),
             TreePath([0, 2, 0]),
         ])
-        XCTAssertEqual(graph.elementsInTraversalOrder.map(\.path), [
-            TreePath([0, 1]),
-            TreePath([0, 2, 0]),
-        ])
         XCTAssertEqual(graph.node(at: TreePath([0, 0])), .container(empty, children: []))
     }
 
@@ -262,20 +258,29 @@ final class InterfaceGraphTests: XCTestCase {
             ]),
         ]
 
-        let interface = Interface(
-            timestamp: Date(timeIntervalSince1970: 1),
-            projecting: tree,
-            elementMetadata: { _, _, _ in
-                InterfaceElementProjectionMetadata(
-                    actions: [.activate],
-                    geometry: makeElement(label: "Save").geometry,
-                    observationIdentity: Observation.ElementIdentity("save_button")
-                )
-            },
-            containerMetadata: { _, _ in
-                InterfaceContainerProjectionMetadata(containerName: "checkout")
-            }
-        )
+        let interface: Interface
+        do {
+            interface = try Interface(
+                timestamp: Date(timeIntervalSince1970: 1),
+                tree: tree,
+                annotations: InterfaceAnnotations(
+                    elements: [InterfaceElementAnnotation(
+                        path: TreePath([0, 0]),
+                        actions: [.activate],
+                        geometry: makeElement(label: "Save").geometry
+                    )],
+                    containers: [InterfaceContainerAnnotation(
+                        path: TreePath([0]),
+                        containerName: "checkout"
+                    )]
+                ),
+                observationIdentities: InterfaceElementIdentities([
+                    TreePath([0, 0]): Observation.ElementIdentity("save_button"),
+                ])
+            )
+        } catch {
+            return XCTFail("Test interface fixture failed admission: \(error)")
+        }
 
         let elementPath = TreePath([0, 0])
         let containerPath = TreePath([0])

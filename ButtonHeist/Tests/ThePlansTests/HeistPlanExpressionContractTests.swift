@@ -240,7 +240,7 @@ import ThePlans
         target: .ref("sourceTarget")
     )
     let resolvedCommand: ResolvedHeistActionCommand = try command.resolve(in: environment)
-    guard case .typeText(let resolvedTypeText) = resolvedCommand else {
+    guard case .typeText(let resolvedTypeText) = resolvedCommand.payload else {
         Issue.record("Expected resolved type text command")
         return
     }
@@ -250,7 +250,7 @@ import ThePlans
     let swipe = HeistActionCommand.swipe(SwipeTarget(
         selection: .elementDirection(.ref("sourceTarget"), .up)
     ))
-    guard case .swipe(let resolvedSwipe) = try swipe.resolve(in: environment) else {
+    guard case .swipe(let resolvedSwipe) = try swipe.resolve(in: environment).payload else {
         Issue.record("Expected resolved spatial gesture swipe")
         return
     }

@@ -1090,6 +1090,7 @@ public struct Interface: Codable, Equatable, Sendable {
     public let diagnostics: InterfaceDiagnostics?
     public let screenActions: [ScreenAction]
     package let observationIdentities: InterfaceElementIdentities
+    package let graph: InterfaceGraph
 
     /// Button Heist element projection in VoiceOver traversal order.
     public var projectedElements: [HeistElement] {
@@ -1125,14 +1126,18 @@ public struct Interface: Codable, Equatable, Sendable {
         tree: [AccessibilityHierarchy],
         diagnostics: InterfaceDiagnostics? = nil
     ) {
-        guard (try? InterfaceGeometryAdmission.validate(tree)) != nil else { return nil }
+        guard (try? InterfaceGeometryAdmission.validate(tree)) != nil,
+              let graph = try? InterfaceGraph(tree: tree) else {
+            return nil
+        }
         self.init(
             validatedTimestamp: timestamp,
             tree: tree,
             annotations: .empty,
             diagnostics: diagnostics,
             screenActions: [],
-            observationIdentities: .empty
+            observationIdentities: .empty,
+            graph: graph
         )
     }
 
@@ -1176,49 +1181,19 @@ public struct Interface: Codable, Equatable, Sendable {
         observationIdentities: InterfaceElementIdentities
     ) throws {
         try InterfaceGeometryAdmission.validate(tree)
-        try InterfaceGraph.validate(
+        let graph = try InterfaceGraph(
             tree: tree,
             annotations: annotations,
             observationIdentities: observationIdentities
         )
-
         self.init(
             validatedTimestamp: timestamp,
             tree: tree,
             annotations: annotations,
             diagnostics: diagnostics,
             screenActions: screenActions,
-            observationIdentities: observationIdentities
-        )
-    }
-
-    package init(
-        timestamp: Date,
-        projecting tree: [AccessibilityHierarchy],
-        diagnostics: InterfaceDiagnostics? = nil,
-        screenActions: [ScreenAction] = [],
-        elementMetadata: (TreePath, AccessibilityElement, Int) -> InterfaceElementProjectionMetadata?,
-        containerMetadata: (TreePath, AccessibilityContainer) -> InterfaceContainerProjectionMetadata?
-    ) {
-        let projection = InterfaceGraph.projection(
-            tree: tree,
-            elementMetadata: elementMetadata,
-            containerMetadata: containerMetadata
-        )
-
-        do {
-            try InterfaceGeometryAdmission.validate(tree)
-        } catch {
-            preconditionFailure("Interface hierarchy geometry must be admitted before projection: \(error)")
-        }
-
-        self.init(
-            validatedTimestamp: timestamp,
-            tree: tree,
-            annotations: projection.annotations,
-            diagnostics: diagnostics,
-            screenActions: screenActions,
-            observationIdentities: projection.observationIdentities
+            observationIdentities: observationIdentities,
+            graph: graph
         )
     }
 
@@ -1228,7 +1203,8 @@ public struct Interface: Codable, Equatable, Sendable {
         annotations: InterfaceAnnotations,
         diagnostics: InterfaceDiagnostics?,
         screenActions: [ScreenAction],
-        observationIdentities: InterfaceElementIdentities
+        observationIdentities: InterfaceElementIdentities,
+        graph: InterfaceGraph
     ) {
         self.timestamp = timestamp
         self.tree = tree
@@ -1236,6 +1212,7 @@ public struct Interface: Codable, Equatable, Sendable {
         self.diagnostics = diagnostics
         self.screenActions = screenActions.sorted()
         self.observationIdentities = observationIdentities
+        self.graph = graph
     }
 
     public static func == (lhs: Interface, rhs: Interface) -> Bool {
@@ -1253,7 +1230,8 @@ public struct Interface: Codable, Equatable, Sendable {
             annotations: annotations,
             diagnostics: diagnostics,
             screenActions: screenActions,
-            observationIdentities: observationIdentities
+            observationIdentities: observationIdentities,
+            graph: graph
         )
     }
 
@@ -1264,7 +1242,8 @@ public struct Interface: Codable, Equatable, Sendable {
             annotations: annotations,
             diagnostics: diagnostics,
             screenActions: screenActions,
-            observationIdentities: observationIdentities
+            observationIdentities: observationIdentities,
+            graph: graph
         )
     }
 
@@ -1281,14 +1260,21 @@ public struct Interface: Codable, Equatable, Sendable {
             preconditionFailure("Cannot project missing interface subtree")
         }
         let rootPath = TreePath([0])
-        return Interface(
-            validatedTimestamp: timestamp,
-            tree: [node],
-            annotations: graph.annotationsForSubtree(originalPath: originalPath, rootPath: rootPath),
-            diagnostics: diagnostics,
-            screenActions: [],
-            observationIdentities: graph.observationIdentitiesForSubtree(originalPath: originalPath, rootPath: rootPath)
-        )
+        do {
+            return try Interface(
+                timestamp: timestamp,
+                tree: [node],
+                annotations: graph.annotationsForSubtree(originalPath: originalPath, rootPath: rootPath),
+                diagnostics: diagnostics,
+                screenActions: [],
+                observationIdentities: graph.observationIdentitiesForSubtree(
+                    originalPath: originalPath,
+                    rootPath: rootPath
+                )
+            )
+        } catch {
+            preconditionFailure("Canonical interface subtree construction failed: \(error)")
+        }
     }
 
 }

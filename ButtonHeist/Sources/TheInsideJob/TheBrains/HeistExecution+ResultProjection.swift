@@ -35,7 +35,7 @@ extension HeistExecution {
         ) -> HeistExecutionStepResult {
             let observed = "could not resolve heist expectation: \(error)"
             let actionResult = ActionResult.failure(
-                payload: command.actionResultPayload,
+                payload: .empty(for: command.type),
                 failureKind: .validationError,
                 message: observed
             )
@@ -83,7 +83,7 @@ extension HeistExecution {
             action leaf: ActionLeaf
         ) -> HeistExecutionStepResult {
             let result = ActionResult.failure(
-                payload: leaf.command.actionResultPayload,
+                payload: .empty(for: leaf.command.type),
                 failureKind: .timeout,
                 message: "whole-heist deadline expired before action dispatch"
             )
@@ -106,19 +106,20 @@ extension HeistExecution {
         }
 
         internal static func heistTimeout(
-            wait leaf: WaitLeaf
+            wait step: WaitStep,
+            path: HeistExecutionPath
         ) -> HeistExecutionStepResult {
             .wait(
-                path: leaf.context.path,
-                predicate: leaf.step.predicate,
-                timeout: leaf.step.timeout,
+                path: path,
+                predicate: step.predicate,
+                timeout: step.timeout,
                 completion: .failed(
                     evidence: .unavailable,
                     failure: HeistFailureDetail(
                         category: .wait,
                         contract: "wait begins within the whole-heist deadline",
                         observed: "whole-heist deadline expired before wait observation",
-                        expected: leaf.step.predicate.description
+                        expected: step.predicate.description
                     )
                 )
             )
@@ -136,7 +137,7 @@ extension HeistExecution {
                 outcome: outcome
             )
             let expectation = leaf.predicate.flatMap { predicate -> HeistExpectationEvidence? in
-                guard leaf.dispatch?.success == true else { return nil }
+                guard leaf.phase.dispatch?.success == true else { return nil }
                 return expectationEvidence(
                     predicate,
                     observation: evidence,
@@ -167,9 +168,13 @@ extension HeistExecution {
                 execution = .failed(
                     command: leaf.step.command,
                     evidence: .init(admitted: evidence),
-                    failure: actionDispatchFailure(
-                        command: leaf.step.command,
-                        result: actionResult
+                    failure: .init(
+                        category: actionResult.outcome.failureKind == .elementNotFound
+                            ? .targetResolution
+                            : .action,
+                        contract: "action dispatch succeeds",
+                        observed: actionResult.message ?? "action dispatch failed",
+                        expected: leaf.step.command.reportTarget.map(String.init(describing:))
                     )
                 )
             }
@@ -180,17 +185,11 @@ extension HeistExecution {
         }
 
         internal static func project(
-            wait leaf: WaitLeaf,
-            evidence: Observation.Evidence,
-            outcome: LeafOutcome,
-            timing: HeistExpectationTiming
+            wait step: WaitStep,
+            path: HeistExecutionPath,
+            expectation: HeistExpectationEvidence,
+            outcome: LeafOutcome
         ) -> HeistExecutionStepResult {
-            let expectation = expectationEvidence(
-                leaf.predicate,
-                observation: evidence,
-                outcome: outcome,
-                timing: timing
-            )
             let passedEvidence = HeistPassedWaitEvidence(expectation)
             let completion: HeistWaitCompletion
             if let passedEvidence,
@@ -199,17 +198,13 @@ extension HeistExecution {
             } else {
                 completion = .failed(
                     evidence: .observed(expectation),
-                    failure: waitFailure(
-                        step: leaf.step,
-                        evidence: expectation,
-                        outcome: outcome
-                    )
+                    failure: waitFailure(step: step, evidence: expectation, outcome: outcome)
                 )
             }
             return .wait(
-                path: leaf.context.path,
-                predicate: leaf.step.predicate,
-                timeout: leaf.step.timeout,
+                path: path,
+                predicate: step.predicate,
+                timeout: step.timeout,
                 completion: completion
             )
         }
@@ -217,19 +212,26 @@ extension HeistExecution {
     }
 }
 
-private extension HeistExecution.ResultProjector {
-    static func expectationEvidence(
+extension HeistExecution.ResultProjector {
+    internal static func expectationEvidence(
         _ predicate: HeistExecution.Predicate,
         observation: Observation.Evidence,
         outcome: HeistExecution.LeafOutcome,
         timing: HeistExpectationTiming
     ) -> HeistExpectationEvidence {
         do {
+            let terminalCause: HeistExpectationEvidence.TerminalCause = switch outcome {
+            case .completed: .observed
+            case .timedOut, .heistTimedOut: .deadline
+            case .cancelled: .cancelled
+            case .unavailable: .unavailable
+            case .viewportExitFailed: .viewportFailure
+            }
             return try HeistExpectationEvidence(
                 predicate: predicate.authored,
                 bindings: predicate.bindings,
                 observation: observation,
-                terminalCause: outcome.expectationTerminalCause,
+                terminalCause: terminalCause,
                 timing: timing
             )
         } catch {
@@ -242,9 +244,22 @@ private extension HeistExecution.ResultProjector {
         evidence: Observation.Evidence,
         outcome: HeistExecution.LeafOutcome
     ) -> ActionResult {
-        guard let dispatch = leaf.dispatch else {
+        switch outcome {
+        case .timedOut, .heistTimedOut:
             return .failure(
-                payload: leaf.command.actionResultPayload,
+                payload: .empty(for: leaf.command.type),
+                failureKind: .timeout,
+                message: leaf.phase.expectation?.result.outstandingDescription.map {
+                    "timed out while waiting for \($0)"
+                } ?? "timed out",
+                observation: .observed(evidence)
+            )
+        case .completed, .cancelled, .unavailable, .viewportExitFailed:
+            break
+        }
+        guard let dispatch = leaf.phase.dispatch else {
+            return .failure(
+                payload: .empty(for: leaf.command.type),
                 failureKind: .actionFailed,
                 message: "action dispatch did not complete",
                 observation: .observed(evidence)
@@ -254,26 +269,14 @@ private extension HeistExecution.ResultProjector {
         let resultOutcome: ActionResultOutcome
         let message: String?
         switch outcome {
-        case .timedOut, .heistTimedOut:
-            resultOutcome = .failure(.timeout)
-            message = timeoutMessage(
-                outstanding: leaf.expectation.result.outstandingDescription
-            )
         case .completed:
             switch dispatch.outcome {
             case .failure(let failure):
                 resultOutcome = .failure(TheBrains.actionFailureKind(for: failure))
                 message = dispatch.message
             case .success:
-                if leaf.expectation.result == .satisfied {
-                    resultOutcome = .success
-                    message = dispatch.message
-                } else {
-                    resultOutcome = .failure(.timeout)
-                    message = timeoutMessage(
-                        outstanding: leaf.expectation.result.outstandingDescription
-                    )
-                }
+                resultOutcome = .success
+                message = dispatch.message
             }
         case .cancelled:
             resultOutcome = .failure(.actionFailed)
@@ -284,6 +287,8 @@ private extension HeistExecution.ResultProjector {
         case .viewportExitFailed:
             resultOutcome = .failure(.actionFailed)
             message = "Could not restore the accessibility viewport after observation"
+        case .timedOut, .heistTimedOut:
+            preconditionFailure("Timed-out actions return before dispatch admission")
         }
 
         return ActionResult(
@@ -294,40 +299,12 @@ private extension HeistExecution.ResultProjector {
             subjectEvidence: dispatch.subjectEvidence,
             activationTrace: dispatch.activationTrace,
             screenActionHandler: dispatch.screenActionHandler,
-            timing: timing(dispatch)
-        )
-    }
-
-    static func timing(
-        _ dispatch: TheSafecracker.ActionDispatchResult
-    ) -> ActionPerformanceTiming {
-        ActionPerformanceTiming(
-            targetResolutionMs: dispatch.timing?.targetResolutionMs,
-            actionDispatchMs: dispatch.timing?.actionDispatchMs,
-            interactionMs: dispatch.timing?.interactionMs,
-            totalMs: dispatch.timing?.totalMs
-        )
-    }
-
-    static func timeoutMessage(outstanding: String?) -> String {
-        var message = "timed out"
-        if let outstanding {
-            message += " while waiting for \(outstanding)"
-        }
-        return message
-    }
-
-    static func actionDispatchFailure(
-        command: HeistActionCommand,
-        result: ActionResult
-    ) -> HeistFailureDetail {
-        HeistFailureDetail(
-            category: result.outcome.failureKind == .elementNotFound
-                ? .targetResolution
-                : .action,
-            contract: "action dispatch succeeds",
-            observed: result.message ?? "action dispatch failed",
-            expected: command.reportTarget.map(String.init(describing:))
+            timing: ActionPerformanceTiming(
+                targetResolutionMs: dispatch.timing?.targetResolutionMs,
+                actionDispatchMs: dispatch.timing?.actionDispatchMs,
+                interactionMs: dispatch.timing?.interactionMs,
+                totalMs: dispatch.timing?.totalMs
+            )
         )
     }
 
@@ -393,75 +370,6 @@ private extension HeistExecution.ResultProjector {
             observed: observed,
             expected: step.predicate.description
         )
-    }
-}
-
-extension ResolvedHeistActionCommand {
-    internal var actionResultPayload: ActionResult.Payload {
-        switch self {
-        case .activate: .activate
-        case .increment: .increment
-        case .decrement: .decrement
-        case .customAction: .customAction
-        case .rotor: .rotor(nil)
-        case .dismiss: .dismiss
-        case .magicTap: .magicTap
-        case .typeText: .typeText(nil)
-        case .oneFingerTap: .oneFingerTap
-        case .longPress: .longPress
-        case .swipe: .swipe
-        case .drag: .drag
-        case .scroll: .scroll
-        case .scrollToVisible: .scrollToVisible
-        case .scrollToEdge: .scrollToEdge
-        case .editAction: .editAction
-        case .setPasteboard: .setPasteboard(nil)
-        case .takeScreenshot: .screenshot(nil)
-        case .dismissKeyboard: .dismissKeyboard
-        }
-    }
-}
-
-extension HeistActionCommand {
-    internal var actionResultPayload: ActionResult.Payload {
-        switch self {
-        case .activate: .activate
-        case .increment: .increment
-        case .decrement: .decrement
-        case .customAction: .customAction
-        case .rotor: .rotor(nil)
-        case .dismiss: .dismiss
-        case .magicTap: .magicTap
-        case .typeText: .typeText(nil)
-        case .oneFingerTap: .oneFingerTap
-        case .longPress: .longPress
-        case .swipe: .swipe
-        case .drag: .drag
-        case .scroll: .scroll
-        case .scrollToVisible: .scrollToVisible
-        case .scrollToEdge: .scrollToEdge
-        case .editAction: .editAction
-        case .setPasteboard: .setPasteboard(nil)
-        case .takeScreenshot: .screenshot(nil)
-        case .dismissKeyboard: .dismissKeyboard
-        }
-    }
-}
-
-private extension HeistExecution.LeafOutcome {
-    var expectationTerminalCause: HeistExpectationEvidence.TerminalCause {
-        switch self {
-        case .completed:
-            .observed
-        case .timedOut, .heistTimedOut:
-            .deadline
-        case .cancelled:
-            .cancelled
-        case .unavailable:
-            .unavailable
-        case .viewportExitFailed:
-            .viewportFailure
-        }
     }
 }
 

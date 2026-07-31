@@ -1,4 +1,5 @@
 import Foundation
+import ThePlans
 
 /// Complete typed result of one heist-plan execution.
 public struct HeistResult: Codable, Sendable, Equatable {
@@ -20,12 +21,7 @@ public struct HeistResult: Codable, Sendable, Equatable {
     }
 
     package init(steps: [HeistExecutionStepResult], durationMs: ElapsedMilliseconds) throws {
-        let normalized = Self.normalizeFailureCapture(in: steps)
-        try Self.admitStructure(normalized.steps, limits: .default)
-        try Self.admitFailureCapture(normalized.failureCapture, steps: normalized.steps)
-        self.steps = normalized.steps
-        failureCapture = normalized.failureCapture
-        self.durationMs = durationMs
+        try self.init(steps: steps, failureCapture: nil, durationMs: durationMs)
     }
 
     package init(
@@ -33,7 +29,7 @@ public struct HeistResult: Codable, Sendable, Equatable {
         failureCapture: HeistFailureCapture?,
         durationMs: ElapsedMilliseconds
     ) throws {
-        try Self.admitStructure(steps, limits: .default)
+        _ = try Self.admitStructure(steps, limits: .default)
         try Self.admitFailureCapture(failureCapture, steps: steps)
         self.steps = steps
         self.failureCapture = failureCapture
@@ -51,14 +47,14 @@ public struct HeistResult: Codable, Sendable, Equatable {
         let encodedSteps = try container.decode([HeistExecutionStepResult].self, forKey: .steps)
         let durationMs = try container.decode(ElapsedMilliseconds.self, forKey: .durationMs)
         let limits = decoder.userInfo[.heistResultCodecLimits] as? HeistResultCodecLimits ?? .default
-        let normalized = Self.normalizeFailureCapture(in: encodedSteps)
+        let normalized = Self.decodeFailureCapture(from: encodedSteps)
         do {
-            try Self.admitStructure(normalized.steps, limits: limits)
+            let nodeCount = try Self.admitStructure(normalized.steps, limits: limits)
             if normalized.failureCapture != nil,
-               Self.nodeCount(in: normalized.steps) >= limits.maxNodeCount {
+               nodeCount >= limits.maxNodeCount {
                 throw HeistResultCodecError.nodeCountExceeded(
                     limit: limits.maxNodeCount,
-                    observed: Self.nodeCount(in: normalized.steps) + 1
+                    observed: nodeCount + 1
                 )
             }
             try Self.admitFailureCapture(normalized.failureCapture, steps: normalized.steps)
@@ -75,63 +71,96 @@ public struct HeistResult: Codable, Sendable, Equatable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        var encodedSteps = steps
-        if let failureCapture, let abortedAtPath {
-            encodedSteps.append(failureCapture.executionStep(failedPath: abortedAtPath))
-        }
-        try container.encode(encodedSteps, forKey: .steps)
+        try container.encode(legacyEncodedSteps, forKey: .steps)
         try container.encode(durationMs, forKey: .durationMs)
     }
 
-    private static func normalizeFailureCapture(
-        in steps: [HeistExecutionStepResult]
+    private var legacyEncodedSteps: [HeistExecutionStepResult] {
+        guard let failureCapture, let failedPath = steps.firstFailedStepInResultOrder?.path else {
+            return steps
+        }
+        return steps + [Self.legacyFailureCaptureStep(failureCapture, failedPath: failedPath)]
+    }
+
+    private static func decodeFailureCapture(
+        from steps: [HeistExecutionStepResult]
     ) -> (steps: [HeistExecutionStepResult], failureCapture: HeistFailureCapture?) {
         guard let candidate = steps.last else { return (steps, nil) }
         let executionSteps = Array(steps.dropLast())
         guard let failedPath = executionSteps.firstFailedStepInResultOrder?.path,
-              let failureCapture = HeistFailureCapture(
-                  executionStep: candidate,
-                  failedPath: failedPath
-              )
+              let failureCapture = legacyFailureCapture(candidate, failedPath: failedPath)
         else { return (steps, nil) }
         return (executionSteps, failureCapture)
+    }
+
+    private static func legacyFailureCapture(
+        _ step: HeistExecutionStepResult,
+        failedPath: HeistExecutionPath
+    ) -> HeistFailureCapture? {
+        guard step.path == failedPath.failureAction(at: 0),
+              step.actionCommand == .takeScreenshot,
+              let result = step.actionEvidence?.result
+        else { return nil }
+        switch (result.outcome, result.payload) {
+        case (.success, .screenshot(let payload?)):
+            return .captured(payload)
+        case (.failure(let kind), .screenshot(nil)):
+            return .unavailable(kind: kind, message: result.message)
+        default:
+            return nil
+        }
+    }
+
+    private static func legacyFailureCaptureStep(
+        _ capture: HeistFailureCapture,
+        failedPath: HeistExecutionPath
+    ) -> HeistExecutionStepResult {
+        let result: ActionResult
+        switch capture {
+        case .captured(let payload):
+            result = .success(
+                payload: .screenshot(payload),
+                message: "Captured screenshot \(Int(payload.width))x\(Int(payload.height))"
+            )
+        case .unavailable(let kind, let message):
+            result = .failure(payload: .screenshot(nil), failureKind: kind, message: message)
+        }
+        let evidence = HeistActionEvidence.completed(result: result, expectation: nil)
+        let execution: HeistActionExecution
+        switch result.outcome {
+        case .success:
+            execution = .passed(command: .takeScreenshot, evidence: .init(admitted: evidence))
+        case .failure:
+            execution = .failed(
+                command: .takeScreenshot,
+                evidence: .init(admitted: evidence),
+                failure: HeistFailureDetail(
+                    category: .action,
+                    contract: "failure screenshot action captures visible screen",
+                    observed: result.message ?? "screenshot action failed",
+                    expected: HeistActionCommandType.takeScreenshot.rawValue
+                )
+            )
+        }
+        return .action(path: failedPath.failureAction(at: 0), execution: execution)
     }
 
     private static func admitFailureCapture(
         _ failureCapture: HeistFailureCapture?,
         steps: [HeistExecutionStepResult]
     ) throws {
-        guard failureCapture != nil else { return }
-        guard let failedPath = steps.firstFailedStepInResultOrder?.path else {
+        guard failureCapture == nil || steps.firstFailedStepInResultOrder != nil else {
             throw HeistResultCodecError.incoherentExecutionEvidence(
                 path: .body,
                 reason: "failure capture requires a failed execution step"
             )
         }
-        guard steps.allSatisfy({ !$0.path.isFailureActionPath }) else {
-            throw HeistResultCodecError.incoherentExecutionEvidence(
-                path: failedPath,
-                reason: "failure capture must not also appear in execution steps"
-            )
-        }
-    }
-
-    private static func nodeCount(
-        in roots: [HeistExecutionStepResult]
-    ) -> Int {
-        var count = 0
-        var pending = roots
-        while let step = pending.popLast() {
-            count += 1
-            pending.append(contentsOf: step.children)
-        }
-        return count
     }
 
     private static func admitStructure(
         _ roots: [HeistExecutionStepResult],
         limits: HeistResultCodecLimits
-    ) throws {
+    ) throws -> Int {
         var pending = roots.reversed().map {
             (
                 step: $0,
@@ -146,6 +175,12 @@ public struct HeistResult: Codable, Sendable, Equatable {
             nodeCount += 1
             guard nodeCount <= limits.maxNodeCount else {
                 throw HeistResultCodecError.nodeCountExceeded(limit: limits.maxNodeCount, observed: nodeCount)
+            }
+            guard !current.step.path.isFailureActionPath else {
+                throw HeistResultCodecError.incoherentExecutionEvidence(
+                    path: current.step.path,
+                    reason: "failure capture action must not appear in canonical execution steps"
+                )
             }
             guard current.depth <= limits.maxNestingDepth else {
                 throw HeistResultCodecError.nestingDepthExceeded(
@@ -219,6 +254,7 @@ public struct HeistResult: Codable, Sendable, Equatable {
         }
         try admitRootIndices(roots)
         try admitOrderedExecution(roots)
+        return nodeCount
     }
 
     private static func admitRootIndices(_ roots: [HeistExecutionStepResult]) throws {

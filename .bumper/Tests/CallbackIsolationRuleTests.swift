@@ -9,7 +9,7 @@ struct CallbackIsolationRuleTests {
         let path: RelativeFilePath = "ButtonHeist/Sources/TheInsideJob/Client.swift"
         let report = try evaluateButtonHeistRules(
             path: path,
-            component: .runtime,
+            component: .embeddedRuntime,
             source: "struct Client { var onEvent: ((String) -> Void)? }"
         )
 
@@ -21,7 +21,7 @@ struct CallbackIsolationRuleTests {
     func actorAndSendableCallbacksAreExplicitlyIsolated() throws {
         let report = try evaluateButtonHeistRules(
             path: "ButtonHeist/Sources/TheInsideJob/Client.swift",
-            component: .runtime,
+            component: .embeddedRuntime,
             source: """
             struct Client {
                 var onEvent: (@Sendable (String) -> Void)?
@@ -37,7 +37,7 @@ struct CallbackIsolationRuleTests {
     func fileLocalCallbackAliasesPreserveTheirIsolationContract() throws {
         let report = try evaluateButtonHeistRules(
             path: "ButtonHeist/Sources/TheInsideJob/Callbacks.swift",
-            component: .runtime,
+            component: .embeddedRuntime,
             source: """
             typealias CheckedHandler = @Sendable (String) -> Void
             typealias LooseHandler = (String) -> Void
@@ -57,7 +57,7 @@ struct CallbackIsolationRuleTests {
     func sameNamedNestedAliasesResolveInTheirLexicalType() throws {
         let report = try evaluateButtonHeistRules(
             path: "ButtonHeist/Sources/TheInsideJob/Callbacks.swift",
-            component: .runtime,
+            component: .embeddedRuntime,
             source: """
             struct CheckedCallbacks {
                 typealias Handler = @Sendable () -> Void
@@ -78,7 +78,7 @@ struct CallbackIsolationRuleTests {
     func nestedSendableParametersDoNotIsolateTheStoredCallback() throws {
         let report = try evaluateButtonHeistRules(
             path: "ButtonHeist/Sources/TheInsideJob/Callbacks.swift",
-            component: .runtime,
+            component: .embeddedRuntime,
             source: "struct Callbacks { var onEvent: (@Sendable () -> Void) -> Void }"
         )
 
@@ -89,7 +89,7 @@ struct CallbackIsolationRuleTests {
     func genericOptionalCallbacksRemainVisibleToTheRule() throws {
         let report = try evaluateButtonHeistRules(
             path: "ButtonHeist/Sources/TheInsideJob/Callbacks.swift",
-            component: .runtime,
+            component: .embeddedRuntime,
             source: """
             typealias Handler = () -> Void
             struct Callbacks {

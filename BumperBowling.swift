@@ -37,14 +37,22 @@ let bumper = BumperProject {
             Modules("HeistDoctorCore", "HeistDoctorTool")
         }
 
-        Component(.runtime) {
+        Component(.embeddedRuntime) {
             Owns(
-                "ButtonHeist/Sources/TheButtonHeist",
                 "ButtonHeist/Sources/TheInsideJob",
-                "ButtonHeist/Sources/ThePlant",
-                "ButtonHeist/Sources/ButtonHeistSupport"
+                "ButtonHeist/Sources/ThePlant"
             )
-            Modules("ButtonHeist", "TheInsideJob", "ThePlant", "ButtonHeistSupport")
+            Modules("TheInsideJob", "ThePlant")
+        }
+
+        Component(.client) {
+            Owns("ButtonHeist/Sources/TheButtonHeist")
+            Modules("ButtonHeist")
+        }
+
+        Component(.support) {
+            Owns("ButtonHeist/Sources/ButtonHeistSupport")
+            Modules("ButtonHeistSupport")
         }
 
         Component(.testing) {

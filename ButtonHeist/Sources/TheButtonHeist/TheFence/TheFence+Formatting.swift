@@ -416,7 +416,7 @@ extension FenceResponse {
 
     private func formatActionResult(command: TheFence.Command, result: ActionResult) -> String {
         let methodName = command.rawValue
-        let projection = ActionProjection(actionMethod: .fence(command), result: result, profile: .summary)
+        let projection = ActionProjection(method: command.rawValue, result: result, profile: .summary)
         guard projection.failure == nil else {
             return "Error: \(projection.message ?? methodName)"
         }

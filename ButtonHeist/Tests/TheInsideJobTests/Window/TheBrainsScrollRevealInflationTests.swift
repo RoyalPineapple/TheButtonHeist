@@ -119,7 +119,7 @@ extension TheBrainsScrollTests {
         )
         let entry = try XCTUnwrap(brains.vault.interfaceTree.findElement(heistId: "settings_button"))
         let current = await brains.vault.semanticObservationStream
-            .commitDiscoveryObservationForTesting(brains.vault.latestObservation)
+            .commitDiscoveryObservationForTesting(brains.vault.currentInterfaceObservation)
             .current
         XCTAssertEqual(current.scope, .discovery)
         XCTAssertEqual(
@@ -181,7 +181,7 @@ extension TheBrainsScrollTests {
                 scrollView: scrollView
             )
         )
-        let matchingObservation = brains.vault.latestObservation
+        let matchingObservation = brains.vault.currentInterfaceObservation
         let matchingElement = try XCTUnwrap(
             matchingObservation.tree.findElement(heistId: "settings_button")
         )

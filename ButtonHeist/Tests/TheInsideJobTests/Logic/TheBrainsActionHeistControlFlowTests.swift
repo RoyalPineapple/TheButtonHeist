@@ -152,6 +152,34 @@ final class HeistMachineControlFlowTests: XCTestCase {
         XCTAssertEqual(loop.repeatUntilEvidence?.iterationCount, 1)
         XCTAssertEqual(loop.children.map(\.kind), [.repeatUntilIteration])
         XCTAssertEqual(loop.children.first?.children.map(\.kind), [.warn])
+        XCTAssertFalse(loop.children.flatMap(\.children).contains { $0.kind == .wait })
+    }
+
+    func testRepeatUntilRetriesAuthoredBodyWithoutReturningPredicateCheck() throws {
+        let plan = try HeistPlan(body: [
+            .repeatUntil(try RepeatUntilStep(
+                predicate: .exists(.label("Done")),
+                timeout: try .seconds(1),
+                body: [.action(ActionStep(command: .dismiss))]
+            )),
+        ])
+        var driver = try HeistMachineTestDriver(
+            plan: plan,
+            script: MachineRunScript(
+                snapshots: [
+                    makeTestObservationSnapshot(labels: []),
+                    makeTestObservationSnapshot(labels: ["Done"]),
+                ],
+                events: [.noChange, .noChange]
+            )
+        )
+
+        let completion = try driver.run()
+        let loop = try XCTUnwrap(completion.steps.first)
+
+        XCTAssertEqual(loop.status, .passed)
+        XCTAssertEqual(loop.repeatUntilEvidence?.iterationCount, 2)
+        XCTAssertEqual(loop.children.map { $0.children.map(\.kind) }, [[.action], [.action]])
     }
 
     func testRepeatUntilRejectsDeadlineMatchWithoutSettledNoChange() throws {
@@ -180,6 +208,7 @@ final class HeistMachineControlFlowTests: XCTestCase {
         XCTAssertEqual(loop.status, .failed)
         XCTAssertEqual(loop.repeatUntilEvidence?.iterationCount, 1)
         XCTAssertEqual(loop.children.map(\.kind), [.repeatUntilIteration])
+        XCTAssertFalse(loop.children.flatMap(\.children).contains { $0.kind == .wait })
     }
 }
 

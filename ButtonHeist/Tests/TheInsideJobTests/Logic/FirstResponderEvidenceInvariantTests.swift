@@ -73,7 +73,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             ],
             firstResponderHeistId: heistId
         )
-        brains.vault.observeInterface(originalScreen)
+        await brains.vault.installObservationForTesting(originalScreen)
         XCTAssertEqual(brains.vault.firstResponderHeistId, heistId)
 
         let replacement = UITextField()
@@ -88,7 +88,7 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
             ],
             firstResponderHeistId: nil
         )
-        brains.vault.observeInterface(replacementScreen)
+        await brains.vault.installObservationForTesting(replacementScreen)
         original = nil
 
         XCTAssertNil(releasedOriginal)

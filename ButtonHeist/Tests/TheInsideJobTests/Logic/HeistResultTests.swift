@@ -260,14 +260,8 @@ final class HeistResultTests: XCTestCase {
                         expected: expected
                     )
                 ),
-                HeistResultFixture.action(
-                    path: "$.body[0].failure.actions[0]",
-                    command: .takeScreenshot,
-                    result: ActionResult.success(
-                        payload: .screenshot(screenshot),
-                    )
-                ),
             ],
+            failureCapture: .captured(screenshot),
             durationMs: 2
         )
 

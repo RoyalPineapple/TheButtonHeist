@@ -23,9 +23,11 @@ extension TheVaultResolutionTests {
     }
 
     func testInvalidatedCurrentTruthRequiresLaterPublication() async {
-        let first = await vault.semanticObservationStream.commitVisibleObservationForTesting(
-            InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
-        )
+        let firstReceipt = await capturePublication(in: vault) {
+            await vault.semanticObservationStream.commitVisibleObservationForTesting(
+                InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
+            )
+        }
         vault.semanticObservationStream.invalidateCurrentAdmission()
 
         let admittedObservation = vault.semanticObservationStream.admittedObservation(
@@ -37,7 +39,7 @@ extension TheVaultResolutionTests {
 
         let waiter = Task { @MainActor in
             await vault.semanticObservationStream.waitForObservation(
-                after: first.historyRange.upperBound,
+                after: firstReceipt.historyRange.upperBound,
                 scope: .visible,
                 boundary: .cancellation
             )
@@ -53,12 +55,14 @@ extension TheVaultResolutionTests {
     }
 
     func testDiscoveryWaiterIgnoresVisiblePublication() async {
-        let first = await vault.semanticObservationStream.commitVisibleObservationForTesting(
-            InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
-        )
+        let firstReceipt = await capturePublication(in: vault) {
+            await vault.semanticObservationStream.commitVisibleObservationForTesting(
+                InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
+            )
+        }
         let waiter = Task { @MainActor in
             await vault.semanticObservationStream.waitForObservation(
-                after: first.historyRange.upperBound,
+                after: firstReceipt.historyRange.upperBound,
                 scope: .discovery,
                 boundary: .cancellation
             )
@@ -81,15 +85,17 @@ extension TheVaultResolutionTests {
 
     func testVisibleWaiterReceivesCanonicalGraphFromDiscoveryPublication() async {
         let sharedHeader = element(label: "Catalog", traits: .header)
-        let first = await vault.semanticObservationStream.commitVisibleObservationForTesting(
-            InterfaceObservation.makeForTests(elements: [
-                (sharedHeader, "catalog"),
-                (element(label: "First"), "first"),
-            ])
-        )
+        let firstReceipt = await capturePublication(in: vault) {
+            await vault.semanticObservationStream.commitVisibleObservationForTesting(
+                InterfaceObservation.makeForTests(elements: [
+                    (sharedHeader, "catalog"),
+                    (element(label: "First"), "first"),
+                ])
+            )
+        }
         let waiter = Task { @MainActor in
             await vault.semanticObservationStream.waitForObservation(
-                after: first.historyRange.upperBound,
+                after: firstReceipt.historyRange.upperBound,
                 scope: .visible,
                 boundary: .cancellation
             )
@@ -249,7 +255,7 @@ extension TheVaultResolutionTests {
     func testCancelledDiscoveryWaiterUnregisters() async {
         vault.semanticObservationStream.start()
 
-        let start = vault.semanticObservationStream.historyEndIndex()
+        let start = vault.state.history.endIndex
         let waiter = Task { @MainActor in
             await vault.semanticObservationStream.waitForObservation(
                 after: start,
@@ -274,7 +280,7 @@ extension TheVaultResolutionTests {
         )
 
         let result = await vault.semanticObservationStream.waitForObservation(
-            after: vault.semanticObservationStream.historyEndIndex(),
+            after: vault.state.history.endIndex,
             scope: .visible,
             boundary: .externalDeadline(deadline)
         )

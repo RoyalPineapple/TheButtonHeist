@@ -117,6 +117,36 @@ final class WireCommandParityTests: XCTestCase {
         XCTAssertEqual(TheFence.Command.perform.descriptor.timeout, .performStep)
     }
 
+    @ButtonHeistActor
+    func testEveryActionCommandTypeHasOnePerformTimeoutClass() async {
+        let expectedTimeouts: [HeistActionCommandType: FenceCommandFixedTimeout] = [
+            .activate: .standardAction,
+            .increment: .standardAction,
+            .decrement: .standardAction,
+            .performCustomAction: .standardAction,
+            .rotor: .standardAction,
+            .dismiss: .standardAction,
+            .magicTap: .standardAction,
+            .oneFingerTap: .standardAction,
+            .longPress: .standardAction,
+            .swipe: .standardAction,
+            .drag: .standardAction,
+            .typeText: .longAction,
+            .editAction: .standardAction,
+            .setPasteboard: .standardAction,
+            .takeScreenshot: .standardAction,
+            .scroll: .standardAction,
+            .scrollToVisible: .standardAction,
+            .scrollToEdge: .standardAction,
+            .dismissKeyboard: .standardAction,
+        ]
+
+        XCTAssertEqual(Set(expectedTimeouts.keys), Set(HeistActionCommandType.allCases))
+        for type in HeistActionCommandType.allCases {
+            XCTAssertEqual(TheFence.performActionTimeoutClass(for: type), expectedTimeouts[type])
+        }
+    }
+
     func testRunHeistDescriptorOwnsUnboundedTypedTimeoutDefault() {
         let descriptor = TheFence.Command.runHeist.descriptor
         let timeout = descriptor.parameter(named: .timeout)

@@ -3,117 +3,100 @@ import Foundation
 import ThePlans
 import TheScore
 
-struct FenceFailureDescriptor: Sendable {
-    let details: FailureDetails
-    let coreMessage: String
-
-    var errorCode: String { details.errorCode }
-    var phase: FailurePhase { details.phase }
-    var retryable: Bool { details.retryable }
-    var hint: String? { details.hint }
-}
-
 public extension FenceError {
-    internal var failureDescriptor: FenceFailureDescriptor {
+    internal var diagnosticFailure: DiagnosticFailure {
         switch self {
         case .invalidRequest(let message):
-            return FenceFailureDescriptor(
-                details: FailureDetails(code: .requestInvalid),
-                coreMessage: message
-            )
+            return DiagnosticFailure(message: message, details: FailureDetails(code: .requestInvalid))
         case .heistBuildDiagnostics(let diagnostics):
-            let message = diagnostics.renderedBuildDiagnosticMessage
-            return FenceFailureDescriptor(
+            return DiagnosticFailure(
+                message: diagnostics.renderedBuildDiagnosticMessage,
                 details: diagnostics.heistBuildFailureDetails,
-                coreMessage: message
+                buildDiagnostics: diagnostics
             )
         case .noDeviceFound:
-            let message = "No devices found within timeout. Is the app running?"
-            return FenceFailureDescriptor(
-                details: FailureDetails(code: .discoveryNoDeviceFound),
-                coreMessage: message
+            return DiagnosticFailure(
+                message: "No devices found within timeout. Is the app running?",
+                details: FailureDetails(code: .discoveryNoDeviceFound)
             )
         case .noMatchingDevice(let filter, let available):
             let list = available.isEmpty ? "(none)" : available.joined(separator: ", ")
-            let message = "No device matching '\(filter)'. Available: \(list)"
-            return FenceFailureDescriptor(
-                details: FailureDetails(code: .discoveryNoMatchingDevice),
-                coreMessage: message
+            return DiagnosticFailure(
+                message: "No device matching '\(filter)'. Available: \(list)",
+                details: FailureDetails(code: .discoveryNoMatchingDevice)
             )
         case .ambiguousDeviceTarget(let filter, let matches):
-            let list = matches.joined(separator: ", ")
-            let message = "Ambiguous device target '\(filter)' (matches: \(list))"
-            return FenceFailureDescriptor(
-                details: FailureDetails(code: .discoveryAmbiguousDeviceTarget),
-                coreMessage: message
+            return DiagnosticFailure(
+                message: "Ambiguous device target '\(filter)' (matches: \(matches.joined(separator: ", ")))",
+                details: FailureDetails(code: .discoveryAmbiguousDeviceTarget)
             )
         case .connectionTimeout:
-            let hint = "Is the app running? Check 'buttonheist list_devices' to see available devices."
-            return FenceFailureDescriptor(
-                details: FailureDetails(code: .setupTimeout, hint: hint),
-                coreMessage: "Connection timed out"
+            return DiagnosticFailure(
+                message: "Connection timed out",
+                details: FailureDetails(code: .setupTimeout, hint: HandoffConnectionError.recoveryHint)
             )
         case .connectionFailed(let message):
-            let hint = "Is the app running? Check 'buttonheist list_devices' to see available devices."
-            return FenceFailureDescriptor(
-                details: FailureDetails(code: .connectionFailed, hint: hint),
-                coreMessage: "Connection failed: \(message)"
+            return DiagnosticFailure(
+                message: "Connection failed: \(message)",
+                details: FailureDetails(code: .connectionFailed, hint: HandoffConnectionError.recoveryHint)
             )
         case .connectionFailure(let failure):
-            return FenceFailureDescriptor(
-                details: FailureDetails(code: failure.failureCode, hint: failure.hint),
-                coreMessage: failure.message
-            )
+            return DiagnosticFailure(message: failure.message, details: failure.details)
         case .sessionLocked(let message):
-            return FenceFailureDescriptor(
-                details: FailureDetails(code: .sessionLocked),
-                coreMessage: "Session locked: \(message)"
+            return DiagnosticFailure(
+                message: "Session locked: \(message)",
+                details: FailureDetails(code: .sessionLocked)
             )
         case .authFailed(let message):
-            let base = "Auth failed: \(message)"
-            return FenceFailureDescriptor(
-                details: FailureDetails(code: .authFailed),
-                coreMessage: base
+            return DiagnosticFailure(
+                message: "Auth failed: \(message)",
+                details: FailureDetails(code: .authFailed)
             )
         case .notConnected:
-            return FenceFailureDescriptor(
-                details: FailureDetails(code: .connectionNotConnected),
-                coreMessage: "Not connected to device."
+            return DiagnosticFailure(
+                message: "Not connected to device.",
+                details: FailureDetails(code: .connectionNotConnected)
             )
         case .actionTimeout:
-            return FenceFailureDescriptor(
-                details: FailureDetails(code: .requestTimeout),
-                coreMessage: "Command timed out waiting for a response from the app."
+            return DiagnosticFailure(
+                message: "Command timed out waiting for a response from the app.",
+                details: FailureDetails(code: .requestTimeout)
             )
         case .actionFailed(let message):
-            let displayMessage = "Action failed: \(message)"
-            return FenceFailureDescriptor(
-                details: FailureDetails(code: .requestActionFailed),
-                coreMessage: displayMessage
+            return DiagnosticFailure(
+                message: "Action failed: \(message)",
+                details: FailureDetails(code: .requestActionFailed)
             )
         case .serverError(let serverError):
-            let displayMessage = "Action failed: \(serverError.message)"
-            return FenceFailureDescriptor(
-                details: serverError.failureDetails,
-                coreMessage: displayMessage
+            return DiagnosticFailure(
+                message: "Action failed: \(serverError.message)",
+                details: serverError.failureDetails
             )
         }
     }
 
+    var coreMessage: String {
+        diagnosticFailure.message
+    }
+
+    var failureDetails: FailureDetails {
+        diagnosticFailure.details
+    }
+
     var errorCode: String {
-        failureDescriptor.errorCode
+        failureDetails.errorCode
     }
 
     var phase: FailurePhase {
-        failureDescriptor.phase
+        failureDetails.phase
     }
 
     var retryable: Bool {
-        failureDescriptor.retryable
+        failureDetails.retryable
     }
 
     var hint: String? {
-        failureDescriptor.hint
+        failureDetails.hint
     }
 
     internal var buildDiagnostics: [HeistBuildDiagnostic] {

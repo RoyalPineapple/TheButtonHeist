@@ -77,7 +77,7 @@ private extension HeistReport.Evidence {
         case .completed(let result, _):
             try container.encode(
                 ActionProjection(
-                    actionMethod: .heist(command),
+                    method: command.wireType.rawValue,
                     result: result,
                     announcementOverride: expectation?.matchedAnnouncement,
                     profile: profile,

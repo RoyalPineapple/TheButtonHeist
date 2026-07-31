@@ -7,18 +7,20 @@ struct FrameworkImportOwnershipTests {
     @Test
     func allowedComponentsOwnTheirFrameworkImports() throws {
         let fixtures: [(module: String, component: ButtonHeistComponent)] = [
-            ("UIKit", .runtime),
+            ("UIKit", .embeddedRuntime),
             ("UIKit", .demo),
-            ("SwiftUI", .runtime),
+            ("SwiftUI", .embeddedRuntime),
             ("SwiftUI", .demo),
-            ("Network", .runtime),
+            ("Network", .embeddedRuntime),
+            ("Network", .client),
+            ("Network", .support),
             ("Network", .score),
             ("Security", .score),
-            ("ObjectiveC", .runtime),
-            ("ObjectiveC.runtime", .runtime),
-            ("AccessibilitySnapshotCore", .runtime),
-            ("AccessibilitySnapshotParser", .runtime),
-            ("AccessibilitySnapshotPreviews", .runtime),
+            ("ObjectiveC", .embeddedRuntime),
+            ("ObjectiveC.runtime", .embeddedRuntime),
+            ("AccessibilitySnapshotCore", .embeddedRuntime),
+            ("AccessibilitySnapshotParser", .embeddedRuntime),
+            ("AccessibilitySnapshotPreviews", .embeddedRuntime),
         ]
 
         for (index, fixture) in fixtures.enumerated() {

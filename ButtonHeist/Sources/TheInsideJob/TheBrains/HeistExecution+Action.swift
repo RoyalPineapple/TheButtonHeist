@@ -45,7 +45,7 @@ extension HeistExecution.Machine {
         }
 
         let id = nextID()
-        activeLeaf = .action(HeistExecution.ActionLeaf(
+        running.activeLeaf = .action(HeistExecution.ActionLeaf(
             id: id,
             step: step,
             command: command,

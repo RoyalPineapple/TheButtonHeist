@@ -24,9 +24,15 @@ enum AccessibilityNotificationIngress {
 extension Observation {
 @MainActor
 internal final class Stream {
+    enum EventDelivery {
+        case all
+        case noChangesUntilActivated
+    }
+
     private struct EventReceiver {
         let subscriptionID: UInt64
         let receive: @MainActor (Event) -> Void
+        var delivery: EventDelivery
         var pending: [Event]
         var nextIndex: Int
         var isDelivering: Bool
@@ -37,15 +43,23 @@ internal final class Stream {
         internal let replay: Result<[Event], History.ReadError>
     }
 
+    internal struct ExecutionAdmission {
+        internal let baseline: TheVault.State.Current?
+        internal let retainedHistoryIndex: Int
+        internal let subscription: SemanticObservationSubscription
+        internal let demand: SemanticObservationDemand
+    }
+
     private struct CycleResult {
         let claim: AccessibilityNotificationCycleClaim
         let observationCommitted: Bool
     }
 
-    weak var vault: TheVault?
+    unowned let vault: TheVault
     let tripwire: TheTripwire
     var readTripwireSignal: @MainActor () -> TheTripwire.TripwireSignal
     private var cycle = SemanticObservationCycle()
+
     // MARK: - Observation Bookkeeping
 
     var scopePressure = SemanticObservationScopePressure()
@@ -59,7 +73,6 @@ internal final class Stream {
     var captureLineage: ScreenLineage {
         activeViewportMovementCount == 0 ? .resting : .viewportMovement
     }
-    var state = TheVault.State()
     var observationWaiters = WaiterStore<UInt64, SemanticObservationWaiter>()
     private var eventReceiver: EventReceiver?
     private let notificationIngress: AccessibilityNotificationIngress
@@ -102,10 +115,8 @@ internal final class Stream {
 
     internal func start() {
         guard cycle.start() else { return }
-        state.discardCurrentObservation()
-        if let vault {
-            notificationIngress.start(deliveringTo: vault.accessibilityNotifications)
-        }
+        vault.state.discardCurrentObservation()
+        notificationIngress.start(deliveringTo: vault.accessibilityNotifications)
         tripwire.observePulses { [weak self] pulse in
             self?.receive(pulse)
         }
@@ -117,9 +128,7 @@ internal final class Stream {
         tripwire.stopObservingPulses()
         stop.activeTask?.cancel()
         cancelObservationWaiters()
-        if let vault {
-            notificationIngress.stop(deliveringTo: vault.accessibilityNotifications)
-        }
+        notificationIngress.stop(deliveringTo: vault.accessibilityNotifications)
     }
 
     /// Raises the scope the vault reads at, without listening.
@@ -138,6 +147,7 @@ internal final class Stream {
     internal func subscribe(
         scope: SemanticObservationScope,
         replayingAfter historyIndex: Int,
+        delivery: EventDelivery = .all,
         receive: @escaping @MainActor (Event) -> Void
     ) -> EventInstallation {
         precondition(
@@ -149,6 +159,7 @@ internal final class Stream {
         eventReceiver = EventReceiver(
             subscriptionID: subscription.id,
             receive: receive,
+            delivery: delivery,
             pending: [],
             nextIndex: 0,
             isDelivering: false
@@ -166,9 +177,21 @@ internal final class Stream {
 
     func publish(_ publication: Publication) {
         guard var receiver = eventReceiver else { return }
-        receiver.pending.append(contentsOf: publication.events)
+        receiver.pending.append(contentsOf: publication.events.filter {
+            if receiver.delivery == .all { return true }
+            if case .noChange = $0 { return true }
+            return false
+        })
         eventReceiver = receiver
         drain(subscriptionID: receiver.subscriptionID)
+    }
+
+    internal func activateExecutionDelivery(_ subscription: SemanticObservationSubscription) {
+        guard var receiver = eventReceiver,
+              receiver.subscriptionID == subscription.id
+        else { return }
+        receiver.delivery = .all
+        eventReceiver = receiver
     }
 
     private func drain(subscriptionID: UInt64) {
@@ -200,7 +223,7 @@ internal final class Stream {
     /// Keeps committed semantic truth readable while requiring a fresh
     /// observation before it can be admitted to a waiter.
     func invalidateCurrentAdmission() {
-        state.invalidateCurrentAdmission()
+        vault.state.invalidateCurrentAdmission()
     }
 
     /// Runs `movement` with every reading taken during it attributed to the
@@ -275,10 +298,7 @@ internal final class Stream {
         guard cycle.owns(request.identity) else {
             return nil
         }
-        guard let vault else {
-            stop()
-            return nil
-        }
+        await beforeVisibleReading()
         let claim = vault.accessibilityNotifications.freezeObservationCycleClaim()
         let committed = await observeSemanticState(
             scope: request.scope,
@@ -314,23 +334,7 @@ internal final class Stream {
     }
 
     func invalidateAdmissionIfSignalChanged(to signal: TheTripwire.TripwireSignal) {
-        state.invalidateAdmissionIfSignalChanged(to: signal)
-    }
-
-    internal func current() -> TheVault.State.Current? {
-        state.current
-    }
-
-    internal func historyEndIndex() -> Int {
-        state.history.endIndex
-    }
-
-    internal func notifications() -> [Observation.Notification] {
-        state.notifications
-    }
-
-    internal var canonicalInterfaceTree: InterfaceTree {
-        state.interfaceTree
+        vault.state.invalidateAdmissionIfSignalChanged(to: signal)
     }
 
     internal func events(
@@ -338,42 +342,32 @@ internal final class Stream {
     ) -> Result<[Observation.Event], Observation.History.ReadError> {
         do {
             return .success(Array(
-                try state.history.events(after: historyIndex)
+                try vault.state.history.events(after: historyIndex)
             ))
         } catch {
             return .failure(error)
         }
     }
 
-    internal func evidence(
-        after boundary: TheVault.State.HistoryBoundary
-    ) -> Observation.Evidence {
-        state.evidence(after: boundary)
-    }
-
     internal func observationBoundary(
         scope: SemanticObservationScope
     ) -> TheVault.State.HistoryBoundary {
-        state.observationBoundary(scope: scope)
+        vault.state.observationBoundary(scope: scope)
     }
 
     internal func protectHistory(from index: Int) {
-        state.protectHistory(from: index)
+        vault.state.protectHistory(from: index)
     }
 
     internal func releaseHistory(from index: Int) {
-        state.releaseHistory(from: index)
+        vault.state.releaseHistory(from: index)
     }
 
     internal func advanceHistoryProtection(
         from index: Int,
         to nextIndex: Int
     ) {
-        state.advanceHistoryProtection(from: index, to: nextIndex)
-    }
-
-    internal func reset(retentionLimit: Int = TheVault.State.defaultRetentionLimit) {
-        state = TheVault.State(retentionLimit: retentionLimit)
+        vault.state.advanceHistoryProtection(from: index, to: nextIndex)
     }
 
 }

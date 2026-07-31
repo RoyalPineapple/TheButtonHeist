@@ -31,15 +31,3 @@ extension Error {
         return localizedDescription
     }
 }
-
-extension FenceError {
-    /// The concise message to show when `failureDetails` carries recovery guidance separately.
-    public var coreMessage: String {
-        failureDescriptor.coreMessage
-    }
-
-    /// Machine-readable metadata for this failure.
-    public var failureDetails: FailureDetails {
-        failureDescriptor.details
-    }
-}

@@ -46,7 +46,7 @@ extension ElementInflation {
 
         let treeElement = liveTarget.treeElement
         let description = Navigation.ScrollTargetDescription(treeElement).description
-        let historyIndex = vault.semanticObservationStream.historyEndIndex()
+        let historyIndex = vault.state.history.endIndex
         let admittedTarget: Result<AdmittedSemanticTarget, SemanticTargetResolutionFailure>
         if let admitted = inflatedTarget.identity.admittedSemanticTarget {
             admittedTarget = .success(admitted)

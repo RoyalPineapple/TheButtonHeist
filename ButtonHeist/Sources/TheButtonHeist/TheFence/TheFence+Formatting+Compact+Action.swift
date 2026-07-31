@@ -11,7 +11,7 @@ extension FenceResponse {
         profile: ProjectionProfile = .summary
     ) -> String {
         let projection = ActionProjection(
-            actionMethod: .fence(command),
+            method: command.rawValue,
             result: result,
             expectation: expectation,
             expectationHint: expectation.flatMap {
@@ -35,9 +35,9 @@ extension FenceResponse {
             text = "screenshot: \(Int(width))x\(Int(height))"
         case .value, .none:
             if let delta = projection.delta {
-                text = Self.compactDelta(delta, actionMethod: projection.actionMethod)
+                text = Self.compactDelta(delta, method: projection.method)
             } else {
-                text = "\(projection.actionMethod): ok"
+                text = "\(projection.method): ok"
             }
         }
         if let screenId = projection.screenId {
@@ -145,9 +145,9 @@ extension FenceResponse {
 
     private static func compactActionFailure(_ projection: ActionProjection) -> String {
         guard let failure = projection.failure else {
-            return "\(projection.actionMethod): ok"
+            return "\(projection.method): ok"
         }
-        var text = "\(projection.actionMethod): error[\(failure.compactCode)]: \(failure.message)"
+        var text = "\(projection.method): error[\(failure.compactCode)]: \(failure.message)"
         if let screenId = projection.screenId {
             text = "\(screenId) | \(text)"
         }

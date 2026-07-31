@@ -4,7 +4,9 @@ enum ButtonHeistComponent: String, ComponentKey {
     case plans
     case score
     case doctor
-    case runtime
+    case embeddedRuntime
+    case client
+    case support
     case testing
     case tools
     case mcp

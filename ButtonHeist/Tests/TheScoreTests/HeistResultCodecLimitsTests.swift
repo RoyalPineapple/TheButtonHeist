@@ -185,17 +185,13 @@ import ThePlans
         )
     }
 
-    @Test func `aggregate admission normalizes legacy failure capture roots`() throws {
+    @Test func `explicit failure capture stays out of canonical execution steps`() throws {
         let screenshot = failureScreenshot()
         let result = try HeistResult(
             steps: [
                 HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop"),
-                HeistResultFixture.action(
-                    path: "$.body[0].failure.actions[0]",
-                    command: .takeScreenshot,
-                    result: .success(payload: .screenshot(screenshot))
-                ),
             ],
+            failureCapture: .captured(screenshot),
             durationMs: 2
         )
 
@@ -203,23 +199,72 @@ import ThePlans
         #expect(result.failureCapture == .captured(screenshot))
     }
 
-    @Test func `aggregate admission retains skipped roots before terminal failure capture`() throws {
+    @Test func `codec normalizes legacy failure capture and preserves its wire shape`() throws {
         let screenshot = failureScreenshot()
-        let result = try HeistResult(
-            steps: [
-                HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop"),
-                skippedWarning(path: "$.body[1]"),
-                HeistResultFixture.action(
-                    path: "$.body[0].failure.actions[0]",
-                    command: .takeScreenshot,
-                    result: .success(payload: .screenshot(screenshot))
-                ),
-            ],
-            durationMs: 3
+        let legacyCapture = HeistResultFixture.action(
+            path: "$.body[0].failure.actions[0]",
+            command: .takeScreenshot,
+            result: .success(payload: .screenshot(screenshot))
+        )
+        let decoded = try HeistResultCodec.decode(
+            try resultData(
+                steps: [
+                    HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop"),
+                    skippedWarning(path: "$.body[1]"),
+                    legacyCapture,
+                ],
+                durationMs: 3
+            )
+        ).result
+        let encoded = try JSONEncoder().encode(decoded)
+        let roundTrip = try JSONDecoder().decode(HeistResult.self, from: encoded)
+        let encodedSteps = try JSONProbe(data: encoded).array("steps")
+
+        #expect(decoded.steps.map(\.status) == [.failed, .skipped])
+        #expect(decoded.failureCapture == .captured(screenshot))
+        #expect(roundTrip == decoded)
+        #expect(encodedSteps.count == 3)
+        #expect(try encodedSteps.last?.string("path") == "$.body[0].failure.actions[0]")
+    }
+
+    @Test func `explicit failure capture requires a failed execution step`() throws {
+        let screenshot = failureScreenshot()
+        let expected = HeistResultCodecError.incoherentExecutionEvidence(
+            path: .body,
+            reason: "failure capture requires a failed execution step"
         )
 
-        #expect(result.steps.map(\.status) == [.failed, .skipped])
-        #expect(result.failureCapture == .captured(screenshot))
+        #expect(throws: expected) {
+            _ = try HeistResult(
+                steps: [HeistResultFixture.warning(path: "$.body[0]", message: "passed")],
+                failureCapture: .captured(screenshot),
+                durationMs: 3
+            )
+        }
+    }
+
+    @Test func `aggregate admission rejects failure capture steps outside decoding`() throws {
+        let screenshot = failureScreenshot()
+        let path: HeistExecutionPath = "$.body[0].failure.actions[0]"
+        let expected = HeistResultCodecError.incoherentExecutionEvidence(
+            path: path,
+            reason: "failure capture action must not appear in canonical execution steps"
+        )
+
+        #expect(throws: expected) {
+            _ = try HeistResult(
+                steps: [
+                    HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop"),
+                    skippedWarning(path: "$.body[1]"),
+                    HeistResultFixture.action(
+                        path: "$.body[0].failure.actions[0]",
+                        command: .takeScreenshot,
+                        result: .success(payload: .screenshot(screenshot))
+                    ),
+                ],
+                durationMs: 3
+            )
+        }
     }
 
     @Test(
@@ -292,7 +337,7 @@ import ThePlans
                 ),
                 HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop"),
             ],
-            containing: ["root path $.body[0].failure.actions[0] is not a legal root step path"]
+            containing: ["failure capture action must not appear in canonical execution steps"]
         )
     }
 
@@ -306,7 +351,7 @@ import ThePlans
                     result: .success(payload: .screenshot(nil))
                 ),
             ],
-            containing: ["root path $.body[0].failure.actions[0] is not a legal root step path"]
+            containing: ["failure capture action must not appear in canonical execution steps"]
         )
     }
 
@@ -321,7 +366,7 @@ import ThePlans
                 ),
                 skippedWarning(path: "$.body[1]"),
             ],
-            containing: ["root path $.body[0].failure.actions[0] is not a legal root step path"]
+            containing: ["failure capture action must not appear in canonical execution steps"]
         )
     }
 
@@ -335,7 +380,7 @@ import ThePlans
                     result: .success(payload: .screenshot(nil))
                 ),
             ],
-            containing: ["root path $.body[0].failure.actions[1] is not a legal root step path"]
+            containing: ["failure capture action must not appear in canonical execution steps"]
         )
     }
 

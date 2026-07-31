@@ -57,7 +57,7 @@ extension Navigation {
         )
         if let target,
            explorationGoalIsSatisfied(target),
-           let current = vault.semanticObservationStream.current() {
+           let current = vault.state.current {
             return exploration.finish(
                 startTime: CACurrentMediaTime(),
                 current: current,

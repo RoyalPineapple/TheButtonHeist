@@ -169,7 +169,6 @@ public extension Heist {
             self.failedStepPath = failedStep?.path ?? "$"
             self.failedStepKind = failedStep?.kind ?? .fail
             self.message = failedStep?.reportActionResult?.message
-                ?? failedStep?.reportFailureMessage
                 ?? failedStep?.reportMessage
                 ?? "heist failed"
             self.diagnostic = failedStep?.failure.map(Self.diagnostic)
@@ -305,6 +304,10 @@ extension TheInsideJob {
         // previous run's settled semantic world when the app is already on
         // another screen.
         await brains.vault.resetInterfaceForLifecycle()
+        guard case .committed = await brains.vault.semanticObservationStream
+            .refreshedVisibleObservation(boundary: .cancellation) else {
+            return .failure(.accessibilityTreeUnavailable)
+        }
         let result = await brains.executeHeistPlan(
             plan,
             argument: argument,

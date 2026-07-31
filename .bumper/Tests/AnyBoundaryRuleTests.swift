@@ -9,7 +9,7 @@ struct AnyBoundaryRuleTests {
         let path: RelativeFilePath = "ButtonHeist/Sources/TheInsideJob/UntypedValue.swift"
         let report = try evaluateButtonHeistRules(
             path: path,
-            component: .runtime,
+            component: .embeddedRuntime,
             source: "func render(_ value: Any) {}"
         )
 
@@ -37,7 +37,7 @@ struct AnyBoundaryRuleTests {
         for (path, source) in fixtures {
             let report = try evaluateButtonHeistRules(
                 path: path,
-                component: .runtime,
+                component: .embeddedRuntime,
                 source: source
             )
             #expect(report.violations.isEmpty)
@@ -45,12 +45,12 @@ struct AnyBoundaryRuleTests {
     }
 
     @Test
-    func boundaryFunctionNameDoesNotExemptOtherFiles() throws {
+    func nonBoundaryFunctionNamesDoNotExemptAny() throws {
         let path: RelativeFilePath = "ButtonHeist/Sources/TheInsideJob/OtherDecoder.swift"
         let report = try evaluateButtonHeistRules(
             path: path,
-            component: .runtime,
-            source: "func decodeFoundationInfoPlistValue(_ object: Any) {}"
+            component: .embeddedRuntime,
+            source: "func decodeOtherFoundationValue(_ object: Any) {}"
         )
 
         #expect(report.contains(ViolationMatcher(id: "buttonheist.any_boundary", path: path)))

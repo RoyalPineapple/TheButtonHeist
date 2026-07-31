@@ -309,7 +309,7 @@ final class ClientMessageTests: XCTestCase {
               action.expectationPolicy.expectedExpectation == nil else {
             return XCTFail("Expected heistPlan envelope, got \(decoded.message)")
         }
-        guard case .typeText(let payload) = try action.command.resolve(in: .empty) else {
+        guard case .typeText(let payload) = try action.command.resolve(in: .empty).payload else {
             return XCTFail("Expected resolved typeText command")
         }
         XCTAssertEqual(payload.text, "hello")

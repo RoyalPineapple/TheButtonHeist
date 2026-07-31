@@ -85,7 +85,6 @@ public struct HeistReport: Sendable, Equatable {
             step: HeistExecutionStepResult,
             children: [Node]
         ) {
-            let actionResult = step.reportActionResult
             path = step.path
             kind = step.kind
             capability = step.invocation?.path
@@ -98,13 +97,12 @@ public struct HeistReport: Sendable, Equatable {
                 Failure(
                     detail: $0,
                     message: step.reportFailureMessage,
-                    actionKind: actionResult.flatMap {
-                        $0.outcome.isSuccess ? nil : $0.outcome.failureKind
-                    }
+                    actionKind: step.actionEvidence?.result?.outcome.failureKind
+                        ?? (step.waitEvidence == nil ? nil : $0.actionFailureKind)
                 )
             }
             abortedAtChildPath = step.abortedAtChildPath
-            activationTrace = actionResult?.activationTrace
+            activationTrace = step.reportActionResult?.activationTrace
             self.children = children
             evidence = Evidence(step: step)
         }
@@ -321,9 +319,12 @@ private extension HeistReport {
             outputNodeCount += 1
             executedNodeCount += step.status == .skipped ? 0 : 1
             metricAccumulator.appendMetrics(for: step)
-            if let screenId = step.reportActionResult?
-                .observationEvidence?
-                .current?
+            let observation: Observation.Evidence? = switch step.node {
+            case .action: step.actionEvidence?.result?.observationEvidence
+            case .wait: step.waitEvidence?.observation
+            default: nil
+            }
+            if let screenId = observation?.current?
                 .context
                 .screenId {
                 finalScreenId = screenId

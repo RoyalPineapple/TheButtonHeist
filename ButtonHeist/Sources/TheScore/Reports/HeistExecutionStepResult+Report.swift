@@ -10,7 +10,6 @@ package extension HeistExecutionStepResult {
         guard case .invocation(let path, let argument, _) = node else { return nil }
         return HeistInvocationStep(path: path, argument: argument)
     }
-
 }
 
 public extension HeistExecutionStepResult {
@@ -31,30 +30,10 @@ public extension HeistExecutionStepResult {
         failure?.observed ?? reportSuccessMessage
     }
 
-    /// Action result surfaced to human/report adapters.
-    var reportActionResult: ActionResult? {
-        switch node {
-        case .action:
-            actionEvidence?.result
-        case .wait:
-            reportWaitActionResult
-        case .conditional,
-             .forEachElement,
-             .forEachString,
-             .forEachElementIteration,
-             .forEachStringIteration,
-             .repeatUntil,
-             .repeatUntilIteration,
-             .warning,
-             .failure,
-             .heist,
-             .invocation:
-            nil
-        }
-    }
+    /// Authored action result surfaced to human/report adapters.
+    var reportActionResult: ActionResult? { actionEvidence?.result }
 
-    /// Public-facing failure message for a failed step, derived from factual
-    /// execution evidence.
+    /// Public-facing failure message for a failed step, derived from factual execution evidence.
     var reportFailureMessage: String? {
         guard let failure else { return nil }
         if children.contains(where: { $0.status == .failed }) {
@@ -70,32 +49,15 @@ public extension HeistExecutionStepResult {
 }
 
 private extension HeistExecutionStepResult {
-    var reportWaitActionResult: ActionResult? {
-        guard let evidence = waitEvidence else { return nil }
-        if status == .passed {
-            let message: String
-            do {
-                message = try evidence.replay().actual ?? "matched"
-            } catch {
-                message = "matched"
-            }
-            return .success(
-                payload: .wait,
-                message: message,
-                observation: .observed(evidence.observation)
-            )
-        }
-        guard let failure else { return nil }
-        return .failure(
-            payload: .wait,
-            failureKind: failure.actionFailureKind,
-            message: failure.observed,
-            observation: .observed(evidence.observation)
-        )
-    }
-
     var reportSuccessMessage: String? {
         switch node {
+        case .wait:
+            guard let evidence = waitEvidence else { return nil }
+            do {
+                return try evidence.replay().actual ?? "matched"
+            } catch {
+                return "matched"
+            }
         case .conditional:
             guard let evidence = caseSelectionEvidence else { return nil }
             switch evidence.selection.outcome {
@@ -132,13 +94,13 @@ private extension HeistExecutionStepResult {
             return invocationPath.description
         case .warning(let message, .passed):
             return message.description
-        case .action, .wait, .failure, .heist, .warning:
+        case .action, .failure, .heist, .warning:
             return nil
         }
     }
 }
 
-private extension HeistFailureDetail {
+extension HeistFailureDetail {
     var actionFailureKind: ActionFailure.Kind {
         switch category {
         case .timeout:

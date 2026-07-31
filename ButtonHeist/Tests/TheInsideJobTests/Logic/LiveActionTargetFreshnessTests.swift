@@ -213,7 +213,7 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
             )
         ))
         let installedElement = try XCTUnwrap(
-            vault.latestObservation.tree.findElement(heistId: heistId)
+            vault.currentInterfaceObservation.tree.findElement(heistId: heistId)
         )
         guard case .resolved(let target) = vault.resolveLiveActionTarget(for: installedElement) else {
             throw LiveActionTargetFixtureError.unavailable

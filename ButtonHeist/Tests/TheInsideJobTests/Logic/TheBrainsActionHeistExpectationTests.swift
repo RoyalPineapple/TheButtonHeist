@@ -197,7 +197,7 @@ final class HeistMachineExpectationTests: XCTestCase {
         }
         XCTAssertEqual(firstObservationID, id)
         XCTAssertTrue(
-            machine.activeLeaf?.admits(.request(firstFinishID)) == true
+            machine.running.activeLeaf?.admits(.request(firstFinishID)) == true
         )
 
         guard case .wait = machine.advance(
@@ -205,9 +205,14 @@ final class HeistMachineExpectationTests: XCTestCase {
         ) else {
             return XCTFail("A final-capture change must reopen observation")
         }
-        XCTAssertNil(machine.activeLeaf?.finishingObservationRequestID)
+        guard case .wait(let activeLeaf)? = machine.running.activeLeaf else {
+            return XCTFail("The active leaf must remain an observation wait")
+        }
+        if case .finishingObservation = activeLeaf.phase {
+            XCTFail("A reopened observation must not retain a finishing request")
+        }
         XCTAssertFalse(
-            machine.activeLeaf?.admits(.request(firstFinishID)) == true
+            machine.running.activeLeaf?.admits(.request(firstFinishID)) == true
         )
 
         guard case .perform(let secondFinish) = machine.advance(
@@ -223,10 +228,10 @@ final class HeistMachineExpectationTests: XCTestCase {
         XCTAssertEqual(secondObservationID, id)
         XCTAssertNotEqual(secondFinishID, firstFinishID)
         XCTAssertFalse(
-            machine.activeLeaf?.admits(.request(firstFinishID)) == true
+            machine.running.activeLeaf?.admits(.request(firstFinishID)) == true
         )
         XCTAssertTrue(
-            machine.activeLeaf?.admits(.request(secondFinishID)) == true
+            machine.running.activeLeaf?.admits(.request(secondFinishID)) == true
         )
 
         let lateChange = makeTestObservationSnapshot(labels: ["Late Change"])
@@ -252,10 +257,11 @@ final class HeistMachineExpectationTests: XCTestCase {
         )) else {
             return XCTFail("A superseded final-capture response must be ignored")
         }
-        XCTAssertEqual(
-            machine.activeLeaf?.finishingObservationRequestID,
-            secondFinishID
-        )
+        guard case .wait(let activeLeaf)? = machine.running.activeLeaf,
+              case .finishingObservation(let activeFinishID, _) = activeLeaf.phase else {
+            return XCTFail("The replacement final capture must remain active")
+        }
+        XCTAssertEqual(activeFinishID, secondFinishID)
 
         guard case .complete(let completion) = machine.advance(
             .observationFinished(

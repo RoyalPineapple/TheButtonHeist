@@ -48,8 +48,7 @@ final class JSONLinesSession {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { continue }
 
-            let envelope = await executeRequestLine(trimmed)
-            outputResponse(envelope)
+            await executeRequestLine(trimmed)
         }
 
         idleMonitor?.stop()
@@ -74,31 +73,29 @@ final class JSONLinesSession {
         return monitor
     }
 
-    private func executeRequestLine(_ line: String) async -> CLIRunner.ResponseEnvelope {
+    private func executeRequestLine(_ line: String) async {
         let parsedRequest: CLIParsedRequest
         do {
             parsedRequest = try CLIMachineRequestParser.parsedRequest(from: line)
         } catch let error as CLIMachineRequestError {
-            return CLIRunner.ResponseEnvelope(
-                response: .error(error.diagnosticFailure),
-                requestId: error.requestId
-            )
+            output(.error(error.diagnosticFailure), requestId: error.requestId)
+            return
         } catch {
-            return CLIRunner.ResponseEnvelope(response: .failure(error))
+            output(.failure(error))
+            return
         }
 
         do {
             let operation = try fence.admit(parsedRequest.input)
             let response = try await fence.execute(operation)
-            return CLIRunner.ResponseEnvelope(response: response, requestId: parsedRequest.requestId)
+            output(response, requestId: parsedRequest.requestId)
         } catch {
-            return CLIRunner.ResponseEnvelope(response: .failure(error), requestId: parsedRequest.requestId)
+            output(.failure(error), requestId: parsedRequest.requestId)
         }
     }
 
-    // MARK: - Output
-
-    private func outputResponse(_ envelope: CLIRunner.ResponseEnvelope) {
-        CLIRunner.output(.response(CLIRunner.FormattedResponse(envelope: envelope, format: format)))
+    private func output(_ response: FenceResponse, requestId: PublicRequestId? = nil) {
+        CLIRunner.output(.response(response), format: format, requestId: requestId)
     }
+
 }

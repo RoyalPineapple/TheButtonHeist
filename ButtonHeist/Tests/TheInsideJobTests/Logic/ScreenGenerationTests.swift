@@ -13,17 +13,22 @@ final class ScreenGenerationTests: XCTestCase {
     func testCommittedDiscoveryPagesMergeWithoutScreenBoundary() async throws {
         let brains = TheBrains(tripwire: TheTripwire())
 
-        let first = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
-            screen(header: "Catalog", entries: [("Visible", .staticText, "visible")])
-        )
-        let second = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
-            screen(header: "Catalog", entries: [("Discovered", .button, "discovered")])
-        )
+        let firstReceipt = await capturePublication(in: brains.vault) {
+            await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+                screen(header: "Catalog", entries: [("Visible", .staticText, "visible")])
+            )
+        }
+        let secondReceipt = await capturePublication(in: brains.vault) {
+            await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+                screen(header: "Catalog", entries: [("Discovered", .button, "discovered")])
+            )
+        }
+        let second = secondReceipt.publication
         let retained = try brains.vault.semanticObservationStream
-            .events(after: first.historyRange.upperBound)
+            .events(after: firstReceipt.historyRange.upperBound)
             .get()
 
-        XCTAssertEqual(first.historyRange.upperBound, second.historyRange.lowerBound)
+        XCTAssertEqual(firstReceipt.historyRange.upperBound, secondReceipt.historyRange.lowerBound)
         XCTAssertEqual(retained, second.events)
         XCTAssertFalse(retained.contains { event in
             if case .screenChanged = event { return true }
@@ -36,9 +41,11 @@ final class ScreenGenerationTests: XCTestCase {
 
     func testCommittedDiscoveryReplacementAdvancesGenerationThroughHistory() async throws {
         let brains = TheBrains(tripwire: TheTripwire())
-        let before = await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
-            screen(header: "Home", entries: [("Old Action", .button, "old_action")])
-        )
+        let beforeReceipt = await capturePublication(in: brains.vault) {
+            await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+                screen(header: "Home", entries: [("Old Action", .button, "old_action")])
+            )
+        }
         let actionWindow = brains.vault.accessibilityNotifications.beginActionWindow()
         defer { actionWindow.cancel() }
         brains.vault.accessibilityNotifications.recordForTesting(
@@ -46,6 +53,7 @@ final class ScreenGenerationTests: XCTestCase {
             notificationData: .none,
             associatedElement: .none
         )
+        let afterLowerBound = brains.vault.state.history.endIndex
         let admitted: Observation.Publication? = await actionWindow.admitCausallyCovered { coverage in
             let publication = await brains.vault.semanticObservationStream
                 .commitDiscoveryObservationForTesting(
@@ -62,11 +70,13 @@ final class ScreenGenerationTests: XCTestCase {
             return publication
         }
         let after = try XCTUnwrap(admitted)
+        let afterUpperBound = brains.vault.state.history.endIndex
+        let afterRange = afterLowerBound..<afterUpperBound
         let retained = try brains.vault.semanticObservationStream
-            .events(after: before.historyRange.upperBound)
+            .events(after: beforeReceipt.historyRange.upperBound)
             .get()
 
-        XCTAssertEqual(before.historyRange.upperBound, after.historyRange.lowerBound)
+        XCTAssertEqual(beforeReceipt.historyRange.upperBound, afterRange.lowerBound)
         XCTAssertEqual(retained, after.events)
         XCTAssertEqual(retained.filter { event in
             if case .screenChanged = event { return true }

@@ -9,6 +9,15 @@ internal enum SemanticObservationWaitBoundary: Sendable, Equatable {
     case externalDeadline(SemanticObservationDeadline)
 }
 
+@MainActor
+internal final class SemanticObservationCycleReceipt {
+    var completed = false
+}
+
+internal enum SemanticObservationCycleContext {
+    @TaskLocal static var receipt: SemanticObservationCycleReceipt?
+}
+
 internal enum SemanticObservationWaitResult: Sendable, Equatable {
     case observation(TheVault.State.Current)
     case cycleCompletedWithoutObservation
@@ -46,7 +55,7 @@ extension Observation.Stream {
         defer { subscription.cancel() }
 
         if case .observationCycle = boundary {
-            return await withCheckedContinuation { continuation in
+            let result = await withCheckedContinuation { continuation in
                 guard oneShot.register(continuation) else {
                     continuation.resume(returning: .cancelled)
                     return
@@ -59,6 +68,10 @@ extension Observation.Stream {
                     boundary: boundary
                 )
             }
+            if result != .cancelled, result != .deadlineReached {
+                SemanticObservationCycleContext.receipt?.completed = true
+            }
+            return result
         }
         return await oneShot.wait(
             cancellationValue: .cancelled,
@@ -115,7 +128,7 @@ extension Observation.Stream {
         if let historyIndex {
             cursor = historyIndex
         } else {
-            cursor = state.history.endIndex
+            cursor = vault.state.history.endIndex
         }
         while true {
             switch await waitForObservation(
@@ -130,7 +143,7 @@ extension Observation.Stream {
                 ) {
                     return latest
                 }
-                cursor = state.history.endIndex
+                cursor = vault.state.history.endIndex
             case .cycleCompletedWithoutObservation:
                 return nil
             case .deadlineReached, .cancelled, .unavailable:
@@ -183,7 +196,7 @@ extension Observation.Stream {
         completedScope: SemanticObservationScope?,
         observationCommitted: Bool?
     ) -> SemanticObservationWaitResult? {
-        switch state.current(
+        switch vault.state.current(
             after: waiter.historyIndex,
             scope: waiter.scope
         ) {

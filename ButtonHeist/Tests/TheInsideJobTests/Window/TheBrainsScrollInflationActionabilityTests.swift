@@ -83,7 +83,7 @@ extension TheBrainsScrollTests {
             refreshVisibleObservation: {
                 advanceInflationObservationClock(&now)
                 guard let current =
-                    self.brains.vault.semanticObservationStream.current()
+                    self.brains.vault.state.current
                 else {
                     return .unavailable(.sourceTreeUnavailable)
                 }
@@ -141,7 +141,7 @@ extension TheBrainsScrollTests {
             XCTFail(
                 "Expected placement target to have fresh live geometry: "
                     + String(
-                        describing: brains.vault.latestObservation.tree
+                        describing: brains.vault.currentInterfaceObservation.tree
                             .findElement(heistId: heistId)?
                             .element.shape
                     )

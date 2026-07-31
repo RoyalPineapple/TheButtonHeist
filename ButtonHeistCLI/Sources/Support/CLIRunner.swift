@@ -7,7 +7,7 @@ enum CLIRunner {
 
     // MARK: - Nested Types
 
-    typealias CommandResultProjection = @ButtonHeistActor (TheFence, FenceResponse) throws -> CommandResult
+    typealias CommandOutputProjection = @ButtonHeistActor (TheFence, FenceResponse) throws -> CommandOutput
 
     enum ExecutionMode: Equatable {
         case connected
@@ -19,79 +19,20 @@ enum CLIRunner {
         let connection: ConnectionOptions
         let format: OutputFormat?
         let arguments: TheFence.CommandArgumentEnvelope
-        let executionMode: ExecutionMode
-        let statusMessage: String?
-        let configuration: EnvironmentConfig?
-        let cleanup: () -> Void
-        let result: CommandResultProjection?
-
-        init(
-            fenceDescriptor: FenceCommandDescriptor,
-            connection: ConnectionOptions,
-            format: OutputFormat?,
-            arguments: TheFence.CommandArgumentEnvelope,
-            executionMode: ExecutionMode = .connected,
-            statusMessage: String? = nil,
-            configuration: EnvironmentConfig? = nil,
-            cleanup: @escaping () -> Void = {},
-            result: CommandResultProjection? = nil
-        ) {
-            self.fenceDescriptor = fenceDescriptor
-            self.connection = connection
-            self.format = format
-            self.arguments = arguments
-            self.executionMode = executionMode
-            self.statusMessage = statusMessage
-            self.configuration = configuration
-            self.cleanup = cleanup
-            self.result = result
-        }
+        private(set) var executionMode: ExecutionMode = .connected
+        private(set) var statusMessage: String?
+        private(set) var configuration: EnvironmentConfig?
+        private(set) var cleanup: () -> Void = {}
+        private(set) var output: CommandOutputProjection?
     }
 
-    struct ResponseEnvelope {
-        let response: FenceResponse
-        let requestId: PublicRequestId?
-
-        init(response: FenceResponse, requestId: PublicRequestId? = nil) {
-            self.response = response
-            self.requestId = requestId
-        }
-    }
-
-    struct FormattedResponse {
-        let envelope: ResponseEnvelope
-        let format: OutputFormat
-
-        init(
-            response: FenceResponse,
-            format: OutputFormat,
-            requestId: PublicRequestId? = nil
-        ) {
-            self.envelope = ResponseEnvelope(response: response, requestId: requestId)
-            self.format = format
-        }
-
-        init(envelope: ResponseEnvelope, format: OutputFormat) {
-            self.envelope = envelope
-            self.format = format
-        }
-    }
-
-    enum CommandResult {
-        case response(FormattedResponse)
+    enum CommandOutput {
+        case response(FenceResponse)
         case binary(Data)
-
-        var isFailure: Bool {
-            switch self {
-            case .response(let formatted):
-                return formatted.envelope.response.isFailure
-            case .binary:
-                return false
-            }
-        }
+        case junit(response: FenceResponse, xml: String?, path: String)
     }
 
-    enum RenderedCommandResult: Equatable {
+    enum RenderedOutput: Equatable {
         case text(String)
         case binary(Data)
         case failedText(String)
@@ -107,7 +48,7 @@ enum CLIRunner {
         }
     }
 
-    typealias JSONResponseRenderer = (FormattedResponse) throws -> Data
+    typealias JSONResponseRenderer = (FenceResponse, PublicRequestId?) throws -> Data
 
     private struct JSONResponseStatus: Decodable {
         let code: KnownFailureCode?
@@ -145,23 +86,19 @@ enum CLIRunner {
                 throw error
             }
         } catch {
-            output(.response(FormattedResponse(response: .failure(error), format: fallbackFormat)))
+            output(.response(.failure(error)), format: fallbackFormat)
             throw ExitCode.failure
         }
         defer { fence.stop() }
 
-        let commandResult: CommandResult
+        let commandOutput: CommandOutput
         do {
-            if let result = descriptor.result {
-                commandResult = try result(fence, response)
-            } else {
-                commandResult = .response(FormattedResponse(response: response, format: fallbackFormat))
-            }
+            commandOutput = try descriptor.output?(fence, response) ?? .response(response)
         } catch {
-            commandResult = .response(FormattedResponse(response: .failure(error), format: fallbackFormat))
+            commandOutput = .response(.failure(error))
         }
 
-        if output(commandResult).isFailure {
+        if output(commandOutput, format: fallbackFormat).isFailure {
             throw ExitCode.failure
         }
     }
@@ -170,8 +107,12 @@ enum CLIRunner {
 
     @discardableResult
     @ButtonHeistActor
-    static func output(_ result: CommandResult) -> RenderedCommandResult {
-        let rendered = renderedOutput(for: result)
+    static func output(
+        _ output: CommandOutput,
+        format: OutputFormat,
+        requestId: PublicRequestId? = nil
+    ) -> RenderedOutput {
+        let rendered = renderedOutput(for: output, format: format, requestId: requestId)
         switch rendered {
         case .text(let text), .failedText(let text):
             writeOutput(text)
@@ -184,33 +125,68 @@ enum CLIRunner {
     }
 
     static func renderedOutput(
-        for result: CommandResult,
+        for output: CommandOutput,
+        format: OutputFormat,
+        requestId: PublicRequestId? = nil,
         jsonRenderer: JSONResponseRenderer = defaultJSONResponse
-    ) -> RenderedCommandResult {
-        switch result {
-        case .response(let formatted):
-            return renderedResponse(formatted, jsonRenderer: jsonRenderer)
+    ) -> RenderedOutput {
+        switch output {
+        case .response(let response):
+            return renderedResponse(
+                response,
+                format: format,
+                requestId: requestId,
+                jsonRenderer: jsonRenderer
+            )
         case .binary(let data):
             return .binary(data)
+        case .junit(let response, let xml, let path):
+            if let xml {
+                do {
+                    try xml.write(
+                        to: URL(fileURLWithPath: path),
+                        atomically: true,
+                        encoding: .utf8
+                    )
+                    logStatus("JUnit report written to \(path)")
+                } catch {
+                    return renderedResponse(
+                        .failure(error),
+                        format: format,
+                        requestId: requestId,
+                        jsonRenderer: jsonRenderer
+                    )
+                }
+            } else {
+                logStatus("Warning: --junit requested but run_heist did not produce a report")
+            }
+            return renderedResponse(
+                response,
+                format: format,
+                requestId: requestId,
+                jsonRenderer: jsonRenderer
+            )
         }
     }
 
     private static func renderedResponse(
-        _ formatted: FormattedResponse,
+        _ response: FenceResponse,
+        format: OutputFormat,
+        requestId: PublicRequestId?,
         jsonRenderer: JSONResponseRenderer
-    ) -> RenderedCommandResult {
+    ) -> RenderedOutput {
         let presenter = FenceResponsePresenter(profile: .summary)
-        let responseFailed = formatted.envelope.response.isFailure
-        switch formatted.format {
+        let responseFailed = response.isFailure
+        switch format {
         case .human:
-            let text = presenter.humanText(for: formatted.envelope.response)
+            let text = presenter.humanText(for: response)
             return responseFailed ? .failedText(text) : .text(text)
         case .compact:
-            let text = presenter.compactText(for: formatted.envelope.response)
+            let text = presenter.compactText(for: response)
             return responseFailed ? .failedText(text) : .text(text)
         case .json:
             do {
-                let data = try jsonRenderer(formatted)
+                let data = try jsonRenderer(response, requestId)
                 if let json = String(data: data, encoding: .utf8) {
                     let failed = responseFailed || isJSONRenderingFailure(data)
                     return failed ? .failedText(json) : .text(json)
@@ -222,10 +198,13 @@ enum CLIRunner {
         }
     }
 
-    private static func defaultJSONResponse(_ formatted: FormattedResponse) throws -> Data {
+    private static func defaultJSONResponse(
+        _ response: FenceResponse,
+        requestId: PublicRequestId?
+    ) throws -> Data {
         try FenceResponsePresenter(profile: .summary).jsonData(
-            for: formatted.envelope.response,
-            requestId: formatted.envelope.requestId
+            for: response,
+            requestId: requestId
         )
     }
 

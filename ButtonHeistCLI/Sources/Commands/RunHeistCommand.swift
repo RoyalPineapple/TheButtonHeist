@@ -60,22 +60,6 @@ struct RunHeistCommand: ConnectedOneShotCLICommand {
                 argument: argument
             )
             let heistPath = prepared.path
-            let format = output.format ?? .auto
-            let result: CLIRunner.CommandResultProjection?
-            if let junitPath = junit {
-                let junitResult: CLIRunner.CommandResultProjection = { fence, response in
-                    try Self.writeJUnit(
-                        fence: fence,
-                        response: response,
-                        junitPath: junitPath,
-                        heistPath: heistPath,
-                        format: format
-                    )
-                }
-                result = junitResult
-            } else {
-                result = nil
-            }
             return CLIRunner.CommandDescriptor(
                 fenceDescriptor: Self.fenceDescriptor,
                 connection: connection,
@@ -83,39 +67,22 @@ struct RunHeistCommand: ConnectedOneShotCLICommand {
                 arguments: arguments,
                 statusMessage: "Running heist...",
                 cleanup: prepared.cleanup,
-                result: result
+                output: junit.map { junitPath -> CLIRunner.CommandOutputProjection in
+                    { fence, response in
+                        guard case .heistExecution(_, let report) = response else {
+                            return .junit(response: response, xml: nil, path: junitPath)
+                        }
+                        let name = heistPath
+                            .map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent } ?? "heist"
+                        let junitXML = fence.junitXML(for: report, heistName: name)
+                        return .junit(response: response, xml: junitXML, path: junitPath)
+                    }
+                }
             )
         } catch {
             prepared.cleanup()
             throw error
         }
-    }
-
-    @ButtonHeistActor
-    private static func writeJUnit(
-        fence: TheFence,
-        response: FenceResponse,
-        junitPath: String,
-        heistPath: String?,
-        format: OutputFormat
-    ) throws -> CLIRunner.CommandResult {
-        if case .heistExecution(_, let report) = response {
-            let name = heistPath
-                .map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent } ?? "heist"
-            let junitXML = fence.junitXML(
-                for: report,
-                heistName: name
-            )
-            try junitXML.write(
-                to: URL(fileURLWithPath: junitPath),
-                atomically: true,
-                encoding: String.Encoding.utf8
-            )
-            logStatus("JUnit report written to \(junitPath)")
-        } else {
-            logStatus("Warning: --junit requested but run_heist did not produce a report")
-        }
-        return .response(CLIRunner.FormattedResponse(response: response, format: format))
     }
 
     struct PreparedInput {

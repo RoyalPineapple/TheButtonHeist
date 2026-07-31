@@ -455,10 +455,10 @@ durable artifact, or final output formatting.
 
 The approved long-lived owners are:
 
-- `TheVault`: latest disposable `LiveCapture`, current
-  `Observation.Snapshot`, ordered `Observation.History`, and live UIKit boundary
-  evidence. Its stream is the sole visible-observation producer and delivery
-  owner.
+- `TheVault`: one admitted `InterfaceObservation`, current
+  `Observation.Snapshot`, ordered `Observation.History`, and capture-boundary
+  live UIKit evidence. Its stream is the sole visible-observation producer and
+  delivery owner.
 - `AccessibilityNotificationBus`: one bounded transient ingress log. The
   observation cycle is its sole claim and acknowledgement owner.
 - `TheMuscle`: auth, admission, and session state inside the app.
@@ -477,11 +477,15 @@ The approved long-lived owners are:
 - Artifact stores: `.heist` package files and screenshot bytes on disk.
 
 The Vault's current semantic truth has one phase: vacant with an optional
-replacement requirement, committed with snapshot/tree/continuity/signal, or
-invalidated with the same readable committed truth. Only committed truth is
-admissible to waiters. History, notification cursors, and reader protection
-remain independent because they intentionally survive current-truth
-replacement.
+replacement requirement, committed with a snapshot, `InterfaceObservation`,
+continuity, and signal, or invalidated with the same readable committed truth.
+`InterfaceTree.Topology` owns that observation's canonical hierarchy and
+traversal order; element and container maps are lookup indexes. Admission first
+reattaches live capture evidence to the candidate tree, then commits current
+truth, history, and notification cursors as one state update. Reattachment
+failure leaves all three unadvanced. Only committed truth is admissible to
+waiters. History, notification cursors, and reader protection remain
+independent because they intentionally survive current-truth replacement.
 
 `LiveCapture` is an ephemeral index. Its per-path maps exist to disambiguate a
 single capture and must not become stable identity. Transport registries and
@@ -521,7 +525,7 @@ pipelines are explicit:
 | Result recording decision | `HeistResult.Outcome` and `HeistResultRecordingMode` | `HeistResultRecording` filesystem boundary |
 | Offline validation algebra | `HeistValidation.Result<Value>` composed by `HeistValidation.Report` | Public JSON and text projections |
 | Complete-heist progress | One `HeistExecution` machine; its answer is `Decision` | MainActor host advances it with admitted inputs |
-| Accessibility truth and history | TheVault: current `Snapshot` + `Observation.History` | Host admission and machine consumption |
+| Accessibility truth and history | `TheVault.State`: admitted `InterfaceObservation` (topology plus reattached capture evidence), current `Snapshot`, and `Observation.History` | Host admission and machine consumption |
 | Observation pulse and notification admission | `Observation.Stream` cycle driven by TheTripwire's single `CADisplayLink` | Demand resumes or pauses the link; each cycle claims ingress, captures, commits, publishes, evaluates, then acknowledges |
 | Host deadlines | One active-leaf absolute deadline spanning baseline acquisition through trailing `noChange`, capped by the whole-heist deadline, with one scheduled task | Cancels the in-flight effect, admits terminal evidence, and times out only an incomplete final `Decision` |
 | Testing request construction | `ButtonHeistTesting.swift` | Synchronous helpers and joined sessions live in their named extension files |

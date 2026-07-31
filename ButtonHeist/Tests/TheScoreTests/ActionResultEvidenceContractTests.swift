@@ -42,12 +42,52 @@ final class ActionResultEvidenceContractTests: XCTestCase {
             (.scroll, .scroll),
             (.scrollToVisible, .scrollToVisible),
             (.scrollToEdge, .scrollToEdge),
-            (.wait, .wait),
         ]
 
         for (payload, method) in cases {
             XCTAssertEqual(ActionResult.success(payload: payload).method, method)
         }
+    }
+
+    func testEveryActionCommandTypeProjectsOneResultMethod() {
+        let expectedMethods: [HeistActionCommandType: ActionMethod] = [
+            .activate: .activate,
+            .increment: .increment,
+            .decrement: .decrement,
+            .performCustomAction: .customAction,
+            .rotor: .rotor,
+            .dismiss: .dismiss,
+            .magicTap: .magicTap,
+            .oneFingerTap: .oneFingerTap,
+            .longPress: .longPress,
+            .swipe: .swipe,
+            .drag: .drag,
+            .typeText: .typeText,
+            .editAction: .editAction,
+            .setPasteboard: .setPasteboard,
+            .takeScreenshot: .takeScreenshot,
+            .scroll: .scroll,
+            .scrollToVisible: .scrollToVisible,
+            .scrollToEdge: .scrollToEdge,
+            .dismissKeyboard: .dismissKeyboard,
+        ]
+
+        XCTAssertEqual(Set(expectedMethods.keys), Set(HeistActionCommandType.allCases))
+        for type in HeistActionCommandType.allCases {
+            let result = ActionResult.success(payload: .empty(for: type))
+            XCTAssertEqual(type.actionResultMethod, expectedMethods[type])
+            XCTAssertEqual(result.method, expectedMethods[type])
+        }
+    }
+
+    func testActionEvidenceRejectsMismatchedCanonicalCommandType() {
+        let evidence = HeistActionEvidence.completed(
+            result: .success(payload: .customAction),
+            expectation: nil
+        )
+
+        XCTAssertTrue(evidence.matches(command: .customAction(name: "Archive", target: .label("Mail"))))
+        XCTAssertFalse(evidence.matches(command: .activate(.label("Mail"))))
     }
 
     func testEveryOutcomeRoundTripsWithEveryObservationCase() throws {
@@ -62,11 +102,11 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         for observation in observations {
             let results = [
                 ActionResult.success(
-                    payload: .wait,
+                    payload: .activate,
                     observation: observation
                 ),
                 ActionResult.failure(
-                    payload: .wait,
+                    payload: .activate,
                     failureKind: .timeout,
                     observation: observation
                 ),
@@ -130,7 +170,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
 
     func testFailureEvidenceRoundTripsWithExplicitAbsence() throws {
         let result = ActionResult.failure(
-            payload: .wait,
+            payload: .activate,
             failureKind: .timeout,
             message: "timed out",
         )
@@ -144,6 +184,20 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertNil(decoded.warning)
         XCTAssertNil(decoded.evidence.subjectEvidence)
         XCTAssertNil(decoded.evidence.timing)
+    }
+
+    func testLegacyWaitActionResultRoundTripsForReceiptCompatibility() throws {
+        let result = ActionResult.failure(
+            payload: .wait,
+            failureKind: .timeout,
+            message: "timed out"
+        )
+
+        let decoded = try JSONDecoder().decode(ActionResult.self, from: JSONEncoder().encode(result))
+
+        XCTAssertEqual(decoded, result)
+        XCTAssertEqual(decoded.method, .wait)
+        XCTAssertEqual(decoded.payload, .wait)
     }
 
     func testScreenActionHandlerIsSuccessEvidence() throws {

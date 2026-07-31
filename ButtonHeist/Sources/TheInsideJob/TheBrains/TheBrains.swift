@@ -28,7 +28,7 @@ final class TheBrains {
     }
 
     func notifications() -> [Observation.Notification] {
-        vault.semanticObservationStream.notifications()
+        vault.state.notifications
     }
 
     enum InterfaceQueryResult {

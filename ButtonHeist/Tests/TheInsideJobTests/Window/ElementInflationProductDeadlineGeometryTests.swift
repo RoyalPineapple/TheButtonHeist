@@ -57,8 +57,7 @@ extension ElementInflationProductTests {
                 await refreshBrains.vault.installObservationForTesting(
                     observation
                 )
-                guard let current =
-                    refreshBrains.vault.semanticObservationStream.current()
+                guard let current = refreshBrains.vault.state.current
                 else {
                     return .unavailable(.sourceTreeUnavailable)
                 }

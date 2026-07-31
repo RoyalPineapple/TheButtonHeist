@@ -47,7 +47,8 @@ final class HeistExecutionMachineTests: XCTestCase {
             current: nil
         )
 
-        guard machine.activeLeaf?.expectationIsSatisfied == false,
+        guard case .wait(let leaf) = machine.running.activeLeaf,
+              case .beginningObservation = leaf.phase,
               case .complete(let completion) = machine.advance(.observationFinished(
                   source: .deadline,
                   observationID: request.id,
@@ -219,6 +220,43 @@ final class HeistExecutionMachineTests: XCTestCase {
         XCTAssertTrue(completion.steps.allSatisfy { $0.status == .passed })
     }
 
+    func testDirectScrollUsesTheActionPipelineWithoutDurablePlanAdmission() throws {
+        var machine = HeistExecution.Machine(action: .scroll(.init()))
+        guard case .perform(.beginObservation(let observationID, _)) = machine.start(),
+              case .perform(.dispatch(let dispatchID, _)) = machine.advance(
+                .observationBegan(observationID, baseline: nil)
+              ),
+              dispatchID == observationID,
+              case .perform(.finishObservation(let finishID, let finishedObservationID, _)) = machine.advance(
+                .dispatchCompleted(
+                    dispatchID,
+                    .failure(
+                        .empty(for: .scroll),
+                        message: "scroll dispatch failed",
+                        failureKind: .actionFailed
+                    )
+                )
+              ),
+              finishedObservationID == observationID,
+              case .complete(let completion) = machine.advance(.observationFinished(
+                source: .request(finishID),
+                observationID: observationID,
+                evidence: .init(
+                    baseline: nil,
+                    events: [],
+                    current: nil,
+                    coverage: .incomplete(.captureUnavailable)
+                ),
+                outcome: .completed,
+                timing: HeistResultFixture.expectationTiming
+              ))
+        else {
+            return XCTFail("A direct scroll must complete through the action reducer")
+        }
+        XCTAssertEqual(completion.steps.count, 1)
+        XCTAssertEqual(completion.steps.first?.status, .failed)
+    }
+
     func testFailedActivateKeepsActivationTraceInActionEvidence() throws {
         let activationTrace = ActivationTrace(.activationPointFallback(
             axActivateReturned: false,
@@ -307,7 +345,7 @@ struct HeistMachineTestDriver {
                     state = machine.advance(.event(event))
                     continue
                 }
-                guard let leaf = machine.activeLeaf,
+                guard let leaf = machine.running.activeLeaf,
                       let start = observationStarts[leaf.id] else {
                     throw MachineDriverFailure.stalled
                 }
@@ -342,7 +380,7 @@ struct HeistMachineTestDriver {
 
         case .dispatch(let id, let command):
             let result = script.dispatchResults.isEmpty
-                ? .success(payload: command.actionResultPayload)
+                ? .success(payload: .empty(for: command.type))
                 : script.dispatchResults.removeFirst()
             return machine.advance(.dispatchCompleted(id, result))
 

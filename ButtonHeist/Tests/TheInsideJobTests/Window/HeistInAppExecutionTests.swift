@@ -165,6 +165,48 @@ final class HeistInAppExecutionTests: XCTestCase {
         }
     }
 
+    func testFailureSeparatesOneWaitCauseFromContractAndExpectation() throws {
+        let step = HeistResultFixture.failedWait(failure: HeistFailureDetail(
+            category: .timeout,
+            contract: "wait predicate is met",
+            observed: "deadline expired",
+            expected: "exists(label: Done)"
+        ))
+        let failure = Heist.Failure(try HeistResult(steps: [step], durationMs: 0))
+
+        XCTAssertEqual(
+            failure.description,
+            """
+            Heist failed at $.body[0] (wait)
+            Cause: deadline expired
+            Contract: wait predicate is met
+            Expected: exists(label: Done)
+            """
+        )
+        XCTAssertEqual(failure.description.components(separatedBy: "deadline expired").count, 2)
+    }
+
+    func testActionFailureLabelsDispatchTargetSeparately() throws {
+        let result = ActionResult.failure(
+            payload: .activate,
+            failureKind: .elementNotFound,
+            message: "target missing"
+        )
+        let step = HeistResultFixture.action(
+            result: result,
+            failure: HeistFailureDetail(
+                category: .targetResolution,
+                contract: "target resolves uniquely",
+                observed: "target missing",
+                expected: "label: Delete"
+            )
+        )
+        let failure = Heist.Failure(try HeistResult(steps: [step], durationMs: 0))
+
+        XCTAssertTrue(failure.description.contains("Target: label: Delete"))
+        XCTAssertFalse(failure.description.contains("Expected: label: Delete"))
+    }
+
     func testFailureAbortsAtFirstFailedStepAndRestoresRuntime() async throws {
         let job = try TheInsideJob(token: "in-app-heist-abort-test")
 

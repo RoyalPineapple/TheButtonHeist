@@ -11,16 +11,7 @@ import TheScore
 extension TheVault {
 
     func resetInterfaceForLifecycle() async {
-        latestObservation = .empty
-        semanticObservationStream.discardCurrentObservation()
-    }
-
-    func recordCommittedObservation(_ observation: InterfaceObservation) {
-        observeInterface(observation)
-    }
-
-    func observeInterface(_ observation: InterfaceObservation) {
-        latestObservation = observation
+        state.discardCurrentObservation()
     }
 
     func firstResponderInterfaceElement() -> InterfaceTree.Element? {

@@ -49,26 +49,31 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
         let oldRow = NSObject()
         let newHeader = NSObject()
         let newRow = NSObject()
-        let firstPublication = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
-            scrollObservation(
-                headerId: "old_header",
-                rowLabel: "Orders",
-                rowId: "old_row",
-                headerObject: oldHeader,
-                rowObject: oldRow
+        let firstReceipt = await capturePublication(in: vault) {
+            await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+                scrollObservation(
+                    headerId: "old_header",
+                    rowLabel: "Orders",
+                    rowId: "old_row",
+                    headerObject: oldHeader,
+                    rowObject: oldRow
+                )
             )
-        )
-        let secondPublication = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
-            scrollObservation(
-                headerId: "new_header",
-                rowLabel: "Products",
-                rowId: "new_row",
-                headerObject: newHeader,
-                rowObject: newRow
+        }
+        let secondReceipt = await capturePublication(in: vault) {
+            await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+                scrollObservation(
+                    headerId: "new_header",
+                    rowLabel: "Products",
+                    rowId: "new_row",
+                    headerObject: newHeader,
+                    rowObject: newRow
+                )
             )
-        )
+        }
+        let secondPublication = secondReceipt.publication
         let replacementEvents = try retainedEvents(
-            after: firstPublication.historyRange.upperBound
+            after: firstReceipt.historyRange.upperBound
         )
 
         XCTAssertEqual(
@@ -82,18 +87,24 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
         )
         XCTAssertNil(vault.interfaceTree.findElement(heistId: "old_row"))
         XCTAssertNotNil(vault.interfaceTree.findElement(heistId: "new_row"))
-        XCTAssertNil(vault.latestObservation.liveCapture.object(for: "old_row"))
-        XCTAssertTrue(vault.latestObservation.liveCapture.object(for: "new_row") === newRow)
+        XCTAssertNil(vault.currentInterfaceObservation.liveCapture.object(for: "old_row"))
+        XCTAssertTrue(vault.currentInterfaceObservation.liveCapture.object(for: "new_row") === newRow)
     }
 
     func testDiscoveryPublicationProjectsOneLogAcrossFulfilledScopes() async throws {
         let first = observation(label: "First", heistId: "first")
         let second = observation(label: "Second", heistId: "second")
-        let discovery = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(first)
-        let visible = await vault.semanticObservationStream.commitVisibleObservationForTesting(second)
+        let discoveryReceipt = await capturePublication(in: vault) {
+            await vault.semanticObservationStream.commitDiscoveryObservationForTesting(first)
+        }
+        let discovery = discoveryReceipt.publication
+        let visibleReceipt = await capturePublication(in: vault) {
+            await vault.semanticObservationStream.commitVisibleObservationForTesting(second)
+        }
+        let visible = visibleReceipt.publication
 
-        let events = try retainedEvents(after: discovery.historyRange.upperBound)
-        XCTAssertEqual(discovery.historyRange.upperBound, visible.historyRange.lowerBound)
+        let events = try retainedEvents(after: discoveryReceipt.historyRange.upperBound)
+        XCTAssertEqual(discoveryReceipt.historyRange.upperBound, visibleReceipt.historyRange.lowerBound)
         XCTAssertEqual(events, visible.events)
         XCTAssertEqual(events.count, 3)
         guard case .elementsChanged(let departure) = events[0],
@@ -116,10 +127,13 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
             offViewport: [.init(offViewport, heistId: "off_viewport")]
         )
 
-        let publication = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(observation)
+        let receipt = await capturePublication(in: vault) {
+            await vault.semanticObservationStream.commitDiscoveryObservationForTesting(observation)
+        }
+        let publication = receipt.publication
         let snapshot = publication.current.snapshot
         let retained = try retainedEvents(
-            after: publication.historyRange.lowerBound
+            after: receipt.historyRange.lowerBound
         )
 
         XCTAssertEqual(
@@ -133,7 +147,6 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
 
     func testDiscoverySettlementRejectsHierarchyChangeBeforeCommit() async {
         let observation = observation(label: "Candidate", heistId: "candidate")
-        vault.observeInterface(observation)
         let currentSignal = TheTripwire.TripwireSignal(
             topmostVC: ObjectIdentifier(vault),
             navigation: .empty,
@@ -142,6 +155,7 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
         )
         vault.semanticObservationStream.readTripwireSignal = { currentSignal }
         let admission = vault.semanticObservationStream.admitCurrentObservation(
+            observation,
             vault: vault,
             tripwireSignal: tripwireSignal(sequence: 1),
             discoveryCommitPolicy: .mergeIntoInterface,
@@ -155,16 +169,25 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
     }
 
     func testDiscoveryAfterVisibleReplacementContinuesOneOrderedHistory() async throws {
-        let initialDiscovery = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
-            observation(label: "First Screen", heistId: "first_screen")
-        )
-        let replacementVisible = await vault.semanticObservationStream.commitVisibleObservationForTesting(
-            observation(label: "Second Screen", heistId: "second_screen"),
-            notificationBatch: screenChangedBatch()
-        )
-        let replacementDiscovery = await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
-            observation(label: "Second Screen", heistId: "second_screen")
-        )
+        let initialReceipt = await capturePublication(in: vault) {
+            await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+                observation(label: "First Screen", heistId: "first_screen")
+            )
+        }
+        let initialDiscovery = initialReceipt.publication
+        let replacementVisibleReceipt = await capturePublication(in: vault) {
+            await vault.semanticObservationStream.commitVisibleObservationForTesting(
+                observation(label: "Second Screen", heistId: "second_screen"),
+                notificationBatch: screenChangedBatch()
+            )
+        }
+        let replacementVisible = replacementVisibleReceipt.publication
+        let replacementDiscoveryReceipt = await capturePublication(in: vault) {
+            await vault.semanticObservationStream.commitDiscoveryObservationForTesting(
+                observation(label: "Second Screen", heistId: "second_screen")
+            )
+        }
+        let replacementDiscovery = replacementDiscoveryReceipt.publication
 
         XCTAssertEqual(
             replacementVisible.current.continuity,
@@ -172,15 +195,15 @@ final class SemanticObservationDiscoveryTests: SemanticObservationStreamTestCase
         )
         XCTAssertEqual(replacementDiscovery.current.continuity, .sameGeneration)
         XCTAssertEqual(
-            initialDiscovery.historyRange.upperBound,
-            replacementVisible.historyRange.lowerBound
+            initialReceipt.historyRange.upperBound,
+            replacementVisibleReceipt.historyRange.lowerBound
         )
         XCTAssertEqual(
-            replacementVisible.historyRange.upperBound,
-            replacementDiscovery.historyRange.lowerBound
+            replacementVisibleReceipt.historyRange.upperBound,
+            replacementDiscoveryReceipt.historyRange.lowerBound
         )
 
-        let events = try retainedEvents(after: initialDiscovery.historyRange.upperBound)
+        let events = try retainedEvents(after: initialReceipt.historyRange.upperBound)
         XCTAssertEqual(events, replacementVisible.events + replacementDiscovery.events)
         XCTAssertEqual(events.count, 4)
         guard case .elementsChanged(let departure) = events[0],

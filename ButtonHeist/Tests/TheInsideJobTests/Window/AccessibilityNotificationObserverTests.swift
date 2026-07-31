@@ -288,11 +288,19 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         )
 
         var state = TheVault.State()
-        _ = state.commitObservation(admission())
+        _ = try state.commitObservation(
+            admission(),
+            sourceObservation: .empty,
+            beginningNewBaseline: false
+        ).get()
         state.discardCurrentObservation()
 
         let newBaseline = claim.batch.beginningNewBaseline
-        let replacement = state.commitObservation(admission(notificationBatch: newBaseline))
+        let replacement = try state.commitObservation(
+            admission(notificationBatch: newBaseline),
+            sourceObservation: .empty,
+            beginningNewBaseline: true
+        ).get()
 
         XCTAssertNil(newBaseline.gap)
         XCTAssertTrue(newBaseline.events.isEmpty)
@@ -700,7 +708,7 @@ final class ScreenChangeObservationAdmissionTests: ButtonHeistObservationTestCas
         recordScreenChanged()
         brains.vault.semanticObservationStream.discardIfScreenChangedSinceRead()
 
-        XCTAssertNil(brains.vault.semanticObservationStream.current())
+        XCTAssertNil(brains.vault.state.current)
     }
 
     func testScreenChangedOutsideCommandScopePreservesCommittedObservation() async {
@@ -711,7 +719,7 @@ final class ScreenChangeObservationAdmissionTests: ButtonHeistObservationTestCas
         defer { actionWindow.cancel() }
         brains.vault.semanticObservationStream.discardIfScreenChangedSinceRead()
 
-        XCTAssertNotNil(brains.vault.semanticObservationStream.current())
+        XCTAssertNotNil(brains.vault.state.current)
     }
 
     func testAdmissionReadPreservesBaselineDepartureEvidenceForReplacementCapture() async throws {

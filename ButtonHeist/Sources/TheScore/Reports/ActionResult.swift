@@ -51,6 +51,8 @@ public struct ActionResult: Codable, Sendable, Equatable {
         case scroll
         case scrollToVisible
         case scrollToEdge
+        /// Legacy wire payload retained for decoding historical action-result receipts.
+        /// Runtime wait evidence is reported directly and never constructs this case.
         case wait
 
         package var method: ActionMethod {

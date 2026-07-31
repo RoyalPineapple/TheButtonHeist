@@ -64,7 +64,7 @@ extension TheVault {
     private func resolveLiveActionTarget(
         forCanonical semanticElement: InterfaceTree.Element
     ) -> LiveTargetResolution<LiveActionTarget> {
-        let captureID = latestObservation.captureID
+        let currentCaptureID = captureID
         guard let liveEvidence = liveElementEvidence(aliasedTo: semanticElement),
               let object = currentLiveCapture.object(for: semanticElement.heistId) else {
             return .objectUnavailable
@@ -77,7 +77,7 @@ extension TheVault {
             object: object,
             frame: geometry.frame,
             activationPoint: geometry.activationPoint,
-            captureID: captureID
+            captureID: currentCaptureID
         ))
     }
 
@@ -111,7 +111,7 @@ extension TheVault {
     ) -> InterfaceTree.Element? {
         guard interfaceTree.viewportElementIDs.contains(semanticElement.heistId),
               currentLiveCapture.contains(heistId: semanticElement.heistId),
-              let evidence = latestObservation.tree.findElement(heistId: semanticElement.heistId)
+              let evidence = currentInterfaceObservation.tree.findElement(heistId: semanticElement.heistId)
         else { return nil }
         let semanticIdentity = AccessibilityPolicy.matcherIdentityFacts(
             for: WireConversion.convert(semanticElement.element, geometry: semanticElement.geometry)
@@ -136,7 +136,7 @@ extension TheVault {
     private func resolveLiveContainerTarget(
         forCanonical semanticContainer: InterfaceTree.Container
     ) -> LiveTargetResolution<LiveContainerTarget> {
-        let captureID = latestObservation.captureID
+        let currentCaptureID = captureID
         guard let liveEvidence = liveContainerEvidence(aliasedTo: semanticContainer),
               let object = currentLiveCapture.containerObject(forPath: semanticContainer.path) else {
             return .objectUnavailable
@@ -149,7 +149,7 @@ extension TheVault {
             object: object,
             frame: geometry.frame,
             activationPoint: geometry.activationPoint,
-            captureID: captureID
+            captureID: currentCaptureID
         ))
     }
 
@@ -250,7 +250,7 @@ extension TheVault {
         aliasedTo semanticContainer: InterfaceTree.Container
     ) -> AccessibilityContainer? {
         let path = semanticContainer.path
-        guard let observedContainer = latestObservation.tree.containers[path],
+        guard let observedContainer = currentInterfaceObservation.tree.containers[path],
               Self.container(observedContainer, matches: semanticContainer),
               case .container(let evidence, _) = currentLiveCapture.hierarchy.node(at: path),
               Self.container(evidence, matches: semanticContainer)
