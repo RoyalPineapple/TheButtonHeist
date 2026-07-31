@@ -74,6 +74,89 @@ extension TheFenceHandlerTests {
     }
 
     @ButtonHeistActor
+    func testSingleStepDefaultActionBudgetIncludesStructuralNoChangeSettlement() async throws {
+        let policy = ActionExpectationTimeoutPolicy(standard: 7, screenTransition: 12)
+        let transportHeadroom: TimeInterval = 11
+        let (fence, mockConn) = makeConnectedFence(configuration: .init(
+            actionExpectationTimeoutPolicy: policy,
+            postActionExpectationTimeoutBuffer: transportHeadroom
+        ))
+
+        _ = try await fence.execute(command: .activate, values: [
+            "target": targetValue(label: "Pay"),
+        ])
+
+        XCTAssertEqual(
+            mockConn.sent.sentHeistRun?.timeout.seconds,
+            FenceCommandFixedTimeout.standardAction.seconds + policy.standard.seconds + transportHeadroom
+        )
+    }
+
+    @ButtonHeistActor
+    func testSingleStepAuthoredActionBudgetUsesAuthoredTimeoutWithoutExtraStandardSettlement() async throws {
+        let policy = ActionExpectationTimeoutPolicy(standard: 7, screenTransition: 12)
+        let transportHeadroom: TimeInterval = 11
+        let authoredTimeout: TimeInterval = 19
+        let (fence, mockConn) = makeConnectedFence(configuration: .init(
+            actionExpectationTimeoutPolicy: policy,
+            postActionExpectationTimeoutBuffer: transportHeadroom
+        ))
+
+        _ = try await fence.execute(command: .activate, values: [
+            "target": targetValue(label: "Pay"),
+            "expect": .object([
+                "type": .string("changed"),
+                "scope": .string("screen"),
+            ]),
+            "timeout": .double(authoredTimeout),
+        ])
+
+        XCTAssertEqual(
+            mockConn.sent.sentHeistRun?.timeout.seconds,
+            FenceCommandFixedTimeout.standardAction.seconds + authoredTimeout + transportHeadroom
+        )
+    }
+
+    @ButtonHeistActor
+    func testPerformDefaultActionBudgetIncludesStructuralNoChangeSettlement() async throws {
+        let policy = ActionExpectationTimeoutPolicy(standard: 7, screenTransition: 12)
+        let transportHeadroom: TimeInterval = 11
+        let (fence, mockConn) = makeConnectedFence(configuration: .init(
+            actionExpectationTimeoutPolicy: policy,
+            postActionExpectationTimeoutBuffer: transportHeadroom
+        ))
+
+        _ = try await fence.execute(command: .perform, values: [
+            "step": .string(#"Activate(.label("Pay"))"#),
+        ])
+
+        XCTAssertEqual(
+            mockConn.sent.sentHeistRun?.timeout.seconds,
+            FenceCommandFixedTimeout.standardAction.seconds + policy.standard.seconds + transportHeadroom
+        )
+    }
+
+    @ButtonHeistActor
+    func testPerformAuthoredActionBudgetUsesAuthoredTimeoutWithoutExtraStandardSettlement() async throws {
+        let policy = ActionExpectationTimeoutPolicy(standard: 7, screenTransition: 12)
+        let transportHeadroom: TimeInterval = 11
+        let authoredTimeout: TimeInterval = 19
+        let (fence, mockConn) = makeConnectedFence(configuration: .init(
+            actionExpectationTimeoutPolicy: policy,
+            postActionExpectationTimeoutBuffer: transportHeadroom
+        ))
+
+        _ = try await fence.execute(command: .perform, values: [
+            "step": .string(#"Activate(.label("Pay")).expect(.screenChanged, timeout: 19)"#),
+        ])
+
+        XCTAssertEqual(
+            mockConn.sent.sentHeistRun?.timeout.seconds,
+            FenceCommandFixedTimeout.standardAction.seconds + authoredTimeout + transportHeadroom
+        )
+    }
+
+    @ButtonHeistActor
     func testRunHeistRecordsResultArtifactWhenEnvironmentConfigured() async throws {
         try await withResultDirectory { directory in
             let previousDirectory = EnvironmentKey.buttonheistResultsDir.value
@@ -245,7 +328,7 @@ extension TheFenceHandlerTests {
     }
 
     @ButtonHeistActor
-    func testRunHeistRejectsRawJSONIRFieldsInsteadOfDecodingThem() async throws {
+    func testRunHeistRejectsRawJSONIRFieldsAsMissingCanonicalSource() async throws {
         let fence = TheFence(configuration: .init())
         XCTAssertThrowsError(try fence.decodeRunHeistRequest(
             TheFence.CommandArgumentEnvelope(values: [
@@ -253,14 +336,14 @@ extension TheFenceHandlerTests {
                 "body": .array([.object(["type": .string("warn"), "warn": .object(["message": .string("x")])])]),
             ])
         )) { error in
-            XCTAssertTrue(String(describing: error).contains("raw JSON HeistPlan IR field"), "\(error)")
+            XCTAssertTrue(String(describing: error).contains("requires exactly one plan source"), "\(error)")
             XCTAssertTrue(String(describing: error).contains("ButtonHeist DSL"), "\(error)")
             XCTAssertTrue(String(describing: error).contains(".heist"), "\(error)")
         }
         XCTAssertThrowsError(try fence.decodeRunHeistRequest(
             TheFence.CommandArgumentEnvelope(values: ["version": .int(1), "body": .array([])])
         )) { error in
-            XCTAssertTrue(String(describing: error).contains("raw JSON HeistPlan IR field"), "\(error)")
+            XCTAssertTrue(String(describing: error).contains("requires exactly one plan source"), "\(error)")
         }
     }
 
@@ -304,21 +387,15 @@ extension TheFenceHandlerTests {
 
         let response = try await fence.execute(command: .listHeists, arguments: try Self.planSourceArguments(for: plan))
 
-        guard case .heistCatalog(let catalog) = response else {
+        guard case .heistCatalog(let descriptions, let detail) = response else {
             return XCTFail("Expected heistCatalog response, got \(response)")
         }
-        XCTAssertEqual(catalog.map(\.identity.displayName), ["shop", "addToCart"])
-        XCTAssertEqual(catalog[1].parameterKind, .string)
-        XCTAssertTrue(catalog[1].requiresArgument)
-        XCTAssertEqual(catalog[1].summary, "Reusable heist capability requiring string argument")
-        XCTAssertEqual(catalog[1].tags, [.capability, .parameterized, .semanticAction])
-        XCTAssertNil(catalog[1].parameterName)
-        XCTAssertNil(catalog[1].actionCommands)
-        XCTAssertNil(catalog[1].nestedRunHeists)
-        XCTAssertNil(catalog[1].waitCount)
-        XCTAssertNil(catalog[1].expectationCount)
-        XCTAssertNil(catalog[1].semanticSurfaces)
-        XCTAssertNil(catalog[1].validationStatus)
+        XCTAssertEqual(detail, .summary)
+        XCTAssertEqual(descriptions.map(\.identity.displayName), ["shop", "addToCart"])
+        XCTAssertEqual(descriptions[1].parameterKind, .string)
+        XCTAssertTrue(descriptions[1].requiresArgument)
+        XCTAssertEqual(descriptions[1].parameterName, "item")
+        XCTAssertEqual(descriptions[1].semanticSurface.actionCommands, [.activate])
     }
 
     @ButtonHeistActor
@@ -339,12 +416,13 @@ extension TheFenceHandlerTests {
             ])
         )
 
-        guard case .heistCatalog(let catalog) = response else {
+        guard case .heistCatalog(let descriptions, let detail) = response else {
             return XCTFail("Expected heistCatalog response, got \(response)")
         }
-        XCTAssertEqual(catalog.map(\.identity.displayName), ["shop", "addToCart"])
-        XCTAssertEqual(catalog[1].parameterKind, .string)
-        XCTAssertTrue(catalog[1].requiresArgument)
+        XCTAssertEqual(detail, .summary)
+        XCTAssertEqual(descriptions.map(\.identity.displayName), ["shop", "addToCart"])
+        XCTAssertEqual(descriptions[1].parameterKind, .string)
+        XCTAssertTrue(descriptions[1].requiresArgument)
     }
 
     @ButtonHeistActor
@@ -357,14 +435,14 @@ extension TheFenceHandlerTests {
         ])
 
         let listResponse = try await fence.execute(command: .listHeists, arguments: sourceArguments)
-        guard case .heistCatalog(let catalog) = listResponse else {
+        guard case .heistCatalog(let descriptions, let detail) = listResponse else {
             return XCTFail("Expected heistCatalog response, got \(listResponse)")
         }
-        XCTAssertEqual(catalog.map(\.identity.displayName), ["agentFlow", "Cart", "Cart.addItem"])
-        let addItem = try XCTUnwrap(catalog.first { $0.identity.displayName == "Cart.addItem" })
+        XCTAssertEqual(detail, .detailed)
+        XCTAssertEqual(descriptions.map(\.identity.displayName), ["agentFlow", "Cart", "Cart.addItem"])
+        let addItem = try XCTUnwrap(descriptions.first { $0.identity.displayName == "Cart.addItem" })
         XCTAssertEqual(addItem.parameterKind, .string)
-        XCTAssertEqual(addItem.actionCommands, [.activate])
-        XCTAssertEqual(addItem.validationStatus, .validated)
+        XCTAssertEqual(addItem.semanticSurface.actionCommands, [.activate])
 
         let describeResponse = try await fence.execute(
             command: .describeHeist,
@@ -438,21 +516,21 @@ extension TheFenceHandlerTests {
             arguments: TheFence.CommandArgumentEnvelope(values: arguments)
         )
 
-        guard case .heistCatalog(let catalog) = response else {
+        guard case .heistCatalog(let descriptions, let detail) = response else {
             return XCTFail("Expected heistCatalog response, got \(response)")
         }
-        let checkout = try XCTUnwrap(catalog.first { $0.identity.displayName == "checkout" })
-        XCTAssertEqual(checkout.nestedRunHeists, [invocationPath("checkout.confirm")])
-        XCTAssertEqual(checkout.actionCommands, [.activate])
-        XCTAssertEqual(checkout.waitCount, 1)
-        XCTAssertEqual(checkout.expectationCount, 1)
-        XCTAssertEqual(checkout.semanticSurfaces, [
-            .label(exactSemanticString("Checkout")),
-            .label(exactSemanticString("Done")),
-            .label(exactSemanticString("Receipt")),
-            .identifier(exactSemanticString("confirm_button")),
+        XCTAssertEqual(detail, .detailed)
+        let checkout = try XCTUnwrap(descriptions.first { $0.identity.displayName == "checkout" })
+        XCTAssertEqual(checkout.semanticSurface.nestedRunHeists, [invocationPath("checkout.confirm")])
+        XCTAssertEqual(checkout.semanticSurface.actionCommands, [.activate])
+        XCTAssertEqual(checkout.semanticSurface.waits.count, 1)
+        XCTAssertEqual(checkout.semanticSurface.expectations.count, 1)
+        XCTAssertEqual(checkout.semanticSurface.semanticSurfaces, [
+            .label(.exact("Checkout")),
+            .label(.exact("Done")),
+            .label(.exact("Receipt")),
+            .identifier(.exact("confirm_button")),
         ])
-        XCTAssertEqual(checkout.validationStatus, .validated)
     }
 
     @ButtonHeistActor

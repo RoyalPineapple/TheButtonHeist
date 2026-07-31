@@ -42,32 +42,19 @@ public struct HeistPlan: Codable, Sendable, Equatable {
         definitions: [HeistPlan] = [],
         body: [HeistStep]
     ) throws {
-        let plan = try HeistPlan(
-            stackVersion: version,
-            name: name,
-            parameter: parameter,
-            definitions: definitions,
-            body: body
+        self = try Self.admitRoot(
+            HeistPlan(
+                structuralVersion: version,
+                name: name,
+                parameter: parameter,
+                definitions: definitions,
+                body: body
+            )
         )
-        do {
-            var validator = HeistPlanRuntimeSafetyValidator(limits: .standard)
-            try validator.validate(plan)
-            self = plan
-        } catch let error as HeistPlanRuntimeSafetyError {
-            throw HeistPlanBuildError(diagnostics: error.diagnostics)
-        }
     }
 
     public init(from decoder: Decoder) throws {
-        let decoded = try DecodedHeistPlan(from: decoder)
-        let plan = try decoded.admitStructure()
-        do {
-            var validator = HeistPlanRuntimeSafetyValidator(limits: .standard)
-            try validator.validate(plan)
-            self = plan
-        } catch let error as HeistPlanRuntimeSafetyError {
-            throw HeistPlanBuildError(diagnostics: error.diagnostics)
-        }
+        self = try Self.admitRoot(DecodedHeistPlan(from: decoder).structure())
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -83,28 +70,31 @@ public struct HeistPlan: Codable, Sendable, Equatable {
         try container.encode(body, forKey: .body)
     }
 
-    fileprivate init(
-        stackVersion version: Int,
+    init(
+        structuralVersion version: Int,
         name: HeistPlanName? = nil,
         parameter: HeistParameter = .none,
         definitions: [HeistPlan] = [],
         body: [HeistStep]
-    ) throws {
-        guard version == Self.currentVersion else {
-            throw HeistPlanVersionAdmissionError(observed: version)
-        }
-        guard !body.isEmpty || !definitions.isEmpty else {
-            throw HeistPlanBuildError.planStructure(
-                path: "$.body",
-                message: "heist plan must contain a body or nested definitions",
-                hint: "Add body steps, or use this plan only as a namespace with nested definitions."
-            )
-        }
+    ) {
         self.version = version
         self.name = name
         self.parameter = parameter
         self.definitions = definitions
         self.body = body
+    }
+
+    private static func admitRoot(_ plan: HeistPlan) throws -> HeistPlan {
+        guard plan.version == currentVersion else {
+            throw HeistPlanVersionAdmissionError(observed: plan.version)
+        }
+        do {
+            var validator = HeistPlanRuntimeSafetyValidator(limits: .standard)
+            try validator.validate(plan)
+            return plan
+        } catch let error as HeistPlanRuntimeSafetyError {
+            throw HeistPlanBuildError(diagnostics: error.diagnostics)
+        }
     }
 }
 
@@ -117,8 +107,8 @@ extension HeistPlan {
     static func mergeDefinitions(
         _ definitions: [HeistPlan],
         duplicatePolicy: DefinitionDuplicatePolicy
-    ) throws -> [HeistPlan] {
-        try definitions.reduce(into: []) { merged, definition in
+    ) -> [HeistPlan] {
+        definitions.reduce(into: []) { merged, definition in
             guard let definitionName = definition.name,
                   let existingIndex = merged.firstIndex(where: { $0.name == definitionName })
             else {
@@ -134,26 +124,16 @@ extension HeistPlan {
                 merged.append(definition)
                 return
             }
-            do {
-                merged[existingIndex] = try HeistPlan(
-                    version: existing.version,
-                    name: existing.name,
-                    parameter: existing.parameter,
-                    definitions: try mergeDefinitions(
-                        existing.definitions + definition.definitions,
-                        duplicatePolicy: duplicatePolicy
-                    ),
-                    body: existing.body
-                )
-            } catch let error as HeistPlanBuildError {
-                let prefix = "$.definitions[\(existingIndex)]"
-                throw HeistPlanBuildError(diagnostics: error.diagnostics.map { diagnostic in
-                    guard let path = diagnostic.path, path.hasPrefix("$") else {
-                        return diagnostic
-                    }
-                    return diagnostic.withPath(prefix + String(path.dropFirst()))
-                })
-            }
+            merged[existingIndex] = HeistPlan(
+                structuralVersion: existing.version,
+                name: existing.name,
+                parameter: existing.parameter,
+                definitions: mergeDefinitions(
+                    existing.definitions + definition.definitions,
+                    duplicatePolicy: duplicatePolicy
+                ),
+                body: existing.body
+            )
         }
     }
 
@@ -162,8 +142,8 @@ extension HeistPlan {
         parameter: HeistParameter,
         definitions: [HeistPlan],
         body: [HeistStep]
-    ) throws -> HeistPlan {
-        try nestedDefinition(
+    ) -> HeistPlan {
+        nestedDefinition(
             components: path.components[...],
             parameter: parameter,
             definitions: definitions,
@@ -176,21 +156,21 @@ extension HeistPlan {
         parameter: HeistParameter,
         definitions: [HeistPlan],
         body: [HeistStep]
-    ) throws -> HeistPlan {
+    ) -> HeistPlan {
         guard let first = components.first else {
             preconditionFailure("validated heist definition path must not be empty")
         }
         guard components.count > 1 else {
-            return try HeistPlan(
-                version: currentVersion,
+            return HeistPlan(
+                structuralVersion: currentVersion,
                 name: first,
                 parameter: parameter,
                 definitions: definitions,
                 body: body
             )
         }
-        return try HeistPlan(
-            version: currentVersion,
+        return HeistPlan(
+            structuralVersion: currentVersion,
             name: first,
             definitions: [
                 nestedDefinition(
@@ -239,22 +219,15 @@ private struct DecodedHeistPlan: Decodable {
         parameter = try container.decodeIfPresent(HeistParameter.self, forKey: .parameter) ?? .none
         definitions = try container.decodeIfPresent([DecodedHeistPlan].self, forKey: .definitions) ?? []
         body = try container.decode([DecodedHeistStep].self, forKey: .body)
-        guard !body.isEmpty || !definitions.isEmpty else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .body,
-                in: container,
-                debugDescription: "HeistPlan requires a non-empty body or definitions"
-            )
-        }
     }
 
-    func admitStructure() throws -> HeistPlan {
-        try HeistPlan(
-            stackVersion: version,
+    func structure() throws -> HeistPlan {
+        HeistPlan(
+            structuralVersion: version,
             name: name,
             parameter: parameter,
-            definitions: definitions.map { try $0.admitStructure() },
-            body: body.map { try $0.admitStructure() }
+            definitions: try definitions.map { try $0.structure() },
+            body: try body.map { try $0.structure() }
         )
     }
 }
@@ -339,7 +312,7 @@ private indirect enum DecodedHeistStep: Decodable {
         }
     }
 
-    func admitStructure() throws -> HeistStep {
+    func structure() throws -> HeistStep {
         switch self {
         case .action(let step):
             return .action(step)
@@ -347,38 +320,38 @@ private indirect enum DecodedHeistStep: Decodable {
             return .wait(WaitStep(
                 predicate: predicate,
                 timeout: timeout,
-                elseBody: try elseBody?.map { try $0.admitStructure() }
+                elseBody: try elseBody?.map { try $0.structure() }
             ))
         case .conditional(let cases, let elseBody):
             return .conditional(try ConditionalStep(
-                cases: try cases.map { try $0.admitStructure() },
-                elseBody: try elseBody?.map { try $0.admitStructure() }
+                cases: try cases.map { try $0.structure() },
+                elseBody: try elseBody?.map { try $0.structure() }
             ))
         case .forEachElement(let matching, let limit, let parameter, let body):
             return .forEachElement(try ForEachElementStep(
                 matching: matching,
                 limit: limit,
                 parameter: parameter,
-                body: body.map { try $0.admitStructure() }
+                body: try body.map { try $0.structure() }
             ))
         case .forEachString(let values, let parameter, let body):
             return .forEachString(try ForEachStringStep(
                 values: values,
                 parameter: parameter,
-                body: body.map { try $0.admitStructure() }
+                body: try body.map { try $0.structure() }
             ))
         case .repeatUntil(let predicate, let timeout, let body):
             return .repeatUntil(try RepeatUntilStep(
                 predicate: predicate,
                 timeout: timeout,
-                body: body.map { try $0.admitStructure() }
+                body: try body.map { try $0.structure() }
             ))
         case .warn(let step):
             return .warn(step)
         case .fail(let step):
             return .fail(step)
         case .heist(let plan):
-            return .heist(try plan.admitStructure())
+            return .heist(try plan.structure())
         case .invoke(let step):
             return .invoke(step)
         }
@@ -458,10 +431,10 @@ private struct DecodedPredicateCase: Decodable {
         body = try container.decode([DecodedHeistStep].self, forKey: .body)
     }
 
-    func admitStructure() throws -> PredicateCase {
+    func structure() throws -> PredicateCase {
         PredicateCase(
             predicate: predicate,
-            body: try body.map { try $0.admitStructure() }
+            body: try body.map { try $0.structure() }
         )
     }
 }

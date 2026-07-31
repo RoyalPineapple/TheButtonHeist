@@ -195,10 +195,8 @@ extension TheBrainsScrollTests {
             )
         )
 
-        let transition = await brains.navigation.scrollOnePageAndSettle(
-            staleTarget,
-            direction: .down,
-            animated: false,
+        let transition = await brains.navigation.performViewportTransition(
+            .page(staleTarget, direction: .down, animated: false),
             deadline: semanticRevealDeadline()
         )
 
@@ -238,9 +236,8 @@ extension TheBrainsScrollTests {
             )
         )
 
-        let transition = await brains.navigation.scrollToEdgeAndSettle(
-            staleTarget,
-            edge: .bottom,
+        let transition = await brains.navigation.performViewportTransition(
+            .edge(staleTarget, edge: .bottom),
             deadline: semanticRevealDeadline()
         )
 

@@ -102,16 +102,22 @@ struct RenderResponseTests {
     }
 
     @Test("summary heist catalog render stays a compact menu")
-    func summaryHeistCatalogRenderStaysCompactMenu() {
-        let response = FenceResponse.heistCatalog([
-            HeistCatalogEntry(
-                identity: .capability("checkout"),
-                parameterKind: .string,
-                requiresArgument: true,
-                summary: "Reusable heist capability requiring string argument",
-                tags: [.capability, .parameterized, .semanticAction]
-            ),
-        ])
+    func summaryHeistCatalogRenderStaysCompactMenu() throws {
+        let plan = try HeistPlan(
+            name: "root",
+            definitions: [
+                HeistPlan(
+                    name: "checkout",
+                    parameter: .string(name: "item"),
+                    body: [.action(ActionStep(command: .activate(.label("Checkout"))))]
+                ),
+            ],
+            body: [.warn(WarnStep(message: "ready"))]
+        )
+        let response = FenceResponse.heistCatalog(
+            try plan.heistDescriptions(),
+            detail: .summary
+        )
 
         let result = ButtonHeistMCPServer.renderResponse(response)
 
@@ -130,25 +136,30 @@ struct RenderResponseTests {
 
     @Test("detailed heist catalog render includes safe derived fields")
     func detailedHeistCatalogRenderIncludesSafeDerivedFields() throws {
-        let response = FenceResponse.heistCatalog([
-            HeistCatalogEntry(
-                identity: .capability("checkout"),
-                parameterKind: .none,
-                requiresArgument: false,
-                summary: "Reusable heist capability",
-                tags: [.capability, .composed, .assertion, .semanticAction],
-                nestedRunHeists: ["checkout.confirm"],
-                actionCommands: [.activate],
-                waitCount: 1,
-                expectationCount: 1,
-                semanticSurfaces: [
-                    .label(HeistSemanticStringMatch(mode: .exact, value: .literal("Checkout"))),
-                    .identifier(HeistSemanticStringMatch(mode: .exact, value: .literal("confirm_button"))),
-                    .traits([.button]),
-                ],
-                validationStatus: .validated
-            ),
-        ])
+        let confirmation = try HeistPlan(
+            name: "confirm",
+            body: [.action(ActionStep(command: .activate(.identifier("confirm_button"))))]
+        )
+        let checkout = try HeistPlan(
+            name: "checkout",
+            definitions: [confirmation],
+            body: [
+                .action(ActionStep(
+                    command: .activate(.label("Checkout")),
+                    expectationPolicy: .expect(ActionExpectation(predicate: .exists(.label("Done"))))
+                )),
+                .invoke(HeistInvocationStep(path: "confirm")),
+            ]
+        )
+        let plan = try HeistPlan(
+            name: "root",
+            definitions: [checkout],
+            body: [.warn(WarnStep(message: "ready"))]
+        )
+        let response = FenceResponse.heistCatalog(
+            try plan.heistDescriptions(),
+            detail: .detailed
+        )
 
         let result = ButtonHeistMCPServer.renderResponse(response)
 
@@ -158,12 +169,17 @@ struct RenderResponseTests {
         }
         #expect(text.contains("nested RunHeist: checkout.confirm"))
         #expect(text.contains("actions: activate"))
-        #expect(text.contains("waits=1 expectations=1"))
-        #expect(text.contains("semantic surfaces: label=Checkout, identifier=confirm_button, traits=button"))
-        #expect(text.contains("validation=validated"))
+        #expect(text.contains("waits=0 expectations=1"))
+        #expect(!text.contains("validation="))
         #expect(!text.contains("predicate("))
         #expect(!text.contains("point("))
         #expect(!text.contains("heistId"))
+
+        let root = try #require(result.structuredContent?.objectValue)
+        let heists = try #require(root["heists"]?.arrayValue)
+        let entry = try #require(heists.first?.objectValue)
+        #expect(entry["requiresArgument"] == .bool(false))
+        #expect(entry["validationStatus"] == nil)
     }
 
     @Test("error render uses canonical public failure mapping")
@@ -288,12 +304,31 @@ struct RenderResponseTests {
         observationEvidence: Observation.Evidence
     ) throws -> HeistResult {
         let encoder = JSONEncoder()
+        let settledObservationEvidence = Observation.Evidence(
+            baseline: observationEvidence.baseline,
+            events: observationEvidence.events + [.noChange],
+            current: observationEvidence.current,
+            coverage: observationEvidence.coverage
+        )
+        let expectation = try JSONDecoder().decode(
+            HeistExpectationEvidence.self,
+            from: JSONSerialization.data(withJSONObject: [
+                "bindings": ["targets": [:], "strings": [:]],
+                "observation": try jsonObject(settledObservationEvidence, encoder: encoder),
+                "terminalCause": "observed",
+                "timing": [
+                    "budgetMs": 3,
+                    "elapsedMs": 3,
+                    "lastTreeChangeElapsedMs": 3,
+                ],
+            ])
+        )
         let evidence = HeistActionEvidence.completed(
             result: .success(
                 payload: .activate,
                 observation: .observed(observationEvidence)
             ),
-            expectation: nil
+            expectation: expectation
         )
         let step: [String: Any] = [
             "path": "$.body[0]",

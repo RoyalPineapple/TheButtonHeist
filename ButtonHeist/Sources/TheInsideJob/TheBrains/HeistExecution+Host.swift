@@ -138,13 +138,9 @@ extension HeistExecution {
         }
 
         private let brains: TheBrains
-        private let beforeTerminalNotificationAdmission: (@MainActor () -> Void)?
-        private var hasExecuted = false
 
-        internal init(brains: TheBrains,
-                      beforeTerminalNotificationAdmission: (@MainActor () -> Void)? = nil) {
+        internal init(brains: TheBrains) {
             self.brains = brains
-            self.beforeTerminalNotificationAdmission = beforeTerminalNotificationAdmission
         }
 
         internal func execute(
@@ -175,9 +171,6 @@ extension HeistExecution {
         }
 
         private func execute(_ machine: Machine, timeout: HeistTimeout) async throws -> Completion {
-            precondition(!hasExecuted, "A heist host executes exactly one command")
-            hasExecuted = true
-
             guard let installation = installLifetime() else {
                 try Task.checkCancellation()
                 throw HeistExecution.Failure.runtimeUnavailable
@@ -205,7 +198,6 @@ extension HeistExecution {
                     switch decision {
                     case .complete(let completion):
                         let terminalNotificationCursor = brains.vault.accessibilityNotifications.cursor()
-                        beforeTerminalNotificationAdmission?()
                         let notificationsAdmitted = await admitTerminalNotifications(
                             installation.lifetime.notificationScope,
                             after: terminalNotificationCursor
@@ -1051,12 +1043,9 @@ private actor ObservationInbox {
     nonisolated private let count = OSAllocatedUnfairLock(initialState: 0)
 
     init() {
-        var capturedEmit: AsyncStream<Observation.Event>.Continuation?
-        stream = AsyncStream { capturedEmit = $0 }
-        guard let capturedEmit else {
-            preconditionFailure("An observation inbox requires an event stream")
-        }
-        emit = capturedEmit
+        let stream = AsyncStream<Observation.Event>.makeStream()
+        self.stream = stream.stream
+        emit = stream.continuation
     }
 
     nonisolated func yield(_ event: Observation.Event) {

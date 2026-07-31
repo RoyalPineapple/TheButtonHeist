@@ -180,6 +180,28 @@ struct DoctorDemoFixture {
             current: current,
             coverage: .complete
         )
+        let settledObservationEvidence = Observation.Evidence(
+            baseline: observationEvidence.baseline,
+            events: observationEvidence.events + [.noChange],
+            current: observationEvidence.current,
+            coverage: observationEvidence.coverage
+        )
+        let observationObject = try JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(settledObservationEvidence)
+        )
+        let expectation = try JSONDecoder().decode(
+            HeistExpectationEvidence.self,
+            from: JSONSerialization.data(withJSONObject: [
+                "bindings": ["targets": [:], "strings": [:]],
+                "observation": observationObject,
+                "terminalCause": "observed",
+                "timing": [
+                    "budgetMs": 3,
+                    "elapsedMs": 3,
+                    "lastTreeChangeElapsedMs": 3,
+                ],
+            ])
+        )
         let actionResult: ActionResult
         switch outcome {
         case .passed:
@@ -196,7 +218,7 @@ struct DoctorDemoFixture {
             )
         }
         let command = HeistActionCommand.activate(target)
-        let evidence = HeistActionEvidence.completed(result: actionResult, expectation: nil)
+        let evidence = HeistActionEvidence.completed(result: actionResult, expectation: expectation)
         let node = ActionNodeFixture(
             command: command,
             outcome: outcome,

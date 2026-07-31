@@ -8,11 +8,11 @@ import TheScore
     @Test func `evidence admission permits only its legal completion polarity`() {
         let passedAction = HeistActionEvidence.completed(
             result: .success(payload: .dismiss),
-            expectation: nil
+            expectation: HeistResultFixture.defaultActionExpectationEvidence()
         )
         let failedAction = HeistActionEvidence.completed(
             result: .failure(payload: .dismiss, failureKind: .actionFailed),
-            expectation: nil
+            expectation: HeistResultFixture.defaultActionExpectationEvidence()
         )
 
         #expect(HeistPassedActionEvidence(passedAction) != nil)
@@ -42,6 +42,24 @@ import TheScore
 
         #expect(throws: (any Error).self) {
             try JSONDecoder().decode(HeistActionEvidence.self, from: oldForm)
+        }
+    }
+
+    @Test func `completed action evidence requires its structural expectation`() throws {
+        let evidence = HeistActionEvidence.completed(
+            result: .success(payload: .dismiss),
+            expectation: HeistResultFixture.defaultActionExpectationEvidence()
+        )
+        var object = try #require(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(evidence)) as? [String: Any]
+        )
+        object.removeValue(forKey: "expectationEvidence")
+
+        #expect(throws: (any Error).self) {
+            _ = try JSONDecoder().decode(
+                HeistActionEvidence.self,
+                from: JSONSerialization.data(withJSONObject: object)
+            )
         }
     }
 

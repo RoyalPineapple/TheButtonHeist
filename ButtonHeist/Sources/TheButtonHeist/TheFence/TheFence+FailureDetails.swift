@@ -6,22 +6,6 @@ public extension ServerError {
     internal var failureDetails: FailureDetails {
         kind.failureDetails
     }
-
-    var errorCode: String {
-        failureDetails.errorCode
-    }
-
-    var phase: FailurePhase {
-        failureDetails.phase
-    }
-
-    var retryable: Bool {
-        failureDetails.retryable
-    }
-
-    var hint: String? {
-        failureDetails.hint
-    }
 }
 
 extension ActionFailure.Kind {

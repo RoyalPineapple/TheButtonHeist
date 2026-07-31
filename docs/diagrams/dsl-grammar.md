@@ -17,7 +17,7 @@ flowchart TD
     SCOPE["HeistPlanSourceScope<br/>stringRefs · targetRefs"]
     PARSER["HeistPlanSourceParser"]
     VALUES["Concrete canonical values<br/><br/>StringMatch: exact · contains · prefix · suffix · isEmpty<br/>ElementPredicateCheck: label · identifier · value · traits · hint · actions · customContent · rotors · exclude<br/>ElementPredicate<br/>AccessibilityTarget: predicate · container · ref · within<br/>target sugar: label · identifier · value · hint · traits · actions · customContent · rotors · exclude · element · target<br/>AccessibilityPredicate: exists · missing · announcement · screenChanged · elementsChanged<br/>ScreenPredicate · ElementAssertion<br/>WaitStep · ActionExpectationPolicy<br/>ActionStep · HeistActionCommand<br/>HeistStep: action · wait · conditional · forEachElement · forEachString · repeatUntil · warn · fail · heist · invoke"]
-    ASSEMBLY["Private file-local recursive assembly<br/>definitions · nested HeistPlan · scoped HeistStep arrays"]
+    ASSEMBLY["Internal structural assembly<br/>definitions · nested HeistPlan · scoped HeistStep arrays"]
     ADMISSION["One parseProgram root admission<br/>HeistPlanRuntimeSafetyValidator.validate(root)"]
     PLAN["HeistPlan<br/>canonical admitted plan"]
 
@@ -62,9 +62,9 @@ The source parser preserves grammar evidence while lowering:
 - `HeistPlanSourceScope` binds local string and target names to typed
   `HeistReferenceName` values, snapshots scope for nested closures, and restores
   the enclosing scope afterward.
-- Only unchecked recursive plan, step, and definition assembly remains private
-  to `HeistPlanSourceProgramParser.swift` until `parseProgram` performs the
-  single root runtime-safety admission. Predicate parsing remains in
+- The source parser constructs plan fragments through `HeistPlan`'s one
+  internal structural constructor until `parseProgram` performs the single root
+  runtime-safety admission. Predicate parsing remains in
   `HeistPlanSourcePredicateParser.swift`, target and string parsing in
   `HeistPlanSourceTargetStringParser.swift`, and action expectation parsing in
   `HeistPlanSourceActionParser.swift`.

@@ -212,15 +212,15 @@ incomplete ingress as `noChange`.
 ```mermaid
 sequenceDiagram
     participant Demand
-    participant Link as CADisplayLink
+    participant DisplayLink as CADisplayLink
     participant Stream as Observation.Stream
     participant Bus as Notification bus
     participant Vault
     participant Machine
 
     Demand->>Stream: visible or discovery demand
-    Stream->>Link: resume with canonical demand
-    Link->>Stream: pulse
+    Stream->>DisplayLink: resume with canonical demand
+    DisplayLink->>Stream: pulse
     Stream->>Bus: freeze cycle claim
     Bus-->>Stream: exact notification batch
     Stream->>Vault: admitted snapshot + normalized notification payloads
@@ -231,9 +231,9 @@ sequenceDiagram
     Machine->>Machine: reduce active action/wait predicate
     Stream->>Bus: acknowledge committed claim
     alt demand remains
-        Stream->>Link: await next pulse
+        Stream->>DisplayLink: await next pulse
     else zero demand
-        Stream->>Link: pause
+        Stream->>DisplayLink: pause
     end
 ```
 
@@ -517,7 +517,7 @@ pipelines are explicit:
 | Compiler process terminal outcome | `HeistCompilerProcess.Runner` in `HeistCompilerProcess.swift` | `HeistSwiftFileCompilation.swift`; diagnostic rendering lives in `HeistSwiftFileCompilationError.swift` |
 | Result construction and relationship validity | `HeistExecutionStepResult+Construction.swift` | Runtime step executors and result decoding |
 | Result aggregate admission | `HeistResult.admitStructure` in `HeistResult.swift` | Package initialization and decoding; one ordered-sequence reducer admits every root and recursively visited child sequence |
-| Terminal failure capture | `HeistFailureCapture` on `HeistResult` | The runtime records diagnostic capture separately from execution; custom result coding preserves the established auxiliary-step wire representation |
+| Terminal failure capture | `HeistFailureCapture` on `HeistResult` | The runtime records diagnostic capture separately from execution and encodes it directly as optional result evidence |
 | Result private storage codec | `HeistExecutionStepNode.swift` and `HeistExecutionStepNode+Codable.swift` | External result JSON projection only |
 | Action semantic and wire payload | `ActionResult.Payload` with `ActionResult` custom `Codable` | Runtime construction and wire encoding/decoding |
 | Heist result transport | `ServerMessage.heistResult(HeistResult)` | Fence and in-app clients consume the aggregate directly; production failures use `ServerMessage.error` |
@@ -538,13 +538,14 @@ pipelines are explicit:
 `HeistResult` is execution truth: one admitted semantic step tree, duration,
 optional terminal failure capture, and an `Outcome` derived from the execution
 tree. Failure capture is diagnostic evidence, never an execution node. Custom
-result coding projects that value into the established auxiliary-step wire
-shape and admits it back at the boundary. `HeistReport.project(result:)` walks
-the execution tree once and owns its semantic nodes, summary, metrics, failure
-and warning facts, and diagnostics. JSON, compact text, human text, JUnit,
-doctor, and metric boundaries render that report instead of interpreting
-`HeistResult` independently. There is no competing execution report or
-Fence-owned report projection.
+result coding encodes it directly in the optional `failureCapture` result field.
+`HeistReport.project(result:)` walks the execution tree once and owns its
+semantic nodes, summary, metrics, failure and warning facts, and diagnostics.
+JSON, compact text, human text, JUnit, doctor, and metric boundaries render
+that report instead of interpreting `HeistResult` independently. Doctor projects
+each recorded result once, selects report nodes, and reads their report-owned
+action evidence; there is no competing execution report or Fence-owned report
+projection.
 
 Each action or wait result owns its bounded `Observation.Evidence`. Report
 projection preserves that evidence on the corresponding semantic node and does
@@ -711,22 +712,20 @@ plan locations are component-backed `HeistPlanPath` values; only source,
 diagnostic, and response rendering turns them into strings.
 
 Swift DSL construction, JSON decoding, source compilation, and live command
-composition each return one root-admitted `HeistPlan`. Recursive source
-assembly is private to `HeistPlanSourceProgramParser.swift`; it never becomes a
-stored, returned, package-visible, or cross-file architectural currency.
-`HeistPlan` owns root structural admission, and one
+composition each return one root-admitted `HeistPlan`. `HeistPlan` owns the
+single internal structural constructor for recursive source fragments and root
+assembly; only root admission returns a public plan. One
 `HeistPlanRuntimeSafetyValidator` owns cross-tree bounds, references, expansion,
 and cycle safety before the root crosses its boundary. There is no candidate
 tree or node, graph projection, runtime-input wrapper, validation alias, or
 second admission route.
 
-After admission, `HeistPlanTraversal` owns the semantic walk.
-`HeistCallGraph` alone owns graph nodes and edges by reducing traversal events;
-traversal observes invocation cycles from its own invocation stack, never from
-graph state. Catalogs, descriptions, and semantic surfaces are local reductions
-over the same traversal observations and do not create another plan
-representation. This converges on the one complete-heist machine and canonical
-observation boundary below.
+After admission, `HeistPlanTraversal` owns the semantic walk and its `Event`
+currency. Its invocation stack detects cycles directly; no graph projection or
+topological-order owner exists. Catalogs, descriptions, semantic surfaces, lint,
+and runtime safety each reduce those same events locally without creating another
+plan representation. This converges on the one complete-heist machine and
+canonical observation boundary below.
 
 ```mermaid
 flowchart TD
@@ -737,9 +736,8 @@ flowchart TD
     Parse --> RootAdmission
     RootAdmission --> Validate["HeistPlanRuntimeSafetyValidator<br/>one cross-tree safety pass"]
     Validate --> Plan["Canonical admitted HeistPlan"]
-    Plan --> Walk["HeistPlanTraversal<br/>semantic walk + stack-owned cycle observation"]
-    Walk --> Graph["HeistCallGraph<br/>owns node + edge reduction"]
-    Walk --> Discovery["Catalog + descriptions + semantic surfaces<br/>local observation reduction"]
+    Plan --> Walk["HeistPlanTraversal<br/>Event walk + stack-owned cycle observation"]
+    Walk --> Discovery["Catalog + descriptions + semantic surfaces<br/>local event reduction"]
     Plan --> OfflineReport["validate_heist<br/>plan + invocation + lint report"]
     Plan --> FenceCommand["Fence command<br/>run_heist / perform / wait"]
     FenceCommand --> HandoffSocket["Handoff socket<br/>client version == app version"]

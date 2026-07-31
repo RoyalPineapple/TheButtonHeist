@@ -761,7 +761,11 @@ func emptyHeistRejectsPlanUsingDecodedHeistPlanContract() {
         Issue.record("Expected empty HeistPlan construction to throw")
     } catch let error as HeistPlanBuildError {
         #expect(error.diagnostics.map(\.path) == ["$.body"])
-        #expect(error.diagnostics.map(\.message) == ["heist plan must contain a body or nested definitions"])
+        #expect(
+            error.diagnostics.map(\.message) == [
+                "heist plan must contain a body or nested definitions; observed empty heist",
+            ]
+        )
     } catch {
         Issue.record("Expected HeistPlanBuildError, got \(error)")
     }

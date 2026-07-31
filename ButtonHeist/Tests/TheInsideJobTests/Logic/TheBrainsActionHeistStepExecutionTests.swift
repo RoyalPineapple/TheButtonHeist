@@ -41,6 +41,83 @@ final class HeistMachineStepExecutionTests: XCTestCase {
         XCTAssertEqual(Array(driver.history), [.noChange])
     }
 
+    func testWaivedActionRequiresTerminalNoChangeBeforeFinishing() throws {
+        let plan = try HeistPlan(body: [
+            .action(ActionStep(
+                command: .dismiss,
+                expectationPolicy: .waived(try ActionExpectationWaiver(validating: "fixture"))
+            )),
+        ])
+        var machine = try HeistExecution.Machine(plan: plan)
+        let observation = try XCTUnwrap(machine.start().singleBeginObservationRequest)
+        let dispatch = try XCTUnwrap(machine.advance(.observationBegan(
+            observation.id,
+            baseline: nil
+        )).singleDispatchRequest)
+
+        guard case .wait = machine.advance(.dispatchCompleted(
+            dispatch.id,
+            .success(payload: .dismiss)
+        )),
+              case .wait = machine.advance(.event(.elementsChanged(
+                makeTestObservationSnapshot(labels: ["Unexpected"])
+              ))) else {
+            return XCTFail("A waived action must remain active until its no-change witness")
+        }
+
+        guard case .perform(.finishObservation) = machine.advance(.event(.noChange)) else {
+            return XCTFail("A no-change witness must finish the waived action")
+        }
+    }
+
+    func testNoChangeOnlyActionTimeoutIsSettlementFailureAfterSuccessfulDispatch() throws {
+        let policies: [ActionExpectationPolicy] = [
+            .default,
+            .waived(try ActionExpectationWaiver(validating: "fixture")),
+        ]
+
+        for policy in policies {
+            let plan = try HeistPlan(body: [
+                .action(ActionStep(command: .dismiss, expectationPolicy: policy)),
+            ])
+            var driver = try HeistMachineTestDriver(plan: plan)
+
+            let completion = try driver.run()
+            let action = try XCTUnwrap(completion.steps.first)
+
+            XCTAssertEqual(action.status, .failed)
+            XCTAssertEqual(action.actionEvidence?.result?.outcome.failureKind, .timeout)
+            XCTAssertEqual(action.failure?.category, .expectation)
+            XCTAssertEqual(action.failure?.contract, "action settles through terminal no-change")
+            XCTAssertNil(action.failure?.expected)
+            XCTAssertEqual(try action.replayExpectation()?.predicate, nil)
+            XCTAssertEqual(try action.replayExpectation()?.met, false)
+        }
+    }
+
+    func testAuthoredActionRequiresNoChangeAfterItsAuthoredExpectation() throws {
+        let plan = try HeistPlan(body: [
+            .action(ActionStep(
+                command: .dismiss,
+                expectationPolicy: .expect(ActionExpectation(predicate: .notification("Saved")))
+            )),
+        ])
+        var machine = try HeistExecution.Machine(plan: plan)
+        let observation = try XCTUnwrap(machine.start().singleBeginObservationRequest)
+        let dispatch = try XCTUnwrap(machine.advance(.observationBegan(
+            observation.id,
+            baseline: nil
+        )).singleDispatchRequest)
+        _ = machine.advance(.dispatchCompleted(dispatch.id, .success(payload: .dismiss)))
+
+        guard case .wait = machine.advance(.event(heistNotification("Saved"))) else {
+            return XCTFail("The authored expectation must still await terminal no-change")
+        }
+        guard case .perform(.finishObservation) = machine.advance(.event(.noChange)) else {
+            return XCTFail("No-change after the authored expectation must finish the action")
+        }
+    }
+
     func testRuntimePolicyResolvesStandardScreenAndExplicitExpectationBudgets() throws {
         let policy = ActionExpectationTimeoutPolicy(standard: 3, screenTransition: 12)
         let explicitTimeout = try WaitTimeout.seconds(7)
@@ -162,7 +239,7 @@ final class HeistMachineStepExecutionTests: XCTestCase {
 
         XCTAssertEqual(completion.steps.map(\.status), [.failed, .skipped])
         XCTAssertEqual(completion.steps.first?.actionEvidence?.result?.outcome.failureKind, .actionFailed)
-        XCTAssertEqual(completion.abortedAtPath, completion.steps.first?.path)
+        XCTAssertEqual(completion.steps.first(where: { $0.status == .failed })?.path, completion.steps.first?.path)
     }
 
     func testCancelledActionIsTerminalFailure() throws {
@@ -203,7 +280,7 @@ final class HeistMachineStepExecutionTests: XCTestCase {
             completion.steps.map(\.path.description),
             ["$.body[0]", "$.body[1]", "$.body[2]"]
         )
-        XCTAssertEqual(completion.abortedAtPath, completion.steps[1].path)
+        XCTAssertEqual(completion.steps.first(where: { $0.status == .failed })?.path, completion.steps[1].path)
     }
 
     func testFailureScreenshotIsAHostRequestNotASecondExecutor() throws {
@@ -238,7 +315,7 @@ final class HeistMachineStepExecutionTests: XCTestCase {
         XCTAssertEqual(completion.steps.map(\.kind), [.fail])
         XCTAssertEqual(completion.steps.map(\.status), [.failed])
         XCTAssertEqual(completion.failureCapture, .captured(screenshot))
-        XCTAssertEqual(completion.abortedAtPath, completion.steps.first?.path)
+        XCTAssertEqual(completion.steps.first(where: { $0.status == .failed })?.path, completion.steps.first?.path)
     }
 }
 

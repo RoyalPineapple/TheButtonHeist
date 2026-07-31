@@ -3,7 +3,7 @@ import Testing
 @_spi(ButtonHeistInternals) import ThePlans
 
 @Test
-func `thePlans exposes no unchecked HeistPlan construction seam`() throws {
+func `thePlans has one internal structural HeistPlan constructor`() throws {
     let thePlans = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()
         .deletingLastPathComponent()
@@ -15,20 +15,53 @@ func `thePlans exposes no unchecked HeistPlan construction seam`() throws {
             includingPropertiesForKeys: nil
         )?.allObjects as? [URL]
     ).filter { $0.pathExtension == "swift" }
-    let forbiddenSpelling = "structural" + "Version"
-    let uncheckedInitializer = try NSRegularExpression(
-        pattern: #"(?:package|public)\s+init\s*\(\s*(?:stackVersion|sourceStackVersion)"#
-    )
+    let structuralInitializer = try NSRegularExpression(pattern: #"\binit\s*\(\s*structuralVersion"#)
+    var structuralInitializerCount = 0
 
     for file in swiftFiles {
         let source = try String(contentsOf: file, encoding: .utf8)
-        #expect(!source.contains(forbiddenSpelling), "\(file.path) exposes unchecked plan construction")
+        structuralInitializerCount += structuralInitializer.numberOfMatches(
+            in: source,
+            range: NSRange(source.startIndex..., in: source)
+        )
         #expect(
-            uncheckedInitializer.firstMatch(
-                in: source,
-                range: NSRange(source.startIndex..., in: source)
-            ) == nil,
-            "\(file.path) exposes package-visible unchecked plan construction"
+            !source.contains("stackVersion") && !source.contains("sourceStackVersion"),
+            "\(file.path) retains a plan-admission adapter"
+        )
+        if file.lastPathComponent != "HeistPlan.swift" {
+            #expect(
+                structuralInitializer.firstMatch(
+                    in: source,
+                    range: NSRange(source.startIndex..., in: source)
+                ) == nil,
+                "\(file.path) owns a second structural constructor"
+            )
+        }
+    }
+    #expect(structuralInitializerCount == 1, "Expected one internal structural HeistPlan constructor")
+}
+
+@Test
+func `thePlans does not retain raw-field or source-policy admission adapters`() throws {
+    let thePlans = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appendingPathComponent("Sources/ThePlans")
+    let swiftFiles = try #require(
+        FileManager.default.enumerator(
+            at: thePlans,
+            includingPropertiesForKeys: nil
+        )?.allObjects as? [URL]
+    ).filter { $0.pathExtension == "swift" }
+
+    for file in swiftFiles {
+        let source = try String(contentsOf: file, encoding: .utf8)
+        #expect(
+            !source.contains("RejectedPublicSourceField")
+                && !source.contains("rawStructuredJSONIRSourceFields")
+                && !source.contains("SourceAdmissionPolicy"),
+            "\(file.path) retains a plan-admission adapter"
         )
     }
 }

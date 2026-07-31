@@ -60,6 +60,8 @@ public enum HeistParameterKind: String, Codable, Sendable, Equatable {
     case none
     case string
     case accessibilityTarget = "accessibility_target"
+
+    public var requiresArgument: Bool { self != .none }
 }
 
 package enum HeistArgumentCore: Sendable, Equatable {

@@ -241,8 +241,6 @@ The tool MUST reject:
 - calls containing both `plan` and `path`;
 - `.swift`, `.json`, or other non-`.heist` paths;
 - empty inline source;
-- raw JSON IR fields such as `version`, `name`, `parameter`, `definitions`, or
-  `body`;
 - unknown top-level fields;
 - an argument that does not match the shared root-argument schema;
 - unknown lint values.
@@ -313,7 +311,8 @@ are request errors.
 ### 2. Source admission
 
 Use the existing plan-source parameter types and enforce exactly one source.
-Continue to reject public raw JSON IR fields.
+The descriptor-driven command schema is the sole owner of unknown top-level
+field rejection, including raw wire-IR keys.
 
 Failures that mean the caller did not identify one plan source are request
 errors:
@@ -676,7 +675,7 @@ have plan-build errors.
         "severity": "error",
         "path": "body[0]",
         "message": "Semantic action has no expectation",
-        "suggestion": "Attach .expect(...) or .withoutExpectation(\"reason\")"
+        "suggestion": "Attach .expect(...) or .withoutExpectation(\"reason\") to state the authored outcome; every action still proves terminal no-change."
       }
     ]
   },

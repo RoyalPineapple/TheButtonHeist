@@ -27,7 +27,7 @@ import TheScore
             invocationPath: "Cart.checkout",
             argument: .string("Milk"),
             completion: .failed(
-                evidence: .unavailable,
+                evidence: nil,
                 failure: HeistFailureDetail(
                     category: .runtimeUnavailable,
                     contract: "invocation evidence is observed",

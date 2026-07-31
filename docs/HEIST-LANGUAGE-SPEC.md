@@ -79,19 +79,18 @@ root-admitted `HeistPlan` or throw canonical diagnostics.
 
 Each boundary owns its recursive assembly:
 
-- JSON decoding assembles and structurally admits the complete root inside
-  `HeistPlan.swift`.
+- JSON decoding assembles the complete root with `HeistPlan`'s internal
+  structural constructor before root admission.
 - The Swift DSL collects `HeistContent` and calls the throwing `HeistPlan` root
   initializer.
-- The source parser keeps recursive plan, step, branch, and definition assembly
-  private and file-local to `HeistPlanSourceProgramParser.swift`. After the
-  parser consumes the complete root, `parseProgram()` invokes runtime-safety
-  validation once.
+- The source parser lowers recursive plan, step, branch, and definition
+  fragments with that same structural constructor. After it consumes the
+  complete root, `parseProgram()` invokes runtime-safety validation once.
 
-Unchecked recursive assembly MUST NOT be stored, returned, package-visible, or
-observed outside its owning boundary. Root admission validates typed paths,
-supported step shapes, parameter names, expectation composition, version, and
-local structure. One `HeistPlanRuntimeSafetyValidator` pass then validates
+Structural fragments are internal implementation values; only an admitted root
+may cross a public boundary. Root admission validates version, then one
+`HeistPlanRuntimeSafetyValidator` pass validates typed paths, supported step
+shapes, parameter names, expectation composition, local structure,
 duplicate sibling definitions, unresolved `RunHeist` targets, argument
 arity/type mismatches, unsupported recursion, non-durable actions, bounded
 loops, bounded nesting, expansion, cycles, and payload contracts. Only the
@@ -431,7 +430,7 @@ HeistPlan("cart") {
 ## Authoring rules
 
 Durable heist source MUST use Button Heist DSL constructs: actions, targets,
-expectations, expectation waivers, `WaitFor`, `RepeatUntil`, `If`, `Case`,
+expectations, authored-outcome waivers, `WaitFor`, `RepeatUntil`, `If`, `Case`,
 `Else`, `ForEach`, `RunHeist`, `HeistDef`, `Warn`, and `Fail`.
 
 Durable heist source MUST use the canonical rendered spelling for each

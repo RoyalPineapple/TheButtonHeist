@@ -168,7 +168,7 @@ extension TheFenceHandlerTests {
         let json = try publicJSONProbe(response).object()
         try json.assertMissing("method")
         try json.assertPresent("report")
-        assertCompactHeistSummary(response, stepLine: "  [0] activate")
+        assertCompactHeistSummary(response, stepLine: "  [0] activate ✓")
     }
 
     // MARK: - Text Input Validation
@@ -547,7 +547,7 @@ extension TheFenceHandlerTests {
             stepKind: .action,
             reportCommandName: "oneFingerTap"
         )
-        assertCompactHeistSummary(response, stepLine: "  [0] oneFingerTap")
+        assertCompactHeistSummary(response, stepLine: "  [0] oneFingerTap ✓")
     }
 
     @ButtonHeistActor

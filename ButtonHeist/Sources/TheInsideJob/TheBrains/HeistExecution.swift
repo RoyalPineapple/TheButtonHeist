@@ -50,7 +50,6 @@ extension HeistExecution {
     internal struct Completion {
         internal let steps: [HeistExecutionStepResult]
         internal let failureCapture: HeistFailureCapture?
-        internal let abortedAtPath: HeistExecutionPath?
     }
 
 }
@@ -81,6 +80,44 @@ extension HeistExecution {
         internal var isNotification: Bool {
             if case .notification = resolved { return true }
             return false
+        }
+    }
+
+    internal enum ActionObservationExpectation: Sendable {
+        case authoredThenNoChange(Predicate)
+        case noChange
+
+        internal init(
+            _ expectation: ActionExecutionExpectation,
+            bindings: HeistExecutionEnvironment
+        ) throws {
+            switch expectation {
+            case .authoredThenNoChange(let expectation):
+                self = .authoredThenNoChange(try Predicate(
+                    authored: expectation.predicate,
+                    bindings: bindings
+                ))
+            case .noChange:
+                self = .noChange
+            }
+        }
+
+        internal var predicates: [ObservationPredicate] {
+            switch self {
+            case .authoredThenNoChange(let predicate):
+                [predicate.resolved, .noChange]
+            case .noChange:
+                [.noChange]
+            }
+        }
+
+        internal var authoredPredicate: Predicate? {
+            guard case .authoredThenNoChange(let predicate) = self else { return nil }
+            return predicate
+        }
+
+        internal var observationScope: SemanticObservationScope {
+            authoredPredicate?.observationScope ?? .visible
         }
     }
 
@@ -226,16 +263,13 @@ extension HeistExecution {
         internal func expectationIsProven(
             by evidence: Observation.Evidence
         ) -> Bool {
-            proves(
-                predicate.map { [$0, .noChange] } ?? [.noChange],
-                by: evidence
-            )
+            proves(predicates, by: evidence)
         }
 
         internal func needsStabilityCapture(
             after evidence: Observation.Evidence
         ) -> Bool {
-            proves(predicate.map { [$0] } ?? [], by: evidence)
+            proves(predicates.dropLast(), by: evidence)
                 && !expectationIsProven(by: evidence)
         }
 
@@ -249,12 +283,12 @@ extension HeistExecution {
             ).result == .satisfied
         }
 
-        private var predicate: ObservationPredicate? {
+        private var predicates: [ObservationPredicate] {
             switch self {
             case .action(let leaf):
-                leaf.predicate?.resolved
+                leaf.expectation.predicates
             case .wait(let leaf):
-                leaf.predicate.resolved
+                [leaf.predicate.resolved, .noChange]
             }
         }
 
@@ -279,7 +313,7 @@ extension HeistExecution {
         internal let id: RequestID
         internal let step: ActionStep
         internal let command: ResolvedHeistActionCommand
-        internal let predicate: Predicate?
+        internal let expectation: ActionObservationExpectation
         internal let path: HeistExecutionPath
         internal var phase: ActionLeafPhase
 

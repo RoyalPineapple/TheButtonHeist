@@ -85,9 +85,10 @@ extension TheFence {
             handoff.disableAutoReconnect()
             handoff.stopDiscovery()
             clearClientSessionState(error: connectionFailure)
+            let diagnosticFailure = connectionFailure.diagnosticFailure
             return .error(DiagnosticFailure(
-                message: "Connect failed; disconnected from previous target: \(connectionFailure.coreMessage)",
-                details: connectionFailure.failureDetails
+                message: "Connect failed; disconnected from previous target: \(diagnosticFailure.message)",
+                details: diagnosticFailure.details
             ))
         }
 

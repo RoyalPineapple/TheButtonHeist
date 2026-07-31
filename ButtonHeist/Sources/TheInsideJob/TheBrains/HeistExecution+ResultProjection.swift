@@ -41,7 +41,7 @@ extension HeistExecution {
             )
             let evidence = HeistActionEvidence.completed(
                 result: actionResult,
-                expectation: nil
+                expectation: unavailableExpectationEvidence()
             )
             return .action(
                 path: path,
@@ -68,7 +68,7 @@ extension HeistExecution {
                 predicate: step.predicate,
                 timeout: step.timeout,
                 completion: .failed(
-                    evidence: .unavailable,
+                    evidence: nil,
                     failure: HeistFailureDetail(
                         category: .wait,
                         contract: "wait predicate resolves before evaluation",
@@ -89,7 +89,9 @@ extension HeistExecution {
             )
             let evidence = HeistActionEvidence.completed(
                 result: result,
-                expectation: nil
+                expectation: unavailableExpectationEvidence(
+                    predicate: leaf.expectation.authoredPredicate
+                )
             )
             return .action(
                 path: leaf.path,
@@ -114,7 +116,7 @@ extension HeistExecution {
                 predicate: step.predicate,
                 timeout: step.timeout,
                 completion: .failed(
-                    evidence: .unavailable,
+                    evidence: nil,
                     failure: HeistFailureDetail(
                         category: .wait,
                         contract: "wait begins within the whole-heist deadline",
@@ -136,15 +138,12 @@ extension HeistExecution {
                 evidence: evidence,
                 outcome: outcome
             )
-            let expectation = leaf.predicate.flatMap { predicate -> HeistExpectationEvidence? in
-                guard leaf.phase.dispatch?.success == true else { return nil }
-                return expectationEvidence(
-                    predicate,
-                    observation: evidence,
-                    outcome: outcome,
-                    timing: timing
-                )
-            }
+            let expectation = expectationEvidence(
+                leaf.expectation.authoredPredicate,
+                observation: evidence,
+                outcome: outcome,
+                timing: timing
+            )
             let evidence = HeistActionEvidence.completed(
                 result: actionResult,
                 expectation: expectation
@@ -155,7 +154,7 @@ extension HeistExecution {
                     command: leaf.step.command,
                     evidence: .init(admitted: evidence)
                 )
-            } else if leaf.predicate != nil, expectation != nil {
+            } else if leaf.phase.dispatch?.success == true {
                 execution = .failed(
                     command: leaf.step.command,
                     evidence: .init(admitted: evidence),
@@ -197,7 +196,7 @@ extension HeistExecution {
                 completion = .passed(evidence: passedEvidence)
             } else {
                 completion = .failed(
-                    evidence: .observed(expectation),
+                    evidence: expectation,
                     failure: waitFailure(step: step, evidence: expectation, outcome: outcome)
                 )
             }
@@ -214,7 +213,7 @@ extension HeistExecution {
 
 extension HeistExecution.ResultProjector {
     internal static func expectationEvidence(
-        _ predicate: HeistExecution.Predicate,
+        _ predicate: HeistExecution.Predicate?,
         observation: Observation.Evidence,
         outcome: HeistExecution.LeafOutcome,
         timing: HeistExpectationTiming
@@ -228,11 +227,32 @@ extension HeistExecution.ResultProjector {
             case .viewportExitFailed: .viewportFailure
             }
             return try HeistExpectationEvidence(
-                predicate: predicate.authored,
-                bindings: predicate.bindings,
+                predicate: predicate?.authored,
+                bindings: predicate?.bindings ?? .empty,
                 observation: observation,
                 terminalCause: terminalCause,
                 timing: timing
+            )
+        } catch {
+            preconditionFailure("Machine retained invalid predicate bindings: \(error)")
+        }
+    }
+
+    private static func unavailableExpectationEvidence(
+        predicate: HeistExecution.Predicate? = nil
+    ) -> HeistExpectationEvidence {
+        do {
+            return try HeistExpectationEvidence(
+                predicate: predicate?.authored,
+                bindings: predicate?.bindings ?? .empty,
+                observation: .init(
+                    baseline: nil,
+                    events: [],
+                    current: nil,
+                    coverage: .incomplete(.captureUnavailable)
+                ),
+                terminalCause: .unavailable,
+                timing: .init(budgetMs: 0, elapsedMs: 0, lastTreeChangeElapsedMs: nil)
             )
         } catch {
             preconditionFailure("Machine retained invalid predicate bindings: \(error)")
@@ -326,11 +346,14 @@ extension HeistExecution.ResultProjector {
            expectationActual != observed {
             observed += "; replay: \(expectationActual)"
         }
+        let authoredExpectation = step.expectationPolicy.expectedExpectation
         return HeistFailureDetail(
             category: .expectation,
-            contract: "post-action expectation is met",
+            contract: authoredExpectation == nil
+                ? "action settles through terminal no-change"
+                : "post-action expectation is met",
             observed: observed,
-            expected: step.expectationPolicy.expectedExpectation?.predicate.description
+            expected: authoredExpectation?.predicate.description
         )
     }
 

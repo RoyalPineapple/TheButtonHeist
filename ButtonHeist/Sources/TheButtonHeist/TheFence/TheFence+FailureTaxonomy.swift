@@ -75,34 +75,6 @@ public extension FenceError {
         }
     }
 
-    var coreMessage: String {
-        diagnosticFailure.message
-    }
-
-    var failureDetails: FailureDetails {
-        diagnosticFailure.details
-    }
-
-    var errorCode: String {
-        failureDetails.errorCode
-    }
-
-    var phase: FailurePhase {
-        failureDetails.phase
-    }
-
-    var retryable: Bool {
-        failureDetails.retryable
-    }
-
-    var hint: String? {
-        failureDetails.hint
-    }
-
-    internal var buildDiagnostics: [HeistBuildDiagnostic] {
-        guard case .heistBuildDiagnostics(let diagnostics) = self else { return [] }
-        return diagnostics
-    }
 }
 
 private extension Array where Element == HeistBuildDiagnostic {

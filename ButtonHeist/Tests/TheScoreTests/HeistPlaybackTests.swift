@@ -59,7 +59,10 @@ final class HeistPlanTests: XCTestCase {
         let json = #"{"version":\#(HeistPlan.currentVersion),"body":[]}"#
 
         XCTAssertThrowsError(try JSONDecoder().decode(HeistPlan.self, from: Data(json.utf8))) { error in
-            XCTAssertTrue("\(error)".contains("requires a non-empty body or definitions"), "\(error)")
+            XCTAssertTrue(
+                "\(error)".contains("heist plan must contain a body or nested definitions; observed empty heist"),
+                "\(error)"
+            )
         }
     }
 

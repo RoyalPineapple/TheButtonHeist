@@ -48,10 +48,14 @@ final class HandoffServerFailureTests: XCTestCase {
             XCTAssertEqual(expected.retryable, retryable)
             XCTAssertEqual(expected.hint, serverError.recoveryHint?.description ?? failureCode.defaultHint)
             let publicError = FenceError(expected)
-            XCTAssertEqual(publicError.errorCode, failureCode.rawValue)
-            XCTAssertEqual(publicError.phase, phase)
-            XCTAssertEqual(publicError.retryable, retryable)
-            XCTAssertEqual(publicError.hint, serverError.recoveryHint?.description ?? failureCode.defaultHint)
+            let publicDetails = publicError.diagnosticFailure.details
+            XCTAssertEqual(publicDetails.errorCode, failureCode.rawValue)
+            XCTAssertEqual(publicDetails.phase, phase)
+            XCTAssertEqual(publicDetails.retryable, retryable)
+            XCTAssertEqual(
+                publicDetails.hint,
+                serverError.recoveryHint?.description ?? failureCode.defaultHint
+            )
             XCTAssertEqual(connection.disconnectCount, 1)
         }
     }

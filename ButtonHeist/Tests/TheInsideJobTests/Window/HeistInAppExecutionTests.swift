@@ -100,10 +100,10 @@ final class HeistInAppExecutionTests: XCTestCase {
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
 
-        let heist = try await Heist(plan, argument: .none, runtime: .insideJob(job))
+        let result = try await job.executeInAppHeist(plan)
 
-        XCTAssertEqual(heist.result.steps.map(\.kind), [.warn])
-        XCTAssertEqual(heist.result.steps.first?.reportMessage, "prebuilt")
+        XCTAssertEqual(result.steps.map(\.kind), [.warn])
+        XCTAssertEqual(result.steps.first?.reportMessage, "prebuilt")
         XCTAssertFalse(job.isRunning)
         XCTAssertFalse(job.brains.semanticObservationIsActive)
         XCTAssertFalse(job.tripwire.isPulseRunning)
@@ -210,29 +210,22 @@ final class HeistInAppExecutionTests: XCTestCase {
     func testFailureAbortsAtFirstFailedStepAndRestoresRuntime() async throws {
         let job = try TheInsideJob(token: "in-app-heist-abort-test")
 
-        do {
-            _ = try await HeistResultRecording.withEnvironmentRecording(false) {
-                try await Heist(runtime: .insideJob(job)) {
-                    Warn("before")
-                    Fail("abort")
-                    Warn("after")
-                }
-            }
-            XCTFail("Expected failed heist to throw")
-        } catch let failure as Heist.Failure {
-            XCTAssertEqual(failure.failedStepPath, "$.body[1]")
-            XCTAssertEqual(failure.result.abortedAtPath, "$.body[1]")
-            XCTAssertEqual(Array(failure.result.steps.prefix(3)).map(\.kind), [.warn, .fail, .warn])
-            XCTAssertEqual(Array(failure.result.steps.prefix(3)).map(\.status), [.passed, .failed, .skipped])
-            XCTAssertNotNil(failure.result.failureScreenshotPayload)
-            let skipped = try XCTUnwrap(failure.result.steps.dropFirst(2).first)
-            XCTAssertEqual(skipped.path, "$.body[2]")
-            XCTAssertEqual(skipped.kind, .warn)
-            XCTAssertNil(skipped.failure)
-            XCTAssertFalse(job.isRunning)
-            XCTAssertFalse(job.brains.semanticObservationIsActive)
-            XCTAssertFalse(job.tripwire.isPulseRunning)
-        }
+        let result = try await job.executeInAppHeist(try HeistPlan {
+            Warn("before")
+            Fail("abort")
+            Warn("after")
+        })
+        XCTAssertEqual(result.firstFailedStep?.path, "$.body[1]")
+        XCTAssertEqual(Array(result.steps.prefix(3)).map(\.kind), [.warn, .fail, .warn])
+        XCTAssertEqual(Array(result.steps.prefix(3)).map(\.status), [.passed, .failed, .skipped])
+        XCTAssertNotNil(result.failureScreenshotPayload)
+        let skipped = try XCTUnwrap(result.steps.dropFirst(2).first)
+        XCTAssertEqual(skipped.path, "$.body[2]")
+        XCTAssertEqual(skipped.kind, .warn)
+        XCTAssertNil(skipped.failure)
+        XCTAssertFalse(job.isRunning)
+        XCTAssertFalse(job.brains.semanticObservationIsActive)
+        XCTAssertFalse(job.tripwire.isPulseRunning)
     }
 
     private func setEnvironment(_ key: String, _ value: String?) {

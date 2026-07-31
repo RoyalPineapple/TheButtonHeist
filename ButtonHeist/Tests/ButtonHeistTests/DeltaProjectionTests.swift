@@ -41,14 +41,14 @@ final class DeltaProjectionTests: XCTestCase {
             evidence: evidence,
             profile: .full
         ))
-        guard case .elementsChanged(let delta) = projection else {
+        guard case .elementsChanged(_, let projectedEdits) = projection else {
             return XCTFail("Expected elementsChanged, got \(projection.kind)")
         }
 
-        XCTAssertEqual(delta.edits.added.elements, [])
-        XCTAssertEqual(delta.edits.updated.updates, [])
+        XCTAssertEqual(projectedEdits.added.values, [])
+        XCTAssertEqual(projectedEdits.updated.values, [])
         XCTAssertEqual(
-            delta.edits.removed.elements.compactMap(\.semantics.assertable.identifier),
+            projectedEdits.removed.values.compactMap(\.semantics.assertable.identifier),
             removalOrder.map { "row_\($0)" }
         )
         let compact = FenceResponse.compactDelta(projection, method: "activate")
@@ -99,16 +99,16 @@ final class DeltaProjectionTests: XCTestCase {
             evidence: makeObservationEvidence(before: before, after: after),
             profile: .full
         ))
-        guard case .elementsChanged(let delta) = projection else {
+        guard case .elementsChanged(_, let projectedEdits) = projection else {
             return XCTFail("Expected elementsChanged, got \(projection.kind)")
         }
 
-        let removed = try XCTUnwrap(delta.edits.removed.elements.first)
-        XCTAssertEqual(delta.edits.removed.elements.count, 1)
+        let removed = try XCTUnwrap(projectedEdits.removed.values.first)
+        XCTAssertEqual(projectedEdits.removed.values.count, 1)
         XCTAssertEqual(removed.semantics.assertable.identifier, "duplicate")
         XCTAssertEqual(removed.semantics.assertable.actions, [.custom("Archive")])
-        XCTAssertTrue(delta.edits.added.elements.isEmpty)
-        XCTAssertTrue(delta.edits.updated.updates.isEmpty)
+        XCTAssertTrue(projectedEdits.added.values.isEmpty)
+        XCTAssertTrue(projectedEdits.updated.values.isEmpty)
     }
 
     func testScreenBoundaryDominatesEarlierElementFacts() throws {
@@ -148,12 +148,12 @@ final class DeltaProjectionTests: XCTestCase {
             evidence: evidence,
             profile: .full
         ))
-        guard case .screenChanged(let delta) = projection else {
+        guard case .screenChanged(_, let screen) = projection else {
             return XCTFail("Expected screenChanged, got \(projection.kind)")
         }
 
         XCTAssertEqual(
-            delta.screen.elements.compactMap(\.semantics.assertable.identifier),
+            screen.elements.compactMap(\.semantics.assertable.identifier),
             ["checkout", "pay"]
         )
 

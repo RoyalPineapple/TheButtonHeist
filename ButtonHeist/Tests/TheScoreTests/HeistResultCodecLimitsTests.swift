@@ -199,32 +199,25 @@ import ThePlans
         #expect(result.failureCapture == .captured(screenshot))
     }
 
-    @Test func `codec normalizes legacy failure capture and preserves its wire shape`() throws {
+    @Test func `failure capture round trips as direct result evidence`() throws {
         let screenshot = failureScreenshot()
-        let legacyCapture = HeistResultFixture.action(
-            path: "$.body[0].failure.actions[0]",
-            command: .takeScreenshot,
-            result: .success(payload: .screenshot(screenshot))
+        let result = try HeistResult(
+            steps: [
+                HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop"),
+                skippedWarning(path: "$.body[1]"),
+            ],
+            failureCapture: .captured(screenshot),
+            durationMs: 3
         )
-        let decoded = try HeistResultCodec.decode(
-            try resultData(
-                steps: [
-                    HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop"),
-                    skippedWarning(path: "$.body[1]"),
-                    legacyCapture,
-                ],
-                durationMs: 3
-            )
-        ).result
-        let encoded = try JSONEncoder().encode(decoded)
+        let encoded = try JSONEncoder().encode(result)
         let roundTrip = try JSONDecoder().decode(HeistResult.self, from: encoded)
         let encodedSteps = try JSONProbe(data: encoded).array("steps")
+        let failureCapture = try JSONProbe(data: encoded).object("failureCapture")
 
-        #expect(decoded.steps.map(\.status) == [.failed, .skipped])
-        #expect(decoded.failureCapture == .captured(screenshot))
-        #expect(roundTrip == decoded)
-        #expect(encodedSteps.count == 3)
-        #expect(try encodedSteps.last?.string("path") == "$.body[0].failure.actions[0]")
+        #expect(roundTrip == result)
+        #expect(encodedSteps.count == 2)
+        #expect(try failureCapture.string("kind") == "captured")
+        #expect(try failureCapture.object("payload").int("width") == 1)
     }
 
     @Test func `explicit failure capture requires a failed execution step`() throws {
@@ -243,26 +236,35 @@ import ThePlans
         }
     }
 
-    @Test func `aggregate admission rejects failure capture steps outside decoding`() throws {
-        let screenshot = failureScreenshot()
-        let path: HeistExecutionPath = "$.body[0].failure.actions[0]"
-        let expected = HeistResultCodecError.incoherentExecutionEvidence(
-            path: path,
-            reason: "failure capture action must not appear in canonical execution steps"
+    @Test func `legacy failure capture receipt is rejected`() throws {
+        let result = try HeistResult(
+            steps: [HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop")],
+            durationMs: 3
         )
+        var receipt = try #require(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(result)) as? [String: Any]
+        )
+        var legacyCapture = try #require(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(
+                HeistResultFixture.action(
+                    path: "$.body[1]",
+                    command: .takeScreenshot,
+                    result: .success(payload: .screenshot(failureScreenshot()))
+                )
+            )) as? [String: Any]
+        )
+        legacyCapture["path"] = "$.body[0].failure.actions[0]"
+        let steps = try #require(receipt["steps"] as? [Any])
+        let failedStep = try #require(steps.first)
+        receipt["steps"] = [
+            failedStep,
+            legacyCapture,
+        ]
 
-        #expect(throws: expected) {
-            _ = try HeistResult(
-                steps: [
-                    HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop"),
-                    skippedWarning(path: "$.body[1]"),
-                    HeistResultFixture.action(
-                        path: "$.body[0].failure.actions[0]",
-                        command: .takeScreenshot,
-                        result: .success(payload: .screenshot(screenshot))
-                    ),
-                ],
-                durationMs: 3
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(
+                HeistResult.self,
+                from: JSONSerialization.data(withJSONObject: receipt)
             )
         }
     }
@@ -325,83 +327,6 @@ import ThePlans
         ).result
 
         #expect(result.steps.first?.children.count == 1)
-    }
-
-    @Test func `aggregate admission rejects failure capture before owning root`() throws {
-        try expectAggregateAdmissionError(
-            steps: [
-                HeistResultFixture.action(
-                    path: "$.body[0].failure.actions[0]",
-                    command: .takeScreenshot,
-                    result: .success(payload: .screenshot(nil))
-                ),
-                HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop"),
-            ],
-            containing: ["failure capture action must not appear in canonical execution steps"]
-        )
-    }
-
-    @Test func `aggregate admission rejects failure capture without matching failed step`() throws {
-        try expectAggregateAdmissionError(
-            steps: [
-                HeistResultFixture.warning(path: "$.body[0]", message: "passed"),
-                HeistResultFixture.action(
-                    path: "$.body[0].failure.actions[0]",
-                    command: .takeScreenshot,
-                    result: .success(payload: .screenshot(nil))
-                ),
-            ],
-            containing: ["failure capture action must not appear in canonical execution steps"]
-        )
-    }
-
-    @Test func `aggregate admission rejects regular roots after terminal failure capture`() throws {
-        try expectAggregateAdmissionError(
-            steps: [
-                HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop"),
-                HeistResultFixture.action(
-                    path: "$.body[0].failure.actions[0]",
-                    command: .takeScreenshot,
-                    result: .success(payload: .screenshot(nil))
-                ),
-                skippedWarning(path: "$.body[1]"),
-            ],
-            containing: ["failure capture action must not appear in canonical execution steps"]
-        )
-    }
-
-    @Test func `aggregate admission rejects sparse failure capture roots`() throws {
-        try expectAggregateAdmissionError(
-            steps: [
-                HeistResultFixture.explicitFailure(path: "$.body[0]", message: "stop"),
-                HeistResultFixture.action(
-                    path: "$.body[0].failure.actions[1]",
-                    command: .takeScreenshot,
-                    result: .success(payload: .screenshot(nil))
-                ),
-            ],
-            containing: ["failure capture action must not appear in canonical execution steps"]
-        )
-    }
-
-    @Test func `aggregate admission rejects nested failure capture execution`() throws {
-        let screenshot = HeistResultFixture.action(
-            path: "$.body[0].failure.actions[0]",
-            command: .takeScreenshot,
-            result: .success(payload: .screenshot(failureScreenshot()))
-        )
-        let root = HeistExecutionStepResult.failure(
-            path: "$.body[0]",
-            message: "stop",
-            completion: .failed(
-                failure: failureDetail(observed: "stop"),
-                children: try #require(HeistPassingChildren([screenshot]))
-            )
-        )
-
-        #expect(throws: Error.self) {
-            try HeistResult(steps: [root], durationMs: 1)
-        }
     }
 
     @Test func `aggregate admission rejects loop iteration paths with non iteration child nodes`() throws {
@@ -562,7 +487,7 @@ import ThePlans
                     invocationPath: "Checkout",
                     argument: .none,
                     completion: .childAborted(
-                        evidence: .unavailable,
+                        evidence: nil,
                         failure: invocationFailureDetail(observed: "child failed"),
                         children: abortedChildren
                     )
@@ -575,7 +500,7 @@ import ThePlans
                     invocationPath: "Checkout",
                     argument: .none,
                     completion: .childAborted(
-                        evidence: .observed(mismatchedEvidence),
+                        evidence: mismatchedEvidence,
                         failure: invocationFailureDetail(observed: "child failed"),
                         children: abortedChildren
                     )
@@ -589,7 +514,7 @@ import ThePlans
                     invocationPath: "Checkout",
                     argument: .none,
                     completion: .failed(
-                        evidence: .observed(childFailureEvidence),
+                        evidence: childFailureEvidence,
                         failure: invocationFailureDetail(observed: "invocation failed")
                     )
                 ),
@@ -625,7 +550,7 @@ import ThePlans
             invocationPath: "Checkout",
             argument: .none,
             completion: .childAborted(
-                evidence: .observed(childFailureEvidence),
+                evidence: childFailureEvidence,
                 failure: invocationFailureDetail(observed: "child failed"),
                 children: try #require(HeistAbortedChildren([child]))
             )

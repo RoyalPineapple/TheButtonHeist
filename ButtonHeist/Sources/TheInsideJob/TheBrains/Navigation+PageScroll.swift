@@ -38,12 +38,19 @@ extension Navigation {
         ) {
         case .resolved(let scrollTarget):
             let uiDirection = Self.uiScrollDirection(for: direction)
-            let transition = await scrollOnePageAndSettle(
-                scrollTarget,
-                direction: uiDirection,
-                animated: false,
-                deadline: deadline
-            )
+            let transition: ViewportTransition
+            switch scrollTarget {
+            case .uiScrollView:
+                transition = await performViewportTransition(
+                    .page(scrollTarget, direction: uiDirection, animated: false),
+                    deadline: deadline
+                )
+            case .swipeable:
+                transition = await performViewportTransition(
+                    .swipe(scrollTarget, direction: uiDirection),
+                    deadline: deadline
+                )
+            }
             switch transition.outcome {
             case .moved:
                 return .success(payload: .scroll)
@@ -91,9 +98,14 @@ extension Navigation {
             command: .scrollToEdge
         ) {
         case .resolved(let scrollTarget):
-            let transition = await scrollToEdgeAndSettle(
-                scrollTarget,
-                edge: edge,
+            guard case .uiScrollView = scrollTarget else {
+                return .failure(
+                    .scrollToEdge,
+                    message: "scroll_to_edge failed: selected container cannot be scrolled programmatically"
+                )
+            }
+            let transition = await performViewportTransition(
+                .edge(scrollTarget, edge: edge),
                 deadline: deadline
             )
             switch transition.outcome {
@@ -120,40 +132,6 @@ extension Navigation {
         await vault.semanticObservationStream.refreshedVisibleObservation(
             boundary: .cancellation
         ).isCommitted
-    }
-
-    func scrollToEdgeAndSettle(
-        _ target: ScrollableTarget,
-        edge: ScrollEdge,
-        deadline: SemanticObservationDeadline
-    ) async -> ViewportTransition {
-        guard case .uiScrollView = target else {
-            return .unavailable(previousVisibleIds: vault.viewportElementIDs)
-        }
-        return await performViewportTransition(
-            .edge(target, edge: edge),
-            deadline: deadline
-        )
-    }
-
-    func scrollOnePageAndSettle(
-        _ target: ScrollableTarget,
-        direction: UIAccessibilityScrollDirection,
-        animated: Bool = true,
-        deadline: SemanticObservationDeadline
-    ) async -> ViewportTransition {
-        switch target {
-        case .uiScrollView:
-            return await performViewportTransition(
-                .page(target, direction: direction, animated: animated),
-                deadline: deadline
-            )
-        case .swipeable:
-            return await performViewportTransition(
-                .swipe(target, direction: direction),
-                deadline: deadline
-            )
-        }
     }
 
 }

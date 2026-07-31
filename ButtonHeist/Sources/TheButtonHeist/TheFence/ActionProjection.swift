@@ -86,8 +86,7 @@ struct ActionProjection: Sendable {
              .dismissKeyboard,
              .scroll,
              .scrollToVisible,
-             .scrollToEdge,
-             .wait:
+             .scrollToEdge:
             return .none
         }
     }
@@ -129,41 +128,24 @@ struct ActionProjection: Sendable {
     var timing: ActionPerformanceTiming? { result.timing }
 
     var omitted: ActionResultOmissionsProjection? {
-        publicContext.includesOmissions ? ActionResultOmissionsProjection(result: result) : nil
+        guard publicContext.includesOmissions, result.subjectEvidence != nil else { return nil }
+        return ActionResultOmissionsProjection()
     }
 }
 
 struct ActionResultOmissionsProjection: Encodable, Sendable {
-    let subjectEvidence: ProjectionOmission?
-
-    init(result: ActionResult) {
-        subjectEvidence = result.subjectEvidence.map { _ in
-            ProjectionOmission(
-                reason: .rawSubjectEvidence,
-                projectedAs: nil,
-                omittedCount: nil
-            )
-        }
-    }
-
-    var isEmpty: Bool {
-        subjectEvidence == nil
-    }
-}
-
-struct ProjectionOmission: Encodable, Sendable {
-    private enum CodingKeys: String, CodingKey {
-        case reason, projectedAs, omittedCount
-    }
-
-    let reason: ProjectionOmissionReason
-    let projectedAs: String?
-    let omittedCount: Int?
+    private enum CodingKeys: String, CodingKey { case subjectEvidence }
+    private enum SubjectEvidenceCodingKeys: String, CodingKey { case reason }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(reason.rawValue, forKey: .reason)
-        try container.encodeIfPresent(projectedAs, forKey: .projectedAs)
-        try container.encodeIfPresent(omittedCount, forKey: .omittedCount)
+        var subjectEvidence = container.nestedContainer(
+            keyedBy: SubjectEvidenceCodingKeys.self,
+            forKey: .subjectEvidence
+        )
+        try subjectEvidence.encode(
+            ProjectionOmissionReason.rawSubjectEvidence.rawValue,
+            forKey: .reason
+        )
     }
 }

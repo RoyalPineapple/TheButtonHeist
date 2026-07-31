@@ -2,14 +2,11 @@ import ThePlans
 import TheScore
 
 extension HeistDoctor {
-    static func repairEvidence(from step: HeistExecutionStepResult) throws -> HeistRepairEvidence {
-        guard let actionEvidence = step.actionEvidence else {
+    static func repairEvidence(from step: HeistReport.Node) throws -> HeistRepairEvidence {
+        guard case .action(let command, let actionEvidence, _) = step.evidence else {
             throw HeistDoctorError.missingActionEvidence(path: step.path)
         }
-        guard let command = step.actionCommand else {
-            throw HeistDoctorError.missingActionEvidence(path: step.path)
-        }
-        guard let target = step.reportTarget else {
+        guard let target = step.target else {
             throw HeistDoctorError.missingTarget(path: step.path)
         }
         guard let result = actionEvidence.result else {
@@ -21,7 +18,10 @@ extension HeistDoctor {
             throw HeistDoctorError.missingObservationEvidence(path: step.path)
         }
         let projection = RepairObservationProjection(observation)
-        let expectation = try actionEvidence.replayExpectation()
+        if let expectationGap = step.expectationGap {
+            throw expectationGap
+        }
+        let expectation = step.expectation
 
         let outcome: HeistRepairEvidenceOutcome
         switch step.status {
@@ -29,12 +29,8 @@ extension HeistDoctor {
             outcome = .passed
         case .failed:
             outcome = .failed(
-                failureKind: result.outcome.failureKind,
-                message: repairMessage(
-                    step: step,
-                    evidence: actionEvidence,
-                    expectation: expectation
-                )
+                failureKind: step.failure?.actionKind,
+                message: step.failure?.detail.observed ?? result.message ?? expectation?.actual
             )
         case .skipped:
             throw HeistDoctorError.stepStatus(path: step.path, expected: .passed, actual: .skipped)
@@ -52,16 +48,6 @@ extension HeistDoctor {
             outcome: outcome
         )
     }
-
-    private static func repairMessage(
-        step: HeistExecutionStepResult,
-        evidence: HeistActionEvidence,
-        expectation: ExpectationResult?
-    ) -> String? {
-        step.failure?.observed
-            ?? evidence.result?.message
-            ?? expectation?.actual
-    }
 }
 
 private struct RepairObservationProjection {
@@ -76,13 +62,7 @@ private struct RepairObservationProjection {
         for event in evidence.events {
             switch event {
             case .elementsChanged(let snapshot):
-                let edits = previous.map {
-                    ElementEdits.between($0.interface, snapshot.interface)
-                } ?? ElementEdits(
-                    added: snapshot.interface.projectedElements,
-                    removed: [],
-                    updated: []
-                )
+                let edits = Observation.Evidence.editTransition(from: previous, to: snapshot)
                 if !edits.removed.isEmpty {
                     changes.append(.semanticElementsRemoved)
                 }

@@ -66,14 +66,13 @@ final class TheBrains {
         tripwire: TheTripwire,
         fingerprintsEnabled: Bool = true,
         failureEvidencePolicy: FailureEvidencePolicy = .screenshot,
-        requestExecutor: InteractionRequestExecutor? = nil,
         keyboardInput: SafecrackerKeyboardInput = SafecrackerKeyboardInput(),
         visibleObservationSource: @escaping TheVault.VisibleObservationSource = TheVault.captureVisibleObservation,
         notificationIngress: AccessibilityNotificationIngress = .process
     ) {
         self.tripwire = tripwire
         self.failureEvidencePolicy = failureEvidencePolicy
-        self.requestExecutor = requestExecutor ?? InteractionRequestExecutor()
+        self.requestExecutor = InteractionRequestExecutor()
         let safecracker = TheSafecracker(
             fingerprintsEnabled: fingerprintsEnabled,
             keyboardInput: keyboardInput
@@ -178,17 +177,6 @@ final class TheBrains {
         await requestExecutor.drain()
     }
 
-    var interactionRequestSnapshot: InteractionRequestExecutor.Snapshot {
-        requestExecutor.snapshot
-    }
-}
-
-enum InteractionRequestExecutorPhase: Equatable, Sendable {
-    case idle
-    case running
-    case cancelling
-    case cleanupTimedOut
-    case stopping
 }
 
 @MainActor
@@ -227,12 +215,6 @@ final class InteractionRequestExecutor {
         case rejected(Rejection)
     }
 
-    struct Snapshot: Equatable, Sendable {
-        let phase: InteractionRequestExecutorPhase
-        let pendingDepth: Int
-        let capacity: Int
-    }
-
     private struct PendingRequest {
         let id: UInt64
         let owner: Owner
@@ -259,53 +241,27 @@ final class InteractionRequestExecutor {
         case cancelling(CancellationState)
     }
 
-    private let scheduleCleanupDeadline: CleanupDeadlineScheduler
     private var phase = Phase.idle
     private var nextRequestID: UInt64 = 1
 
-    fileprivate convenience init() {
-        self.init { deadlineReached in
-            Task { @MainActor in await InteractionRequestExecutor.waitForCleanupDeadline(deadlineReached) }
-        }
+    convenience init() {
+        self.init(cleanupDeadlineScheduler: Self.scheduleCleanupDeadline)
     }
 
     init(cleanupDeadlineScheduler: @escaping CleanupDeadlineScheduler) {
-        scheduleCleanupDeadline = cleanupDeadlineScheduler
+        self.cleanupDeadlineScheduler = cleanupDeadlineScheduler
     }
 
-    var snapshot: Snapshot {
-        switch phase {
-        case .idle:
-            return Snapshot(phase: .idle, pendingDepth: 0, capacity: Self.maximumPendingRequests)
-        case .running(_, let pending):
-            return Snapshot(
-                phase: .running,
-                pendingDepth: pending.count,
-                capacity: Self.maximumPendingRequests
-            )
-        case .cancelling(let state):
-            let phase: InteractionRequestExecutorPhase
-            if !state.drainWaiters.isEmpty {
-                phase = .stopping
-            } else if state.deadlineExpired {
-                phase = .cleanupTimedOut
-            } else {
-                phase = .cancelling
-            }
-            return Snapshot(
-                phase: phase,
-                pendingDepth: state.pending.count,
-                capacity: Self.maximumPendingRequests
-            )
-        }
-    }
+    private let cleanupDeadlineScheduler: CleanupDeadlineScheduler
 
-    private static func waitForCleanupDeadline(
+    private static func scheduleCleanupDeadline(
         _ deadlineReached: @escaping @MainActor @Sendable () -> Void
-    ) async {
-        try? await Task.sleep(for: cleanupTimeout)
-        guard !Task.isCancelled else { return }
-        deadlineReached()
+    ) -> Task<Void, Never> {
+        Task { @MainActor in
+            try? await Task.sleep(for: cleanupTimeout)
+            guard !Task.isCancelled else { return }
+            deadlineReached()
+        }
     }
 
     @discardableResult
@@ -475,7 +431,7 @@ final class InteractionRequestExecutor {
             deadlineExpired: false
         ))
         let requestID = active.request.id
-        let deadlineTask = scheduleCleanupDeadline { [weak self] in
+        let deadlineTask = cleanupDeadlineScheduler { [weak self] in
             self?.cleanupDeadlineReached(expected: requestID)
         }
         guard case .cancelling(var state) = phase,

@@ -55,7 +55,7 @@ extension HeistExecution.Machine {
                 return .wait
             }
             let expectation = Expectation(
-                leaf.predicate.map { [$0.resolved, .noChange] } ?? [.noChange],
+                leaf.expectation.predicates,
                 baseline: baseline
             )
             leaf.phase = .dispatching(expectation)
@@ -87,7 +87,7 @@ extension HeistExecution.Machine {
             case .failed:
                 return finish(action: leaf, exitPosition: .current)
             case .superseded:
-                guard let predicate = leaf.predicate else {
+                guard let predicate = leaf.expectation.authoredPredicate else {
                     preconditionFailure("A superseded action discovery requires a predicate")
                 }
                 return update(
@@ -328,10 +328,10 @@ extension HeistExecution.Machine {
                 evaluating: event
             )
             guard evaluated.result == .satisfied else {
-                if leaf.predicate?.resolved.watchTarget != nil,
+                if leaf.expectation.authoredPredicate?.resolved.watchTarget != nil,
                    !evaluated.isWaitingOnlyForNoChange,
-                   shouldExplore(after: event, for: leaf.predicate) {
-                    guard let predicate = leaf.predicate else {
+                   shouldExplore(after: event, for: leaf.expectation.authoredPredicate) {
+                    guard let predicate = leaf.expectation.authoredPredicate else {
                         preconditionFailure("An observing action without a predicate cannot request discovery")
                     }
                     leaf.phase = .exploring(evaluated, dispatch: dispatch)
@@ -378,7 +378,7 @@ extension HeistExecution.Machine {
         guard dispatch.success else {
             return finish(action: leaf, exitPosition: .current)
         }
-        guard let predicate = leaf.predicate,
+        guard let predicate = leaf.expectation.authoredPredicate,
               !predicate.isNotification,
               predicate.resolved.watchTarget != nil else {
             running.activeLeaf = .action(leaf)

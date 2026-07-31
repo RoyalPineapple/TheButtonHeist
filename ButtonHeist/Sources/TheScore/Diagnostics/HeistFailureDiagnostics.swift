@@ -5,15 +5,11 @@ public enum HeistFailureDiagnostics {
     public static let defaultElementLimit = 20
 
     public static func screenshotSummary(
-        _ screenshot: ScreenPayload,
-        resultPath: String? = nil
+        _ screenshot: ScreenPayload
     ) -> String {
         var parts = [
             "failure screenshot: \(Int(screenshot.width))x\(Int(screenshot.height))",
         ]
-        if let resultPath {
-            parts.append("result=\(resultPath)")
-        }
         if let interface = screenshot.interface {
             parts.append("interface=\(interface.projectedElements.count) elements")
         } else {
@@ -23,10 +19,9 @@ public enum HeistFailureDiagnostics {
     }
 
     public static func unavailableScreenshotSummary(
-        resultPath: String,
         message: String?
     ) -> String {
-        var parts = ["failure screenshot: unavailable", "result=\(resultPath)"]
+        var parts = ["failure screenshot: unavailable"]
         if let message, !message.isEmpty {
             parts.append("message=\(ElementDiagnosticSummary.RenderProfile.failureInterface().renderString(message))")
         }
@@ -97,13 +92,11 @@ public extension HeistResult {
     }
 
     var failureScreenshotSummary: String? {
-        guard let failureCapture, let abortedAtPath else { return nil }
-        let resultPath = abortedAtPath.failureAction(at: 0).description
+        guard let failureCapture else { return nil }
         if let screenshot = failureCapture.payload {
-            return HeistFailureDiagnostics.screenshotSummary(screenshot, resultPath: resultPath)
+            return HeistFailureDiagnostics.screenshotSummary(screenshot)
         }
         return HeistFailureDiagnostics.unavailableScreenshotSummary(
-            resultPath: resultPath,
             message: failureCapture.message
         )
     }

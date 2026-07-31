@@ -8,17 +8,9 @@ import UIKit
 @_spi(ButtonHeistInternals) @testable import TheScore
 
 @MainActor
-private func advanceInflationObservationClock(
-    _ now: inout RuntimeElapsed.Instant
-) {
-    now = now.advanced(by: .milliseconds(10))
-}
-
-@MainActor
 extension TheBrainsScrollTests {
 
     func testActivationPointPlacementAddsTypedAdjustment() async throws {
-        brains.stopSemanticObservation()
         let targetId: HeistId = "placed_target"
         let scrollView = RecordingScrollView(frame: ScreenMetrics.current.bounds)
         scrollView.contentSize = CGSize(
@@ -76,20 +68,6 @@ extension TheBrainsScrollTests {
         )
         let inflation = brains.navigation.elementInflation
         let originalMoveViewport = inflation.exploration.moveViewport
-        let originalGeometryEnvironment = inflation.geometryEnvironment
-        var now = RuntimeElapsed.now
-        inflation.geometryEnvironment = .init(
-            now: { now },
-            refreshVisibleObservation: {
-                advanceInflationObservationClock(&now)
-                guard let current =
-                    self.brains.vault.state.current
-                else {
-                    return .unavailable(.sourceTreeUnavailable)
-                }
-                return .committed(current)
-            }
-        )
         inflation.exploration.moveViewport = { _, _ in
             object.accessibilityFrame = placedFrame
             object.accessibilityActivationPoint = placedActivationPoint
@@ -105,7 +83,6 @@ extension TheBrainsScrollTests {
         }
         defer {
             inflation.exploration.moveViewport = originalMoveViewport
-            inflation.geometryEnvironment = originalGeometryEnvironment
         }
 
         let result = await inflation.inflate(

@@ -35,8 +35,8 @@ public struct HeistPlanLintFinding: Sendable, Equatable {
 public extension HeistPlan {
     func lint(_ mode: HeistPlanLintMode) -> [HeistPlanLintFinding] {
         var linter = HeistPlanLinter(mode: mode)
-        HeistPlanTraversal().walkLintObservations(self) { observation in
-            linter.observe(observation)
+        HeistPlanTraversal().walk(self) { event in
+            linter.observe(event)
         }
         return linter.findings
     }
@@ -47,9 +47,9 @@ private struct HeistPlanLinter {
 
     var findings: [HeistPlanLintFinding] = []
 
-    mutating func observe(_ observation: HeistPlanTraversal.LintObservation) {
-        switch observation {
-        case .step(let step, let context):
+    mutating func observe(_ event: HeistPlanTraversal.Event) {
+        switch event {
+        case .enterStep(let step, let context):
             inspectStep(step, context: context)
         case .action(let action, let context):
             inspectAction(action, context: context)
@@ -57,6 +57,25 @@ private struct HeistPlanLinter {
             inspectPredicateCase(predicateCase, context: context)
         case .elseBody(let body, let context):
             inspectElseBody(body, context: context)
+        case .enterPlan,
+             .leavePlan,
+             .enterDefinitions,
+             .leaveDefinitions,
+             .enterDefinition,
+             .leaveDefinition,
+             .enterSteps,
+             .leaveSteps,
+             .leaveStep,
+             .wait,
+             .conditional,
+             .forEachElement,
+             .forEachString,
+             .repeatUntil,
+             .warn,
+             .fail,
+             .heist,
+             .invoke:
+            break
         }
     }
 
@@ -110,7 +129,7 @@ private struct HeistPlanLinter {
             severity: mode == .strictTest ? .error : .warning,
             path: path,
             message: "Semantic action has no expectation",
-            suggestion: "Attach .expect(...) or .withoutExpectation(\"reason\")"
+            suggestion: "Attach .expect(...) or .withoutExpectation(\"reason\") to state the authored outcome; every action still proves terminal no-change."
         )
     }
 
@@ -146,7 +165,8 @@ private struct HeistPlanLinter {
             severity: .warning,
             path: path,
             message: "Ambient action has no expectation",
-            suggestion: "Attach .expect(...) or .withoutExpectation(\"reason\") when this side effect has no durable semantic outcome"
+            suggestion: "Attach .expect(...) or .withoutExpectation(\"reason\") when this side effect has no additional durable semantic outcome; " +
+                "every action still proves terminal no-change."
         )
     }
 

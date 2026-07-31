@@ -244,14 +244,16 @@ extension ElementInflation {
             requiresOnscreen: requireOnscreenActivationPoint
         )
 
-        while deadline.hasTimeRemaining(at: geometryEnvironment.now()) {
+        while deadline.hasTimeRemaining(at: RuntimeElapsed.now) {
             guard !Task.isCancelled else {
                 return stateAfterGeometryReduction(
                     stabilization.reduce(.cancelled),
                     target: stableTarget
                 )
             }
-            switch await geometryEnvironment.refreshVisibleObservation() {
+            switch await vault.semanticObservationStream.refreshedVisibleObservation(
+                boundary: .cancellation
+            ) {
             case .committed:
                 break
             case .unavailable(.cancelled):
@@ -260,7 +262,7 @@ extension ElementInflation {
                     target: stableTarget
                 )
             case .unavailable:
-                if deadline.hasTimeRemaining(at: geometryEnvironment.now()) {
+                if deadline.hasTimeRemaining(at: RuntimeElapsed.now) {
                     continue
                 }
                 return stateAfterGeometryReduction(
@@ -268,7 +270,7 @@ extension ElementInflation {
                     target: stableTarget
                 )
             }
-            guard deadline.hasTimeRemaining(at: geometryEnvironment.now()) else {
+            guard deadline.hasTimeRemaining(at: RuntimeElapsed.now) else {
                 return stateAfterGeometryReduction(
                     stabilization.reduce(.deadlineExpired),
                     target: stableTarget
@@ -300,7 +302,7 @@ extension ElementInflation {
                 continue
             }
             stableTarget = currentTarget
-            guard deadline.hasTimeRemaining(at: geometryEnvironment.now()) else {
+            guard deadline.hasTimeRemaining(at: RuntimeElapsed.now) else {
                 return stateAfterGeometryReduction(
                     stabilization.reduce(.deadlineExpired),
                     target: stableTarget
@@ -313,7 +315,7 @@ extension ElementInflation {
             case .awaiting(let next):
                 stabilization = next
             case .stable:
-                guard deadline.hasTimeRemaining(at: geometryEnvironment.now()) else {
+                guard deadline.hasTimeRemaining(at: RuntimeElapsed.now) else {
                     return stateAfterGeometryReduction(
                         stabilization.reduce(.deadlineExpired),
                         target: stableTarget

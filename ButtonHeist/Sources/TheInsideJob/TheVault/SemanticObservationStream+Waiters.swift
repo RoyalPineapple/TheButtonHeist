@@ -103,7 +103,6 @@ extension Observation.Stream {
             boundary: boundary,
             oneShot: oneShot
         ), id: id)
-        observationWaiterDidRegister()
         Task { @MainActor in
             resolveObservationWaiterIfAvailable(id)
         }

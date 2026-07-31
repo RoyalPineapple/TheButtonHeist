@@ -9,6 +9,11 @@ public enum InterfaceDetail: String, CaseIterable, Sendable {
     case full
 }
 
+public enum HeistCatalogDetail: String, CaseIterable, Sendable, Equatable {
+    case summary
+    case detailed
+}
+
 public struct ScreenshotResponseOptions: Sendable, Equatable {
     public let includeInterface: Bool
 
@@ -260,7 +265,7 @@ public enum FenceResponse {
         report: HeistReport
     )
     case heistValidation(HeistValidation.Report)
-    case heistCatalog([HeistCatalogEntry])
+    case heistCatalog([HeistDescription], detail: HeistCatalogDetail)
     case heistDescription(HeistDescription)
     case sessionState(payload: SessionStatePayload)
     case targets([TargetName: TargetConfig], defaultTarget: TargetName?)

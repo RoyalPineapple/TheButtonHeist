@@ -21,7 +21,6 @@ struct HeistSwiftCompilerTests {
             (.swiftCompilationCompileFailed, "heist.swift_compilation.compile_failed"),
             (.directoryNoSources, "heist.directory.no_sources"),
             (.catalogDuplicateCapability, "heist.catalog.duplicate_capability"),
-            (.planningRawJSONIRFields, "heist.planning.raw_json_ir_fields"),
         ]
 
         for (code, rawValue) in representativeCodes {
@@ -490,8 +489,8 @@ struct HeistSwiftCompilerTests {
         let result = try await HeistSwiftCompiler().compileDirectory(temp.url)
 
         #expect(result.diagnostics.isEmpty)
-        #expect(result.catalog.source == HeistCatalogSource(url: temp.url.standardizedFileURL))
-        #expect(result.catalog.capabilities.map(\.name) == ["Alpha", "Beta"])
+        #expect(result.source == temp.url.standardizedFileURL)
+        #expect(result.capabilities.map(\.name) == ["Alpha", "Beta"])
     }
 
     @Test
@@ -512,7 +511,7 @@ struct HeistSwiftCompilerTests {
 
         let result = try await HeistSwiftCompiler().compileDirectory(temp.url)
 
-        #expect(result.catalog.capabilities.count == 1)
+        #expect(result.capabilities.count == 1)
         #expect(result.diagnostics.map(\.code.knownCode) == [.catalogAnonymousCapability])
         #expect(result.diagnostics.map(\.kind) == [.warning])
         #expect(result.diagnostics.map { $0.sourceSpan?.sourceName } == [
@@ -543,8 +542,8 @@ struct HeistSwiftCompilerTests {
 
         let result = try await HeistSwiftCompiler().compileDirectory(temp.url)
 
-        #expect(result.catalog.capabilities.map(\.name) == ["PlanName"])
-        #expect(!result.catalog.capabilities.map { $0.name ?? "" }.contains("Filename"))
+        #expect(result.capabilities.map(\.name) == ["PlanName"])
+        #expect(!result.capabilities.map { $0.name ?? "" }.contains("Filename"))
     }
 
     @Test
@@ -555,7 +554,7 @@ struct HeistSwiftCompilerTests {
 
         let result = try await HeistSwiftCompiler().compileDirectory(temp.url)
 
-        #expect(result.catalog.capabilities.map(\.name) == ["Visible"])
+        #expect(result.capabilities.map(\.name) == ["Visible"])
     }
 
     @Test

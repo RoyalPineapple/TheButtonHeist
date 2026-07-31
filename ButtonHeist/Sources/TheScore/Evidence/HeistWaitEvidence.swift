@@ -49,11 +49,11 @@ public struct HeistExpectationTiming: Codable, Sendable, Equatable {
     }
 }
 
-/// Replayable facts supporting one authored expectation.
+/// Replayable facts supporting one structural action or wait expectation.
 ///
 /// This value stores no verdict. Live and decoded results both derive their
-/// `ExpectationResult` by resolving `predicate` through its captured bindings
-/// and evaluating that one executable predicate over `observation`.
+/// `ExpectationResult` by resolving the authored `predicate`, when present,
+/// and then requiring the terminal `noChange` proof over `observation`.
 public struct HeistExpectationEvidence: Codable, Sendable, Equatable {
     public enum TerminalCause: String, Codable, Sendable, Equatable {
         case observed
@@ -63,20 +63,22 @@ public struct HeistExpectationEvidence: Codable, Sendable, Equatable {
         case viewportFailure = "viewport_failure"
     }
 
-    public let predicate: AccessibilityPredicate
+    /// The authored condition. `nil` denotes an action whose only expectation
+    /// is its structural terminal `noChange`.
+    public let predicate: AccessibilityPredicate?
     public let observation: Observation.Evidence
     public let terminalCause: TerminalCause
     public let timing: HeistExpectationTiming
     package let bindings: HeistExecutionEnvironment
 
     package init(
-        predicate: AccessibilityPredicate,
+        predicate: AccessibilityPredicate?,
         bindings: HeistExecutionEnvironment,
         observation: Observation.Evidence,
         terminalCause: TerminalCause,
         timing: HeistExpectationTiming
     ) throws {
-        _ = try predicate.resolve(in: bindings)
+        _ = try predicate?.resolve(in: bindings)
         self.predicate = predicate
         self.bindings = bindings
         self.observation = observation
@@ -85,16 +87,17 @@ public struct HeistExpectationEvidence: Codable, Sendable, Equatable {
     }
 
     package func replay() throws(Observation.Gap) -> ExpectationResult {
-        let boundPredicate: ObservationPredicate
+        let boundPredicate: ObservationPredicate?
         do {
-            boundPredicate = try predicate.resolve(in: bindings)
+            boundPredicate = try predicate?.resolve(in: bindings)
         } catch {
             preconditionFailure("Admitted expectation bindings became invalid: \(error)")
         }
         let result = Expectation(
-            [boundPredicate, .noChange],
+            boundPredicate.map { [$0] } ?? [],
             baseline: observation.baseline,
-            events: observation.events
+            events: observation.events,
+            requiringNoChange: true
         ).result
         if case .incomplete(let gap) = observation.coverage {
             throw gap
@@ -122,9 +125,9 @@ public struct HeistExpectationEvidence: Codable, Sendable, Equatable {
 
     private func matchingNotificationText(
         met: Bool,
-        boundPredicate: ObservationPredicate
+        boundPredicate: ObservationPredicate?
     ) -> String? {
-        guard met, case .notification(let predicate) = boundPredicate else { return nil }
+        guard met, case .some(.notification(let predicate)) = boundPredicate else { return nil }
         return observation.events.lazy.compactMap { event -> Observation.Notification? in
             guard case .notification(let notification) = event else { return nil }
             return notification
@@ -144,7 +147,7 @@ public struct HeistExpectationEvidence: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist expectation evidence")
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let predicate = try container.decode(AccessibilityPredicate.self, forKey: .predicate)
+        let predicate = try container.decodeIfPresent(AccessibilityPredicate.self, forKey: .predicate)
         let bindings = try container.decode(HeistExecutionEnvironment.self, forKey: .bindings)
         let observation = try container.decode(Observation.Evidence.self, forKey: .observation)
         let terminalCause = try container.decode(TerminalCause.self, forKey: .terminalCause)
@@ -168,7 +171,7 @@ public struct HeistExpectationEvidence: Codable, Sendable, Equatable {
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(predicate, forKey: .predicate)
+        try container.encodeIfPresent(predicate, forKey: .predicate)
         try container.encode(bindings, forKey: .bindings)
         try container.encode(observation, forKey: .observation)
         try container.encode(terminalCause, forKey: .terminalCause)

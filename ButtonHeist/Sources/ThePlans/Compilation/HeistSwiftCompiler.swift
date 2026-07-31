@@ -29,7 +29,8 @@ public struct HeistBuildSourceLocation: Sendable, Equatable, CustomStringConvert
 }
 
 public struct HeistCatalogCompilationResult: Sendable, Equatable {
-    public let catalog: HeistCatalog
+    public let source: URL
+    public let capabilities: [HeistPlan]
     public let diagnostics: [HeistBuildDiagnostic]
 }
 
@@ -146,10 +147,8 @@ public actor HeistSwiftCompiler {
             }
 
             return HeistCatalogCompilationResult(
-                catalog: HeistCatalog(
-                    source: HeistCatalogSource(url: directory),
-                    capabilities: plans
-                ),
+                source: directory,
+                capabilities: plans,
                 diagnostics: diagnostics
             )
         } catch is CancellationError {
@@ -237,13 +236,13 @@ private extension HeistSwiftCompiler {
             }
 
             do {
-                let catalog = try plan.heistCatalog()
-                for entry in catalog {
-                    guard let lookupPath = entry.identity.lookupPath else { continue }
+                let descriptions = try plan.heistDescriptions()
+                for description in descriptions {
+                    guard let lookupPath = description.identity.lookupPath else { continue }
                     if let previous = seen[lookupPath] {
                         diagnostics.append(diagnostic(
                             code: .catalogDuplicateCapability,
-                            "Duplicate capability name \"\(entry.identity.displayName)\" also compiled from \(previous.lastPathComponent).",
+                            "Duplicate capability name \"\(description.identity.displayName)\" also compiled from \(previous.lastPathComponent).",
                             phase: .planValidation,
                             source: source
                         ))

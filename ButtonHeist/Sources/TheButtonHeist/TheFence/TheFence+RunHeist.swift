@@ -8,7 +8,7 @@ extension TheFence {
     // MARK: - Heist Execution and Session State
 
     func handleRunHeist(_ request: RunHeistRequest) async throws -> FenceResponse {
-        try await runHeistPlan(
+        try await dispatchHeistPlan(
             request.plan,
             argument: request.argument,
             timeout: request.timeout
@@ -27,7 +27,7 @@ extension TheFence {
     }
 
     func handleListHeists(_ request: ListHeistsRequest) -> FenceResponse {
-        .heistCatalog(request.catalog)
+        .heistCatalog(request.descriptions, detail: request.detail)
     }
 
     func handleDescribeHeist(_ request: DescribeHeistRequest) -> FenceResponse {
@@ -37,18 +37,6 @@ extension TheFence {
     /// Dispatch a `HeistPlan` to the device and project its execution into a
     /// `.heistExecution` response. Durable single commands and composed heists
     /// share this one path; transient commands use direct client dispatch.
-    func runHeistPlan(
-        _ plan: HeistPlan,
-        argument: HeistArgument = .none,
-        timeout: HeistTimeout
-    ) async throws -> FenceResponse {
-        try await dispatchHeistPlan(
-            plan,
-            argument: argument,
-            timeout: timeout
-        )
-    }
-
     private func dispatchHeistPlan(
         _ plan: HeistPlan,
         argument: HeistArgument = .none,
@@ -106,10 +94,10 @@ extension TheFence {
             return wait.timeout.seconds + config.postActionExpectationTimeoutBuffer
         case .action(_, let expectationPayload, let actionBudget):
             guard let predicate = expectationPayload.expectation else {
-                guard let timeout = expectationPayload.timeout else {
-                    return actionBudget
-                }
-                return max(actionBudget, timeout.seconds)
+                let requestedActionBudget = expectationPayload.timeout.map(\.seconds) ?? actionBudget
+                return max(actionBudget, requestedActionBudget)
+                    + config.actionExpectationTimeoutPolicy.standard.seconds
+                    + config.postActionExpectationTimeoutBuffer
             }
             let expectationTimeout = ActionExpectation(
                 predicate: predicate,
@@ -127,7 +115,11 @@ extension TheFence {
             let actionBudget = performActionTimeout(for: action.command)
             guard let expectation = action.expectationPolicy.expectedExpectation?
                 .waitStep(using: config.actionExpectationTimeoutPolicy)
-            else { return actionBudget }
+            else {
+                return actionBudget
+                    + config.actionExpectationTimeoutPolicy.standard.seconds
+                    + config.postActionExpectationTimeoutBuffer
+            }
             return actionBudget
                 + expectation.timeout.seconds
                 + config.postActionExpectationTimeoutBuffer

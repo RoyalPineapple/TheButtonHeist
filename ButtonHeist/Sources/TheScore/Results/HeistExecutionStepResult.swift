@@ -112,33 +112,33 @@ package struct HeistPassedWaitEvidence: Codable, Sendable, Equatable {
 
 package typealias HeistWaitCompletion = HeistExecutionCompletion<
     HeistPassedWaitEvidence,
-    HeistEvidenceAvailability<HeistExpectationEvidence>,
+    HeistExpectationEvidence?,
     HeistExpectationEvidence
 >
 package typealias HeistCaseSelectionCompletion = HeistExecutionCompletion<
-    HeistCaseSelectionEvidence, HeistEvidenceAvailability<HeistCaseSelectionEvidence>, HeistCaseSelectionEvidence
+    HeistCaseSelectionEvidence, HeistCaseSelectionEvidence?, HeistCaseSelectionEvidence
 >
 package typealias HeistForEachElementCompletion = HeistExecutionCompletion<
     HeistPassedForEachElementEvidence,
-    HeistEvidenceAvailability<HeistFailedForEachElementEvidence>,
+    HeistFailedForEachElementEvidence?,
     HeistFailedForEachElementEvidence
 >
 package typealias HeistForEachStringCompletion = HeistExecutionCompletion<
     HeistPassedForEachStringEvidence,
-    HeistEvidenceAvailability<HeistFailedForEachStringEvidence>,
+    HeistFailedForEachStringEvidence?,
     HeistFailedForEachStringEvidence
 >
 package typealias HeistRepeatUntilCompletion = HeistExecutionCompletion<
     HeistPassedRepeatUntilEvidence,
-    HeistEvidenceAvailability<HeistFailedRepeatUntilEvidence>,
+    HeistFailedRepeatUntilEvidence?,
     HeistFailedRepeatUntilEvidence
 >
 package typealias HeistRepeatUntilIterationCompletion = HeistExecutionCompletion<
     HeistPassedRepeatUntilIterationEvidence,
-    HeistEvidenceAvailability<HeistFailedRepeatUntilEvidence>,
+    HeistFailedRepeatUntilEvidence?,
     HeistFailedRepeatUntilEvidence
 >
-package typealias HeistInvocationFailureEvidence = HeistEvidenceAvailability<HeistFailedInvocationEvidence>
+package typealias HeistInvocationFailureEvidence = HeistFailedInvocationEvidence?
 package typealias HeistInvocationCompletion = HeistExecutionCompletion<
     HeistPassedInvocationEvidence, HeistInvocationFailureEvidence, HeistInvocationFailureEvidence
 >
@@ -316,7 +316,7 @@ public extension HeistExecutionStepResult {
         case .childAborted(let evidence, _, _):
             return evidence
         case .failed(let evidence, _, _):
-            return evidence.value
+            return evidence
         case .skipped:
             return nil
         }
@@ -351,7 +351,7 @@ public extension HeistExecutionStepResult {
         guard case .conditional(let completion) = node else { return nil }
         switch completion {
         case .passed(let evidence, _), .childAborted(let evidence, _, _): return evidence
-        case .failed(let evidence, _, _): return evidence.value
+        case .failed(let evidence, _, _): return evidence
         case .skipped: return nil
         }
     }
@@ -364,7 +364,7 @@ public extension HeistExecutionStepResult {
         }
         switch completion {
         case .passed(let evidence, _): return evidence.value
-        case .failed(let evidence, _, _): return evidence.value?.value
+        case .failed(let evidence, _, _): return evidence?.value
         case .childAborted(let evidence, _, _): return evidence.value
         case .skipped: return nil
         }
@@ -378,7 +378,7 @@ public extension HeistExecutionStepResult {
         }
         switch completion {
         case .passed(let evidence, _): return evidence.value
-        case .failed(let evidence, _, _): return evidence.value?.value
+        case .failed(let evidence, _, _): return evidence?.value
         case .childAborted(let evidence, _, _): return evidence.value
         case .skipped: return nil
         }
@@ -389,14 +389,14 @@ public extension HeistExecutionStepResult {
         case .repeatUntil(_, let completion):
             switch completion {
             case .passed(let evidence, _): return evidence.value
-            case .failed(let evidence, _, _): return evidence.value?.value
+            case .failed(let evidence, _, _): return evidence?.value
             case .childAborted(let evidence, _, _): return evidence.value
             case .skipped: return nil
             }
         case .repeatUntilIteration(_, let completion):
             switch completion {
             case .passed(let evidence, _): return evidence.value
-            case .failed(let evidence, _, _): return evidence.value?.value
+            case .failed(let evidence, _, _): return evidence?.value
             case .childAborted(let evidence, _, _): return evidence.value
             case .skipped: return nil
             }
@@ -409,7 +409,7 @@ public extension HeistExecutionStepResult {
         guard case .invocation(_, _, let completion) = node else { return nil }
         switch completion {
         case .passed(let evidence, _): return evidence.value
-        case .failed(let evidence, _, _), .childAborted(let evidence, _, _): return evidence.value?.value
+        case .failed(let evidence, _, _), .childAborted(let evidence, _, _): return evidence?.value
         case .skipped: return nil
         }
     }

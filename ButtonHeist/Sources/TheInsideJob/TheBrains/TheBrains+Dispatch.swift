@@ -54,10 +54,13 @@ extension TheBrains {
             return runtimeInactiveResult(payload: command.actionResultPayload)
         }
         let completion: HeistExecution.Completion
-        switch await executeHeistAction(command) {
-        case .success(let result):
-            completion = result
-        case .failure(let failure):
+        do {
+            completion = try await HeistExecution.Host(brains: self).execute(
+                command,
+                timeout: .default
+            )
+        } catch {
+            let failure = HeistExecution.Failure.classify(error)
             return .failure(
                 payload: command.actionResultPayload,
                 failureKind: failure.actionFailureKind,

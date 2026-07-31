@@ -29,31 +29,6 @@ private enum PublicActionResultCodingKey: String, CodingKey {
     case omitted
 }
 
-struct PublicActionResponse: Encodable {
-    private let projection: ActionProjection
-
-    init(command: TheFence.Command, result: ActionResult, expectation: ExpectationResult?) {
-        self.init(projection: ActionProjection(
-            method: command.rawValue,
-            result: result,
-            expectation: expectation,
-            expectationHint: expectation.flatMap {
-                FenceResponse.expectationFailureHint($0, command: command, result: result)
-            },
-            profile: .summary
-        ))
-    }
-
-    init(projection: ActionProjection) {
-        self.projection = projection
-    }
-
-    func encode(to encoder: Encoder) throws {
-        try projection.encode(to: encoder)
-    }
-
-}
-
 enum PublicActionResultContext: Sendable, Equatable {
     case standaloneAction
     case heistReportEvidence
@@ -93,7 +68,6 @@ extension ActionProjection: Encodable {
         try container.encodeIfPresent(activationTrace, forKey: .activationTrace)
         try container.encodeIfPresent(timing, forKey: .timing)
         if publicContext.includesOmissions {
-            let omitted = omitted.flatMap { $0.isEmpty ? nil : $0 }
             try container.encodeIfPresent(omitted, forKey: .omitted)
         }
     }
@@ -169,7 +143,6 @@ struct ActionFailureProjection {
     var phase: String { diagnosticFailure.phase.rawValue }
     var retryable: Bool { diagnosticFailure.retryable }
     var hint: String? { diagnosticFailure.hint }
-    var compactCode: String { code }
 }
 
 struct PublicRotorResult: Encodable {
@@ -220,35 +193,35 @@ struct PublicDelta: Encodable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch projection {
-        case .noChange(let metadata):
-            try encodeMetadata(metadata, kind: .noChange, to: &container)
+        case .noChange(let elementCount):
+            try encodeHeader(kind: .noChange, elementCount: elementCount, to: &container)
 
-        case .elementsChanged(let delta):
-            try encodeMetadata(delta.metadata, kind: .elementsChanged, to: &container)
-            let edits = PublicElementEdits(projection: delta.edits)
+        case .elementsChanged(let elementCount, let edits):
+            try encodeHeader(kind: .elementsChanged, elementCount: elementCount, to: &container)
+            let edits = PublicElementEdits(projection: edits)
             try container.encodeIfPresent(edits.isEmpty ? nil : edits, forKey: .edits)
 
-        case .screenChanged(let delta):
-            try encodeMetadata(delta.metadata, kind: .screenChanged, to: &container)
+        case .screenChanged(let elementCount, let screen):
+            try encodeHeader(kind: .screenChanged, elementCount: elementCount, to: &container)
             switch screenPolicy {
             case .newInterface:
                 try container.encodeIfPresent(
-                    delta.screen.interface,
+                    screen.interface,
                     forKey: .newInterface
                 )
             case .screenSummary:
-                try container.encode(PublicHeistScreenProjection(projection: delta.screen), forKey: .screen)
+                try container.encode(PublicHeistScreenProjection(projection: screen), forKey: .screen)
             }
         }
     }
 
-    private func encodeMetadata(
-        _ metadata: DeltaProjectionMetadata,
+    private func encodeHeader(
         kind: DeltaProjectionKind,
+        elementCount: Int,
         to container: inout KeyedEncodingContainer<CodingKeys>
     ) throws {
         try container.encode(kind.rawValue, forKey: .kind)
-        try container.encode(metadata.elementCount, forKey: .elementCount)
+        try container.encode(elementCount, forKey: .elementCount)
     }
 }
 
@@ -263,15 +236,15 @@ struct PublicElementEdits: Encodable {
     }
 
     init(projection: DeltaEditsProjection) {
-        self.added = projection.added.elements.isEmpty
+        self.added = projection.added.values.isEmpty
             ? nil
-            : projection.added.elements.map { PublicElement(element: $0, detail: .summary) }
-        self.removed = projection.removed.elements.isEmpty
+            : projection.added.values.map { PublicElement(element: $0, detail: .summary) }
+        self.removed = projection.removed.values.isEmpty
             ? nil
-            : projection.removed.elements.map { PublicElement(element: $0, detail: .summary) }
-        self.updated = projection.updated.updates.isEmpty
+            : projection.removed.values.map { PublicElement(element: $0, detail: .summary) }
+        self.updated = projection.updated.values.isEmpty
             ? nil
-            : projection.updated.updates.compactMap(PublicElementUpdate.init(update:))
+            : projection.updated.values.compactMap(PublicElementUpdate.init(update:))
         let omitted = PublicHeistElementEditOmissions(projection: projection)
         self.omitted = omitted.isEmpty ? nil : omitted
     }

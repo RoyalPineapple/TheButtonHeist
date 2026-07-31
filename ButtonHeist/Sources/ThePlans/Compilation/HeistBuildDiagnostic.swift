@@ -30,11 +30,9 @@ public enum HeistKnownBuildDiagnosticCode: String, Sendable, Hashable, CaseItera
 
     case planningMissingPlanSource = "heist.planning.missing_plan_source"
     case planningMultiplePlanSources = "heist.planning.multiple_plan_sources"
-    case planningInlineSourceNotAccepted = "heist.planning.inline_source_not_accepted"
     case planningEmptyPath = "heist.planning.empty_path"
     case planningUnsupportedPath = "heist.planning.unsupported_path"
     case planningEmptyInlineSource = "heist.planning.empty_inline_source"
-    case planningRawJSONIRFields = "heist.planning.raw_json_ir_fields"
     case planningInvalidPlanSource = "heist.planning.invalid_plan_source"
     case planningInvalidArtifact = "heist.planning.invalid_artifact"
     case planningInvalidArgument = "heist.planning.invalid_argument"
@@ -110,11 +108,9 @@ public extension HeistBuildDiagnosticCode {
 
     static let planningMissingPlanSource = Self(HeistKnownBuildDiagnosticCode.planningMissingPlanSource)
     static let planningMultiplePlanSources = Self(HeistKnownBuildDiagnosticCode.planningMultiplePlanSources)
-    static let planningInlineSourceNotAccepted = Self(HeistKnownBuildDiagnosticCode.planningInlineSourceNotAccepted)
     static let planningEmptyPath = Self(HeistKnownBuildDiagnosticCode.planningEmptyPath)
     static let planningUnsupportedPath = Self(HeistKnownBuildDiagnosticCode.planningUnsupportedPath)
     static let planningEmptyInlineSource = Self(HeistKnownBuildDiagnosticCode.planningEmptyInlineSource)
-    static let planningRawJSONIRFields = Self(HeistKnownBuildDiagnosticCode.planningRawJSONIRFields)
     static let planningInvalidPlanSource = Self(HeistKnownBuildDiagnosticCode.planningInvalidPlanSource)
     static let planningInvalidArtifact = Self(HeistKnownBuildDiagnosticCode.planningInvalidArtifact)
     static let planningInvalidArgument = Self(HeistKnownBuildDiagnosticCode.planningInvalidArgument)
@@ -312,11 +308,9 @@ public extension HeistBuildDiagnosticCode {
             return "Unsupported perform step"
         case .planningMissingPlanSource,
              .planningMultiplePlanSources,
-             .planningInlineSourceNotAccepted,
              .planningEmptyPath,
              .planningUnsupportedPath,
              .planningEmptyInlineSource,
-             .planningRawJSONIRFields,
              .planningInvalidPlanSource,
              .planningInvalidArtifact,
              .planningInvalidArgument,

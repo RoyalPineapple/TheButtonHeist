@@ -48,9 +48,10 @@ extension TheFenceHandlerTests {
 
     func testFenceErrorRendersTypedHintAtDisplayBoundary() throws {
         let error = FenceError.connectionTimeout
-        let hint = try XCTUnwrap(error.failureDetails.hint)
+        let diagnostic = error.diagnosticFailure
+        let hint = try XCTUnwrap(diagnostic.hint)
 
-        XCTAssertEqual(error.coreMessage, "Connection timed out")
+        XCTAssertEqual(diagnostic.message, "Connection timed out")
         XCTAssertEqual(error.errorDescription, "Connection timed out\n  Hint: \(hint)")
     }
 

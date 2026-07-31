@@ -42,7 +42,7 @@ import TheScore
         #expect(suggestion.newResolvedElement.siblingText == ["Milk"])
     }
 
-    @Test func `doctor repair evidence uses action evidence result meanings`() throws {
+    @Test func `doctor repair evidence uses report action evidence result meanings`() throws {
         let target = AccessibilityTarget.predicate(ElementPredicate(label: "Pay"))
         let before = makeTestInterface(elements: [
             element(label: "Pay", traits: [.button], actions: [.activate]),
@@ -89,7 +89,12 @@ import TheScore
             failure: failure
         )
 
-        let repairEvidence = try HeistDoctor.repairEvidence(from: step)
+        let report = HeistReport.project(result: try HeistResult(
+            steps: [step],
+            durationMs: 1
+        ))
+        let reportNode = try #require(report.outputNodes.first)
+        let repairEvidence = try HeistDoctor.repairEvidence(from: reportNode)
 
         #expect(repairEvidence.beforeSnapshot == before)
         #expect(repairEvidence.observedChanges == [
@@ -109,6 +114,50 @@ import TheScore
         }
         #expect(failureKind == .timeout)
         #expect(message == "timed out waiting for checkout")
+    }
+
+    @Test func `doctor repair evidence preserves report expectation gaps`() throws {
+        let target = AccessibilityTarget.predicate(ElementPredicate(label: "Pay"))
+        let before = makeTestInterface(elements: [
+            element(label: "Pay", traits: [.button], actions: [.activate]),
+        ])
+        let snapshot = doctorSnapshot(interface: before)
+        let observation = Observation.Evidence(
+            baseline: snapshot,
+            events: [],
+            current: snapshot,
+            coverage: .incomplete(.historyUnavailable)
+        )
+        let predicate = AccessibilityPredicate.screenChanged
+        let step = HeistResultFixture.action(
+            path: "$.body[0]",
+            command: .activate(target),
+            result: ActionResult.failure(
+                payload: .activate,
+                failureKind: .timeout,
+                observation: .observed(observation)
+            ),
+            expectation: HeistResultFixture.expectationEvidence(
+                predicate: predicate,
+                observation: observation,
+                terminalCause: .deadline
+            ),
+            failure: HeistFailureDetail(
+                category: .expectation,
+                contract: "action expectation is met",
+                observed: "timed out waiting for checkout",
+                expected: predicate.description
+            )
+        )
+        let report = HeistReport.project(result: try HeistResult(
+            steps: [step],
+            durationMs: 1
+        ))
+        let reportNode = try #require(report.outputNodes.first)
+
+        #expect(throws: Observation.Gap.historyUnavailable) {
+            _ = try HeistDoctor.repairEvidence(from: reportNode)
+        }
     }
 
     @Test func `doctor diagnosis returns typed refusal for valid result pair`() throws {

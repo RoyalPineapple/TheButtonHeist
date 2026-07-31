@@ -127,51 +127,18 @@ extension TheFenceHandlerTests {
     }
 
     @ButtonHeistActor
-    func testRunHeistRejectsPathCombinedWithAnyInlinePlanField() async {
+    func testRunHeistDescriptorRejectsUnknownWireKeyBeforePlanAdmission() async {
         let fence = TheFence(configuration: .init())
-        // Every canonical inline plan field combined with `path` must fail,
-        // before the artifact is touched. Values are irrelevant — key presence
-        // alone is the conflict.
-        let inlineFields: [String: HeistValue] = [
-            "version": .int(1),
-            "name": .string("flow"),
-            "parameter": .object(["type": .string("none")]),
-            "definitions": .array([]),
-            "body": .array([.object(["type": .string("warn")])]),
-        ]
-        for (field, value) in inlineFields {
-            XCTAssertThrowsError(try fence.decodeRunHeistRequest(
-                TheFence.CommandArgumentEnvelope(values: [
-                    "path": .string("/tmp/Flow.heist"),
-                    field: value,
-                ])
-            ), "path + \(field) must fail") { error in
-                XCTAssertTrue(
-                    String(describing: error).contains("raw JSON HeistPlan IR field"),
-                    "path + \(field): \(error)"
-                )
-            }
-        }
-    }
-
-    @ButtonHeistActor
-    func testRunHeistRejectsPlanSourceCombinedWithPathOrStructuredPlanFields() async throws {
-        let fence = TheFence(configuration: .init())
-        XCTAssertThrowsError(try fence.decodeRunHeistRequest(
-            TheFence.CommandArgumentEnvelope(values: [
-                "path": .string("/tmp/Flow.heist"),
-                "plan": .string("HeistPlan { Activate(.label(\"Pay\")) }"),
+        let input = FenceCommandInput(
+            command: .runHeist,
+            arguments: .init(values: [
+                "plan": .string("HeistPlan { Warn(\"Check\") }"),
+                "body": .array([]),
             ])
-        )) { error in
-            XCTAssertTrue(String(describing: error).contains("run_heist accepts exactly one plan source"), "\(error)")
-        }
+        )
 
-        var arguments = try Self.inlineArguments(for: try HeistPlan(body: [.warn(WarnStep(message: "x"))])).values
-        arguments["plan"] = .string("HeistPlan { Activate(.label(\"Pay\")) }")
-        XCTAssertThrowsError(try fence.decodeRunHeistRequest(
-            TheFence.CommandArgumentEnvelope(values: arguments)
-        )) { error in
-            XCTAssertTrue(String(describing: error).contains("raw JSON HeistPlan IR field"), "\(error)")
+        XCTAssertThrowsError(try fence.admit(input)) { error in
+            XCTAssertEqual((error as? SchemaValidationError)?.field, "body")
         }
     }
 

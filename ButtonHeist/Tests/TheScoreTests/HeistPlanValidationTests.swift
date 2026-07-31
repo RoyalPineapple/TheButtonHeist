@@ -82,7 +82,10 @@ func strictValidationRequiresSemanticActionExpectation() throws {
     #expect(finding.severity == .error)
     #expect(finding.path.description == "$.body[0].action")
     #expect(finding.message == "Semantic action has no expectation")
-    #expect(finding.suggestion == "Attach .expect(...) or .withoutExpectation(\"reason\")")
+    #expect(
+        finding.suggestion == "Attach .expect(...) or .withoutExpectation(\"reason\") "
+            + "to state the authored outcome; every action still proves terminal no-change."
+    )
 }
 
 @Test

@@ -42,6 +42,24 @@ import ThePlans
         #expect(try evidence.replay().met == false)
     }
 
+    @Test func noChangeOnlyEvidenceReplaysFromOneTerminalEvent() throws {
+        let evidence = try HeistExpectationEvidence(
+            predicate: nil,
+            bindings: .empty,
+            observation: Observation.Evidence(
+                baseline: nil,
+                events: [.noChange],
+                current: nil,
+                coverage: .complete
+            ),
+            terminalCause: .observed,
+            timing: HeistResultFixture.expectationTiming
+        )
+
+        #expect(try evidence.replay().met)
+        #expect(evidence.predicate == nil)
+    }
+
     @Test func deadlineMatchWithoutSettledNoChangeReplaysUnmetAfterDecoding() throws {
         let predicate = AccessibilityPredicate.elementsChanged([
             .appeared(.label("Done")),

@@ -19,14 +19,16 @@ package struct Expectation: Sendable, Equatable {
     package init(
         _ predicates: [ObservationPredicate] = [],
         baseline: Observation.Snapshot? = nil,
-        events: [Observation.Event] = []
+        events: [Observation.Event] = [],
+        requiringNoChange: Bool = false
     ) {
         let initial = Expectation(
             pending: predicates.flatMap(\.expectationSteps)
         )
+        let required = requiringNoChange ? initial.requiringNoChange() : initial
         let withBaseline = baseline.map {
-            initial.evaluating(.baseline($0))
-        } ?? initial
+            required.evaluating(.baseline($0))
+        } ?? required
         self = events.reduce(withBaseline) { expectation, event in
             expectation.evaluating(.event(event))
         }

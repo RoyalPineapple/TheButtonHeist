@@ -81,7 +81,6 @@ struct ProjectionLimits: Sendable, Equatable {
         case summary
         case full
         case mcp
-        case junit
     }
 
     let kind: Kind
@@ -109,10 +108,6 @@ struct ProjectionLimits: Sendable, Equatable {
                 caseResults: MCPProjectionLimits.caseResults
             )
         )
-    }
-
-    public static var junit: ProjectionProfile {
-        ProjectionProfile(kind: .junit, limits: .current())
     }
 
     var interfaceDetail: InterfaceDetail {

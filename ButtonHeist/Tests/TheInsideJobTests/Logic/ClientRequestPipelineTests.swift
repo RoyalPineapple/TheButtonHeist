@@ -25,14 +25,9 @@ final class TheBrainsInteractionRequestTests: XCTestCase {
             )
         }
         XCTAssertEqual(
-            brains.interactionRequestSnapshot,
-            .init(phase: .running, pendingDepth: 64, capacity: 64)
-        )
-        XCTAssertEqual(
             brains.submitTransportRequest(lease: testLease(65)) {},
             .rejected(.busy(capacity: 64))
         )
-        XCTAssertEqual(brains.interactionRequestSnapshot.pendingDepth, 64)
 
         activeGate.release()
         await brains.stopInteractionRequests()
@@ -111,9 +106,7 @@ final class TheBrainsInteractionRequestTests: XCTestCase {
 
     @MainActor
     func testOwnerCancellationCancelsTheActiveOperationTask() async {
-        let executor = InteractionRequestExecutor(
-            cleanupDeadlineScheduler: ManualInteractionCleanupDeadline().schedule
-        )
+        let executor = InteractionRequestExecutor()
         let activeGate = PipelineTestGate()
         let cancellationObserved = OSAllocatedUnfairLock(initialState: false)
 
@@ -204,17 +197,8 @@ final class TheBrainsInteractionRequestTests: XCTestCase {
 
         executor.cancel(owner: .transportClient(testLease(1)))
         XCTAssertEqual(activeCancellationCount, 1)
-        XCTAssertEqual(
-            executor.snapshot,
-            .init(phase: .cancelling, pendingDepth: 1, capacity: 64)
-        )
-
         deadline.fire()
         XCTAssertEqual(queuedCancellationCount, 1)
-        XCTAssertEqual(
-            executor.snapshot,
-            .init(phase: .cleanupTimedOut, pendingDepth: 0, capacity: 64)
-        )
         XCTAssertEqual(
             executor.submit(
                 owner: .transportClient(testLease(3)),
@@ -230,10 +214,8 @@ final class TheBrainsInteractionRequestTests: XCTestCase {
             await executor.drain()
         }
         await drainStarted.wait()
-        XCTAssertEqual(executor.snapshot.phase, .stopping)
         activeGate.release()
         await drain.value
-        XCTAssertEqual(executor.snapshot, .init(phase: .idle, pendingDepth: 0, capacity: 64))
         XCTAssertEqual(activeCancellationCount, 1)
     }
 }
@@ -251,7 +233,7 @@ private final class ManualInteractionCleanupDeadline {
 
     func fire() {
         let operation = deadlineReached
-        deadlineReached = nil
+        self.deadlineReached = nil
         operation?()
     }
 }
@@ -320,7 +302,6 @@ final class ClientRequestPipelineTests: XCTestCase {
 
         let consumer = pipeline.stop()
         brains.cancelTransportRequests(lease: testLease(1))
-        XCTAssertEqual(brains.interactionRequestSnapshot.phase, .cancelling)
         uiGate.release()
         await brains.stopInteractionRequests()
         await consumer?.value

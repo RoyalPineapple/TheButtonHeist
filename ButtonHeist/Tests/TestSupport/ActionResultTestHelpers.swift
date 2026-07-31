@@ -76,7 +76,7 @@ package enum HeistResultFixture {
         path: String = "$.body[0]",
         command: HeistActionCommand = .activate(.predicate(ElementPredicate(label: "Button"))),
         result: ActionResult = actionResult(),
-        expectation: HeistExpectationEvidence? = nil,
+        expectation: HeistExpectationEvidence = defaultActionExpectationEvidence(),
         failure: HeistFailureDetail? = nil
     ) -> HeistExecutionStepResult {
         let evidence = HeistActionEvidence.completed(result: result, expectation: expectation)
@@ -104,12 +104,15 @@ package enum HeistResultFixture {
         path: String = "$.body[0]",
         evidence: HeistExpectationEvidence = HeistResultFixture.defaultWaitEvidence(met: true)
     ) -> HeistExecutionStepResult {
+        guard let predicate = evidence.predicate else {
+            preconditionFailure("wait result fixture requires an authored predicate")
+        }
         guard let passedEvidence = HeistPassedWaitEvidence(evidence) else {
             preconditionFailure("passed wait result fixture requires complete replayable evidence")
         }
         return .wait(
             path: executionPath(path),
-            predicate: evidence.predicate,
+            predicate: predicate,
             timeout: 1,
             completion: .passed(evidence: passedEvidence)
         )
@@ -120,19 +123,22 @@ package enum HeistResultFixture {
         evidence: HeistExpectationEvidence = HeistResultFixture.defaultWaitEvidence(met: false),
         failure: HeistFailureDetail
     ) -> HeistExecutionStepResult {
-        .wait(
+        guard let predicate = evidence.predicate else {
+            preconditionFailure("failed wait result fixture requires an authored predicate")
+        }
+        return .wait(
             path: executionPath(path),
-            predicate: evidence.predicate,
+            predicate: predicate,
             timeout: 1,
             completion: .failed(
-                evidence: .observed(evidence),
+                evidence: evidence,
                 failure: failure
             )
         )
     }
 
     package static func expectationEvidence(
-        predicate: AccessibilityPredicate,
+        predicate: AccessibilityPredicate?,
         observation: Observation.Evidence,
         terminalCause: HeistExpectationEvidence.TerminalCause = .observed
     ) -> HeistExpectationEvidence {
@@ -204,7 +210,7 @@ package enum HeistResultFixture {
             return .conditional(
                 path: executionPath(path),
                 completion: .failed(
-                    evidence: .observed(evidence),
+                    evidence: evidence,
                     failure: failure ?? HeistFailureDetail(
                         category: .validation,
                         contract: "conditional branch completes",
@@ -277,7 +283,7 @@ package enum HeistResultFixture {
                 path: executionPath(resolvedPath),
                 declaration: declaration,
                 completion: .failed(
-                    evidence: .observed(evidence),
+                    evidence: evidence,
                     failure: failure,
                     children: passingChildren(children)
                 )
@@ -339,6 +345,18 @@ package enum HeistResultFixture {
                 baseline: nil,
                 events: [.elementsChanged(current), .noChange],
                 current: current,
+                coverage: .complete
+            )
+        )
+    }
+
+    package static func defaultActionExpectationEvidence() -> HeistExpectationEvidence {
+        expectationEvidence(
+            predicate: nil,
+            observation: Observation.Evidence(
+                baseline: nil,
+                events: [.noChange],
+                current: nil,
                 coverage: .complete
             )
         )

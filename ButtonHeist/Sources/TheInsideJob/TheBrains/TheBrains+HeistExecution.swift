@@ -91,23 +91,6 @@ extension HeistExecution {
 }
 
 extension TheBrains {
-    internal func executeHeistAction(
-        _ command: HeistActionCommand,
-        timeout: HeistTimeout = .default
-    ) async -> Result<HeistExecution.Completion, HeistExecution.Failure> {
-        guard semanticObservationIsActive else {
-            return .failure(.runtimeUnavailable)
-        }
-        do {
-            return .success(try await HeistExecution.Host(brains: self).execute(
-                command,
-                timeout: timeout
-            ))
-        } catch {
-            return .failure(.classify(error))
-        }
-    }
-
     internal func executeHeistPlan(
         _ plan: HeistPlan,
         argument: HeistArgument = .none,

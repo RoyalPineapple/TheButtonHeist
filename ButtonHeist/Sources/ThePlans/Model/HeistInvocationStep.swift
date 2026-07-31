@@ -165,32 +165,14 @@ public struct HeistInvocationStep: Codable, Sendable, Equatable {
     /// The frame is the product — reports surface this rather than a bare
     /// `invoke`, so a reader can see which capability ran and with what.
     public var runHeistSummary: String {
-        let name = "\"\(path.description)\""
-        switch argument.core {
-        case .none:
-            return "RunHeist(\(name))"
-        case .string(let value):
-            return "RunHeist(\(name), \(Self.stringArgumentSummary(value)))"
-        case .accessibilityTarget(let target):
-            return "RunHeist(\(name), \(Self.targetArgumentSummary(target)))"
-        }
-    }
-
-    private static func stringArgumentSummary(_ expr: AuthoredString) -> String {
-        switch expr {
-        case .literal(let value):
-            return "\"\(value)\""
-        case .ref(let reference):
-            return reference.rawValue
-        }
-    }
-
-    private static func targetArgumentSummary(_ expr: AccessibilityTarget) -> String {
-        switch expr {
-        case .ref(let reference):
-            return reference.rawValue
-        default:
-            return expr.description
+        do {
+            return try HeistCanonicalSwiftDSLRenderer().render(
+                invoke: self,
+                indent: 0,
+                environment: .preservingReferences
+            )
+        } catch {
+            preconditionFailure("admitted heist invocation must render: \(error)")
         }
     }
 }

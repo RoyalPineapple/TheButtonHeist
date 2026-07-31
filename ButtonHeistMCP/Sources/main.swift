@@ -60,7 +60,6 @@ struct ButtonHeistMCPServer {
 
     static func renderResponse(_ response: FenceResponse) -> CallTool.Result {
         var content: [Tool.Content] = []
-        let presenter = FenceResponsePresenter(profile: .mcp)
 
         // Screenshots: embed as image content. File-based screenshots fall through
         // to the compact text below.
@@ -68,8 +67,8 @@ struct ButtonHeistMCPServer {
             content.append(.image(data: payload.pngData, mimeType: "image/png", annotations: nil, _meta: nil))
         }
 
-        content.append(.text(text: presenter.compactText(for: response), annotations: nil, _meta: nil))
-        let structuredContent: Value? = structuredContent(for: response, presenter: presenter)
+        content.append(.text(text: response.compactFormatted(profile: .mcp), annotations: nil, _meta: nil))
+        let structuredContent: Value? = structuredContent(for: response)
         return .init(
             content: content,
             structuredContent: structuredContent,
@@ -78,11 +77,10 @@ struct ButtonHeistMCPServer {
     }
 
     private static func structuredContent(
-        for response: FenceResponse,
-        presenter: FenceResponsePresenter
+        for response: FenceResponse
     ) -> Value {
         do {
-            return try MCPValueBridge.structuredContent(for: response, presenter: presenter)
+            return try MCPValueBridge.structuredContent(for: response)
         } catch {
             return structuredEncodingFailureValue(error)
         }
@@ -94,8 +92,7 @@ struct ButtonHeistMCPServer {
             details: FailureDetails(code: .formattingJSONEncodingFailed)
         )
         return (try? MCPValueBridge.structuredContent(
-            for: .error(failure),
-            presenter: FenceResponsePresenter(profile: .mcp)
+            for: .error(failure)
         )) ?? .object([
             "status": .string("error"),
             "message": .string(failure.message),

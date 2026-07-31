@@ -98,7 +98,7 @@ import ThePlans
             path: "$.body[0]",
             predicate: predicate,
             timeout: 1,
-            completion: .failed(evidence: .observed(matched), failure: failure)
+            completion: .failed(evidence: matched, failure: failure)
         )
         let expected = HeistResultCodecError.incoherentExecutionEvidence(
             path: "$.body[0]",
@@ -164,7 +164,7 @@ import ThePlans
             predicate: predicate,
             timeout: 1,
             completion: .failed(
-                evidence: .observed(incomplete),
+                evidence: incomplete,
                 failure: failure
             )
         )

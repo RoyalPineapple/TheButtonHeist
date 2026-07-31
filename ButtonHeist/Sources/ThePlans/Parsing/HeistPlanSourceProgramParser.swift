@@ -72,11 +72,11 @@ extension HeistPlanSourceParser {
         guard body.steps.isEmpty else {
             throw error(previous, "Namespace blocks may contain HeistDef or Namespace declarations only")
         }
-        return try HeistPlan(
-            sourceStackVersion: HeistPlan.currentVersion,
+        return HeistPlan(
+            structuralVersion: HeistPlan.currentVersion,
             name: try parsePlanName(name, token: nameToken),
             parameter: .none,
-            definitions: try HeistPlan.mergeSourceDefinitions(body.definitions),
+            definitions: HeistPlan.mergeDefinitions(body.definitions, duplicatePolicy: .preserve),
             body: []
         )
     }
@@ -141,44 +141,11 @@ extension HeistPlanSourceParser {
             ))
         }
         let body = try parseHeistClosureBody(parameter: parameter, allowDefinitions: true)
-        return try sourceDefinition(
-            components: definitionPath.components[...],
+        return HeistPlan.nestedDefinition(
+            path: definitionPath,
             parameter: parameter,
-            definitions: try HeistPlan.mergeSourceDefinitions(body.definitions),
+            definitions: HeistPlan.mergeDefinitions(body.definitions, duplicatePolicy: .preserve),
             body: body.steps
-        )
-    }
-
-    private func sourceDefinition(
-        components: ArraySlice<HeistPlanName>,
-        parameter: HeistParameter,
-        definitions: [HeistPlan],
-        body: [HeistStep]
-    ) throws -> HeistPlan {
-        guard let name = components.first else {
-            preconditionFailure("validated heist definition path must not be empty")
-        }
-        guard components.count > 1 else {
-            return try HeistPlan(
-                sourceStackVersion: HeistPlan.currentVersion,
-                name: name,
-                parameter: parameter,
-                definitions: definitions,
-                body: body
-            )
-        }
-        return try HeistPlan(
-            sourceStackVersion: HeistPlan.currentVersion,
-            name: name,
-            definitions: [
-                sourceDefinition(
-                    components: components.dropFirst(),
-                    parameter: parameter,
-                    definitions: definitions,
-                    body: body
-                ),
-            ],
-            body: []
         )
     }
 
@@ -263,9 +230,9 @@ extension HeistPlanSourceParser {
         }
 
         let body = try parseHeistClosureBody(parameter: parameter, allowDefinitions: allowDefinitions)
-        let definitions = try HeistPlan.mergeSourceDefinitions(body.definitions)
-        return try HeistPlan(
-            sourceStackVersion: HeistPlan.currentVersion,
+        let definitions = HeistPlan.mergeDefinitions(body.definitions, duplicatePolicy: .preserve)
+        return HeistPlan(
+            structuralVersion: HeistPlan.currentVersion,
             name: name,
             parameter: parameter,
             definitions: definitions,
@@ -554,60 +521,5 @@ private extension HeistPlanSourceParser {
             referenceName,
             parseHeistBody(untilRightBrace: true, allowDefinitions: false).steps
         )
-    }
-}
-
-private extension HeistPlan {
-    static func mergeSourceDefinitions(_ definitions: [HeistPlan]) throws -> [HeistPlan] {
-        try definitions.reduce(into: []) { merged, definition in
-            guard let name = definition.name,
-                  let existingIndex = merged.firstIndex(where: { $0.name == name })
-            else {
-                merged.append(definition)
-                return
-            }
-            let existing = merged[existingIndex]
-            guard existing.parameter == .none,
-                  existing.body.isEmpty,
-                  !existing.definitions.isEmpty,
-                  definition.parameter == .none,
-                  definition.body.isEmpty,
-                  !definition.definitions.isEmpty
-            else {
-                merged.append(definition)
-                return
-            }
-            merged[existingIndex] = try HeistPlan(
-                sourceStackVersion: existing.version,
-                name: existing.name,
-                parameter: existing.parameter,
-                definitions: try mergeSourceDefinitions(existing.definitions + definition.definitions),
-                body: existing.body
-            )
-        }
-    }
-
-    init(
-        sourceStackVersion version: Int,
-        name: HeistPlanName? = nil,
-        parameter: HeistParameter = .none,
-        definitions: [HeistPlan] = [],
-        body: [HeistStep]
-    ) throws {
-        guard version == Self.currentVersion else {
-            throw HeistPlanVersionAdmissionError(observed: version)
-        }
-        guard !body.isEmpty || !definitions.isEmpty else {
-            throw HeistPlanBuildError.planStructure(
-                path: "$.body",
-                message: "heist plan must contain a body or nested definitions",
-                hint: "Add body steps, or use this plan only as a namespace with nested definitions."
-            )
-        }
-        self.version = version
-        self.name = name
-        self.parameter = parameter
-        self.definitions = definitions
-        self.body = body
     }
 }

@@ -101,13 +101,14 @@ final class HeistExecutionMachineTests: XCTestCase {
         XCTAssertEqual(completion.steps.map(\.path), ["$.body[0]"])
         XCTAssertEqual(completion.steps.map(\.kind), [.warn])
         XCTAssertEqual(completion.steps.map(\.reportMessage), ["done"])
-        XCTAssertNil(completion.abortedAtPath)
+        XCTAssertNil(completion.steps.first(where: { $0.status == .failed }))
 
         guard case .complete(let lateCompletion) = machine.advance(.event(.noChange)) else {
             return XCTFail("Late input must not reopen a completed machine")
         }
         XCTAssertEqual(lateCompletion.steps, completion.steps)
-        XCTAssertEqual(lateCompletion.abortedAtPath, completion.abortedAtPath)
+        XCTAssertEqual(lateCompletion.steps.first(where: { $0.status == .failed })?.path,
+                       completion.steps.first(where: { $0.status == .failed })?.path)
     }
 
     func testElementWaitRestartsDiscoveryAfterScreenReplacementAndSubstantiveEvents() throws {

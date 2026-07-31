@@ -83,7 +83,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
     func testActionEvidenceRejectsMismatchedCanonicalCommandType() {
         let evidence = HeistActionEvidence.completed(
             result: .success(payload: .customAction),
-            expectation: nil
+            expectation: HeistResultFixture.defaultActionExpectationEvidence()
         )
 
         XCTAssertTrue(evidence.matches(command: .customAction(name: "Archive", target: .label("Mail"))))
@@ -184,20 +184,6 @@ final class ActionResultEvidenceContractTests: XCTestCase {
         XCTAssertNil(decoded.warning)
         XCTAssertNil(decoded.evidence.subjectEvidence)
         XCTAssertNil(decoded.evidence.timing)
-    }
-
-    func testLegacyWaitActionResultRoundTripsForReceiptCompatibility() throws {
-        let result = ActionResult.failure(
-            payload: .wait,
-            failureKind: .timeout,
-            message: "timed out"
-        )
-
-        let decoded = try JSONDecoder().decode(ActionResult.self, from: JSONEncoder().encode(result))
-
-        XCTAssertEqual(decoded, result)
-        XCTAssertEqual(decoded.method, .wait)
-        XCTAssertEqual(decoded.payload, .wait)
     }
 
     func testScreenActionHandlerIsSuccessEvidence() throws {

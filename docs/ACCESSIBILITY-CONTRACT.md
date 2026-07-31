@@ -32,6 +32,10 @@ performs its accessibility action, and proves that `Payment Complete` appeared.
 The contract is fulfilled by observed semantic evidence, not by successful tap
 delivery.
 
+Every action also requires its terminal `noChange` proof. An authored
+`.withoutExpectation(...)` waives only an additional semantic predicate; it
+never waives that structural settled-state expectation.
+
 ## Runtime
 
 ```mermaid

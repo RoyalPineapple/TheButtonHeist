@@ -11,58 +11,44 @@ private func invocation(_ dottedName: String) -> HeistInvocationPath {
     }
 }
 
-private func exactSemanticString(_ value: String) -> HeistSemanticStringMatch {
-    HeistSemanticStringMatch(mode: .exact, value: .literal(value))
-}
-
 private func existsLabel(_ label: String) -> AccessibilityPredicate {
     .exists(.label(label))
 }
 
 private let screenChangePredicate = AccessibilityPredicate.screenChanged
 
-@Test func `list heists includes root only entry`() throws {
-    let catalog = try HeistPlan(
+@Test func `discovery includes root entry`() throws {
+    let descriptions = try HeistPlan(
         name: "checkout",
         body: [.warn(WarnStep(message: "ready"))]
-    ).heistCatalog()
+    ).heistDescriptions()
 
-    #expect(catalog.map { $0.identity.displayName } == ["checkout"])
-    #expect(catalog[0].role == .entry)
-    #expect(catalog[0].parameterKind == .none)
-    #expect(catalog[0].requiresArgument == false)
-    #expect(catalog[0].summary == "Root entry heist")
-    #expect(catalog[0].tags == [.entry])
-    #expect(catalog[0].parameterName == nil)
-    #expect(catalog[0].nestedRunHeists == nil)
-    #expect(catalog[0].actionCommands == nil)
-    #expect(catalog[0].waitCount == nil)
-    #expect(catalog[0].expectationCount == nil)
-    #expect(catalog[0].semanticSurfaces == nil)
-    #expect(catalog[0].validationStatus == nil)
+    #expect(descriptions.map { $0.identity.displayName } == ["checkout"])
+    #expect(descriptions[0].role == .entry)
+    #expect(descriptions[0].parameterKind == .none)
+    #expect(descriptions[0].requiresArgument == false)
+    #expect(descriptions[0].parameterName == nil)
 }
 
-@Test func `list heists includes unparameterized definition`() throws {
-    let catalog = try HeistPlan(
+@Test func `discovery includes unparameterized definition`() throws {
+    let descriptions = try HeistPlan(
         name: "root",
         definitions: [
             try HeistPlan(name: "openCart", body: [.warn(WarnStep(message: "open"))]),
         ],
         body: [.warn(WarnStep(message: "ready"))]
-    ).heistCatalog()
+    ).heistDescriptions()
 
-    #expect(catalog.map { $0.identity.displayName } == ["root", "openCart"])
-    #expect(catalog[0].role == .entry)
-    #expect(catalog[1].role == .capability)
-    #expect(catalog[1].parameterKind == .none)
-    #expect(catalog[1].requiresArgument == false)
-    #expect(catalog[1].summary == "Reusable heist capability")
-    #expect(catalog[1].tags == [.capability])
-    #expect(catalog[1].parameterName == nil)
+    #expect(descriptions.map { $0.identity.displayName } == ["root", "openCart"])
+    #expect(descriptions[0].role == .entry)
+    #expect(descriptions[1].role == .capability)
+    #expect(descriptions[1].parameterKind == .none)
+    #expect(descriptions[1].requiresArgument == false)
+    #expect(descriptions[1].parameterName == nil)
 }
 
-@Test func `list heists includes string definition`() throws {
-    let catalog = try HeistPlan(
+@Test func `discovery includes string definition`() throws {
+    let descriptions = try HeistPlan(
         name: "root",
         definitions: [
             HeistPlan(
@@ -76,19 +62,17 @@ private let screenChangePredicate = AccessibilityPredicate.screenChanged
             ),
         ],
         body: [.warn(WarnStep(message: "ready"))]
-    ).heistCatalog()
+    ).heistDescriptions()
 
-    #expect(catalog[1].identity.displayName == "addToCart")
-    #expect(catalog[1].role == .capability)
-    #expect(catalog[1].parameterKind == .string)
-    #expect(catalog[1].requiresArgument == true)
-    #expect(catalog[1].summary == "Reusable heist capability requiring string argument")
-    #expect(catalog[1].tags == [.capability, .parameterized, .semanticAction])
-    #expect(catalog[1].parameterName == nil)
+    #expect(descriptions[1].identity.displayName == "addToCart")
+    #expect(descriptions[1].role == .capability)
+    #expect(descriptions[1].parameterKind == .string)
+    #expect(descriptions[1].requiresArgument == true)
+    #expect(descriptions[1].parameterName == "item")
 }
 
-@Test func `list heists includes element target definition`() throws {
-    let catalog = try HeistPlan(
+@Test func `discovery includes element target definition`() throws {
+    let descriptions = try HeistPlan(
         name: "root",
         definitions: [
             HeistPlan(
@@ -100,56 +84,33 @@ private let screenChangePredicate = AccessibilityPredicate.screenChanged
             ),
         ],
         body: [.warn(WarnStep(message: "ready"))]
-    ).heistCatalog()
+    ).heistDescriptions()
 
-    #expect(catalog[1].identity.displayName == "tapRow")
-    #expect(catalog[1].role == .capability)
-    #expect(catalog[1].parameterKind == .accessibilityTarget)
-    #expect(catalog[1].requiresArgument == true)
-    #expect(catalog[1].summary == "Reusable heist capability requiring accessibility_target argument")
-    #expect(catalog[1].tags == [.capability, .parameterized, .semanticAction])
-    #expect(catalog[1].parameterName == nil)
-}
-
-@Test func `list heists summary mode omits detailed structure`() throws {
-    let catalog = try detailedSurfacePlan().heistCatalog()
-    let checkout = try #require(catalog.first { $0.identity.displayName == "checkout" })
-
-    #expect(checkout.summary == "Reusable heist capability")
-    #expect(checkout.tags == [.capability, .composed, .assertion, .semanticAction])
-    #expect(checkout.parameterName == nil)
-    #expect(checkout.nestedRunHeists == nil)
-    #expect(checkout.actionCommands == nil)
-    #expect(checkout.waitCount == nil)
-    #expect(checkout.expectationCount == nil)
-    #expect(checkout.semanticSurfaces == nil)
-    #expect(checkout.validationStatus == nil)
+    #expect(descriptions[1].identity.displayName == "tapRow")
+    #expect(descriptions[1].role == .capability)
+    #expect(descriptions[1].parameterKind == .accessibilityTarget)
+    #expect(descriptions[1].requiresArgument == true)
+    #expect(descriptions[1].parameterName == "row")
 }
 
 @Test func testDiscoveryPreservesFirstOccurrenceOrder() throws {
     let plan = try detailedSurfacePlan()
-    let catalog = try plan.heistCatalog(detail: .detailed)
-    let checkout = try #require(catalog.first { $0.identity.displayName == "checkout" })
+    let descriptions = try plan.heistDescriptions()
+    let checkout = try #require(descriptions.first { $0.identity.displayName == "checkout" })
 
-    #expect(catalog.map(\.identity.displayName) == ["root", "checkout", "checkout.confirm"])
-    #expect(catalog.map(\.tags) == [
-        [.entry],
-        [.capability, .composed, .assertion, .semanticAction],
-        [.capability, .semanticAction],
-    ])
+    #expect(descriptions.map(\.identity.displayName) == ["root", "checkout", "checkout.confirm"])
     #expect(checkout.parameterName == nil)
-    #expect(checkout.nestedRunHeists == [invocation("checkout.confirm")])
-    #expect(checkout.actionCommands == [.activate])
-    #expect(checkout.waitCount == 1)
-    #expect(checkout.expectationCount == 1)
-    #expect(checkout.semanticSurfaces == [
-        .label(exactSemanticString("Checkout")),
-        .label(exactSemanticString("Done")),
-        .label(exactSemanticString("Confirm")),
-        .identifier(exactSemanticString("confirmation_button")),
+    #expect(checkout.semanticSurface.nestedRunHeists == [invocation("checkout.confirm")])
+    #expect(checkout.semanticSurface.actionCommands == [.activate])
+    #expect(checkout.semanticSurface.waits.count == 1)
+    #expect(checkout.semanticSurface.expectations.count == 1)
+    #expect(checkout.semanticSurface.semanticSurfaces == [
+        .label(.exact("Checkout")),
+        .label(.exact("Done")),
+        .label(.exact("Confirm")),
+        .identifier(.exact("confirmation_button")),
         .traits([.button]),
     ])
-    #expect(checkout.validationStatus == .validated)
 
     let description = try plan.describeHeist(at: "checkout")
     #expect(description.identity == .capability("checkout"))
@@ -163,12 +124,12 @@ private let screenChangePredicate = AccessibilityPredicate.screenChanged
     #expect(description.semanticSurface.waits == [existsLabel("Confirm")])
     #expect(description.semanticSurface.expectations == [existsLabel("Done")])
     #expect(description.semanticSurface.nestedRunHeists == [invocation("checkout.confirm")])
-    #expect(description.semanticSurface.expectedEffects == [existsLabel("Done"), existsLabel("Confirm")])
-    #expect(description.semanticSurface.semanticSurfaces == checkout.semanticSurfaces)
+    #expect(description.semanticSurface.expectedEffects == [existsLabel("Confirm"), existsLabel("Done")])
+    #expect(description.semanticSurface.semanticSurfaces == checkout.semanticSurface.semanticSurfaces)
 }
 
-@Test func `list heists detailed mode includes parameter name for parameterized capability`() throws {
-    let catalog = try HeistPlan(
+@Test func `discovery includes parameter name for parameterized capability`() throws {
+    let descriptions = try HeistPlan(
         name: "root",
         definitions: [
             HeistPlan(
@@ -180,13 +141,13 @@ private let screenChangePredicate = AccessibilityPredicate.screenChanged
             ),
         ],
         body: [.warn(WarnStep(message: "ready"))]
-    ).heistCatalog(detail: .detailed)
+    ).heistDescriptions()
 
-    let tapRow = try #require(catalog.first { $0.identity.displayName == "tapRow" })
+    let tapRow = try #require(descriptions.first { $0.identity.displayName == "tapRow" })
     #expect(tapRow.parameterName == "row")
     #expect(tapRow.parameterKind == .accessibilityTarget)
     #expect(tapRow.requiresArgument)
-    #expect(tapRow.semanticSurfaces == nil)
+    #expect(tapRow.semanticSurface.semanticSurfaces.isEmpty)
 }
 
 @Test func `semantic discovery structurally dedupes before catalog projection`() throws {
@@ -196,21 +157,20 @@ private let screenChangePredicate = AccessibilityPredicate.screenChanged
         .traits([.link, .button]),
         .traits([.button, .link]),
     ])
-    let catalog = try HeistPlan(
+    let descriptions = try HeistPlan(
         name: "pay",
         body: [
             .action(ActionStep(command: .activate(.predicate(.label("Pay"))))),
             .action(ActionStep(command: .activate(.predicate(duplicateTemplate)))),
         ]
-    ).heistCatalog(detail: .detailed)
+    ).heistDescriptions()
 
-    let pay = try #require(catalog.first)
-    #expect(pay.actionCommands == [.activate])
-    #expect(pay.semanticSurfaces == [
-        .label(exactSemanticString("Pay")),
+    let pay = try #require(descriptions.first)
+    #expect(pay.semanticSurface.actionCommands == [.activate])
+    #expect(pay.semanticSurface.semanticSurfaces == [
+        .label(.exact("Pay")),
         .traits([.button, .link]),
     ])
-    #expect(pay.tags == [.entry, .semanticAction])
 }
 
 @Test func `target discovery dedupes authored predicates structurally`() throws {
@@ -223,7 +183,7 @@ private let screenChangePredicate = AccessibilityPredicate.screenChanged
     ).describeHeist(at: "pay")
 
     #expect(description.semanticSurface.targetPredicates == [.predicate(.label("Pay"))])
-    #expect(description.semanticSurface.semanticSurfaces == [.label(exactSemanticString("Pay"))])
+    #expect(description.semanticSurface.semanticSurfaces == [.label(.exact("Pay"))])
 }
 
 @Test func `target discovery dedupes typed facts after ordinal projection`() throws {
@@ -260,12 +220,12 @@ private let screenChangePredicate = AccessibilityPredicate.screenChanged
     )
 
     #expect(throws: HeistCatalogError.self) {
-        _ = try plan.heistCatalog()
+        _ = try plan.heistDescriptions()
     }
 }
 
-@Test func `list heists includes parameterized root entry`() throws {
-    let catalog = try HeistPlan(
+@Test func `discovery includes parameterized root entry`() throws {
+    let descriptions = try HeistPlan(
         name: "root",
         parameter: .string(name: "item"),
         body: [
@@ -274,16 +234,14 @@ private let screenChangePredicate = AccessibilityPredicate.screenChanged
                 target: .label("Search")
             ))),
         ]
-    ).heistCatalog()
+    ).heistDescriptions()
 
-    let root = try #require(catalog.first)
+    let root = try #require(descriptions.first)
     #expect(root.identity.displayName == "root")
     #expect(root.role == .entry)
     #expect(root.parameterKind == .string)
     #expect(root.requiresArgument)
-    #expect(root.parameterName == nil)
-    #expect(root.summary == "Root entry heist requiring string argument")
-    #expect(root.tags == [.entry, .parameterized, .textInput])
+    #expect(root.parameterName == "item")
 }
 
 @Test func `describe root entry`() throws {
@@ -296,7 +254,6 @@ private let screenChangePredicate = AccessibilityPredicate.screenChanged
     #expect(description.role == .entry)
     #expect(description.parameterKind == .none)
     #expect(description.requiresArgument == false)
-    #expect(description.validationStatus == .validated)
 }
 
 @Test func `describe parameterized capability`() throws {
@@ -353,9 +310,9 @@ private let screenChangePredicate = AccessibilityPredicate.screenChanged
     #expect(description.semanticSurface.expectations == [existsLabel("Done")])
     #expect(description.semanticSurface.waits == [screenChangePredicate, notification])
     #expect(description.semanticSurface.expectedEffects == [
-        existsLabel("Done"),
         screenChangePredicate,
         notification,
+        existsLabel("Done"),
     ])
     #expect(description.semanticSurface.targetPredicates == [
         .predicate(.label("Submit")),
@@ -363,9 +320,9 @@ private let screenChangePredicate = AccessibilityPredicate.screenChanged
         .predicate(.identifier("save_status")),
     ])
     #expect(description.semanticSurface.semanticSurfaces == [
-        .label(exactSemanticString("Submit")),
-        .label(exactSemanticString("Done")),
-        .identifier(exactSemanticString("save_status")),
+        .label(.exact("Submit")),
+        .label(.exact("Done")),
+        .identifier(.exact("save_status")),
     ])
 }
 

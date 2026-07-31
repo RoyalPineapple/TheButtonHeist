@@ -76,9 +76,6 @@ internal final class Stream {
     var observationWaiters = WaiterStore<UInt64, SemanticObservationWaiter>()
     private var eventReceiver: EventReceiver?
     private let notificationIngress: AccessibilityNotificationIngress
-    /// Runs at the top of every visible reading, before the tree is read.
-    var beforeVisibleReading: @MainActor () async -> Void = {}
-    var observationWaiterDidRegister: @MainActor () -> Void = {}
 
     // MARK: - Subscriber-Facing Observation History
 
@@ -298,7 +295,6 @@ internal final class Stream {
         guard cycle.owns(request.identity) else {
             return nil
         }
-        await beforeVisibleReading()
         let claim = vault.accessibilityNotifications.freezeObservationCycleClaim()
         let committed = await observeSemanticState(
             scope: request.scope,

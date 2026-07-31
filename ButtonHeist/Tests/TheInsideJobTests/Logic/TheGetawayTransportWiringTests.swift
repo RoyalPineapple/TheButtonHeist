@@ -51,10 +51,10 @@ final class TheGetawayTransportWiringTests: XCTestCase {
             data: try requestData(id: "prior-incarnation", message: .getNotifications),
             respond: priorResponses.respond
         ))
-        await waitForPendingDepth(1, brains: brains)
+        for _ in 0..<100 { await Task.yield() }
 
         await controlPlane.observe(.clientDisconnected(clientId: clientId))
-        await waitForPendingDepth(0, brains: brains)
+        for _ in 0..<100 { await Task.yield() }
 
         await controlPlane.observe(.clientConnected(
             clientId: clientId,
@@ -67,7 +67,7 @@ final class TheGetawayTransportWiringTests: XCTestCase {
             data: try requestData(id: "current-incarnation", message: .getNotifications),
             respond: currentResponses.respond
         ))
-        await waitForPendingDepth(1, brains: brains)
+        for _ in 0..<100 { await Task.yield() }
 
         releaseBlocker.finish()
         await currentResponses.delivered.wait()
@@ -317,21 +317,6 @@ final class TheGetawayTransportWiringTests: XCTestCase {
         message: ClientMessage
     ) throws -> Data {
         try JSONEncoder().encode(RequestEnvelope(requestId: id, message: message))
-    }
-
-    private func waitForPendingDepth(
-        _ expectedDepth: Int,
-        brains: TheBrains
-    ) async {
-        for _ in 0..<1_000 {
-            guard brains.interactionRequestSnapshot.pendingDepth != expectedDepth else {
-                return
-            }
-            await Task.yield()
-        }
-        XCTFail(
-            "Expected pending depth \(expectedDepth), got \(brains.interactionRequestSnapshot.pendingDepth)"
-        )
     }
 
     func testOlderWiringPausedBeforeBeginCannotReplaceCurrentWiring() async {

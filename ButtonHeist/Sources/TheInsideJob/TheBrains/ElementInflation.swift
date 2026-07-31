@@ -110,11 +110,6 @@ internal final class ElementInflation {
         internal var moveViewport: MoveViewport
     }
 
-    internal struct GeometryEnvironment {
-        internal let now: @MainActor () -> RuntimeElapsed.Instant
-        internal let refreshVisibleObservation: @MainActor () async -> VisibleObservationOutcome
-    }
-
     internal struct CommittedElementTarget {
         private let identity: CrossCaptureTarget
         private let resolvedHeistId: HeistId
@@ -135,7 +130,6 @@ internal final class ElementInflation {
     internal let vault: TheVault
     internal let safecracker: TheSafecracker
     internal var exploration: Exploration
-    internal var geometryEnvironment: GeometryEnvironment
 
     internal static let comfortMarginFraction: CGFloat = 1.0 / 6.0
     internal init(
@@ -146,14 +140,6 @@ internal final class ElementInflation {
         self.vault = vault
         self.safecracker = safecracker
         self.exploration = exploration
-        geometryEnvironment = GeometryEnvironment(
-            now: { RuntimeElapsed.now },
-            refreshVisibleObservation: { [vault] in
-                await vault.semanticObservationStream.refreshedVisibleObservation(
-                    boundary: .cancellation
-                )
-            }
-        )
     }
 
     internal func inflate(

@@ -3,10 +3,10 @@
 `heist-doctor` is an alpha, suggestion-only repair experiment for The Button Heist
 results.
 
-It compares the `HeistResult` embedded in a last passing
-`HeistResultRecording` with the result in a new failing recording, then prints
-either structured repair suggestions
-or structured reasons it cannot safely suggest one.
+It projects each `HeistResult` embedded in a last passing
+`HeistResultRecording` and a new failing recording into its canonical
+`HeistReport`, then selects report nodes and prints either structured repair
+suggestions or structured reasons it cannot safely suggest one.
 
 It is not automatic self-healing. It does not connect to an app, rerun a heist,
 edit source, rewrite DSL, mutate `.heist` artifacts, update stored plans, or
@@ -161,7 +161,9 @@ but artifact collection should not depend on per-test wrappers.
 
 ## Evidence Model
 
-The useful evidence is already in the recording's `HeistResult`:
+The useful execution evidence is already in the recording's `HeistResult`.
+`HeistReport.project(result:)` is the sole semantic interpretation; Doctor
+consumes its selected action-node facts:
 
 - step paths and nested execution structure
 - authored action commands and expectations
