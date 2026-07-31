@@ -476,40 +476,40 @@ extension FenceResponse {
 
     private func formatDelta(_ projection: DeltaProjection) -> String {
         switch projection {
-        case .noChange(let metadata):
-            return "[\(metadata.elementCount) elements, no change]"
-        case .elementsChanged(let delta):
-            var parts: [String] = ["\(delta.metadata.elementCount) elements"]
-            if delta.edits.added.elements.count > 0 {
-                let addedCount = delta.edits.added.elements.count
+        case .noChange(let elementCount):
+            return "[\(elementCount) elements, no change]"
+        case .elementsChanged(let elementCount, let edits):
+            var parts: [String] = ["\(elementCount) elements"]
+            if edits.added.values.count > 0 {
+                let addedCount = edits.added.values.count
                 parts.append("+\(addedCount) added")
             }
-            if delta.edits.removed.elements.count > 0 {
-                let removedCount = delta.edits.removed.elements.count
+            if edits.removed.values.count > 0 {
+                let removedCount = edits.removed.values.count
                 parts.append("-\(removedCount) removed")
             }
-            if delta.edits.updated.updates.count > 0 {
-                let updatedCount = delta.edits.updated.updates.count
+            if edits.updated.values.count > 0 {
+                let updatedCount = edits.updated.values.count
                 parts.append("~\(updatedCount) updated")
             }
-            let detail = Self.compactElementEditLines(edits: delta.edits)
+            let detail = Self.compactElementEditLines(edits: edits)
             guard !detail.isEmpty else {
                 return "[" + parts.joined(separator: ", ") + "]"
             }
             return "[" + parts.joined(separator: ", ") + ": " + detail.joined(separator: "; ") + "]"
-        case .screenChanged(let delta):
-            let compactInterface = delta.screen.interface.map {
+        case .screenChanged(let elementCount, let screen):
+            let compactInterface = screen.interface.map {
                 Self.compactInterface($0)
             } ?? ""
-            return "[\(delta.metadata.elementCount) elements, screen changed]\n" + compactInterface
+            return "[\(elementCount) elements, screen changed]\n" + compactInterface
         }
     }
 
-    private static func compactElementEditLines(edits: DeltaEditsProjection?) -> [String] {
+    private static func compactElementEditLines(edits: DeltaEditsProjection) -> [String] {
         var lines: [String] = []
-        lines.append(contentsOf: edits?.added.elements.map { "+ \(compactElementLine($0))" } ?? [])
-        lines.append(contentsOf: edits?.removed.elements.map { "- \(compactElementLine($0))" } ?? [])
-        for update in edits?.updated.updates ?? [] {
+        lines.append(contentsOf: edits.added.values.map { "+ \(compactElementLine($0))" })
+        lines.append(contentsOf: edits.removed.values.map { "- \(compactElementLine($0))" })
+        for update in edits.updated.values {
             let assertable = update.after.semantics.assertable
             let name = nonEmpty(assertable.label)
                 ?? nonEmpty(assertable.value)

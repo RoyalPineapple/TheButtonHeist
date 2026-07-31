@@ -1,78 +1,63 @@
 import TheScore
 
-struct ElementProjectionBucket: Sendable {
-    let elements: [HeistElement]
+struct DeltaProjectionBucket<Value: Sendable>: Sendable {
+    let values: [Value]
     let omittedCount: Int?
     let omittedKeys: [String]?
 
-    init(elements: [HeistElement], limit: Int) {
-        let visible = Array(elements.prefix(max(0, limit)))
-        self.elements = visible
-        let omittedElements = Array(elements.dropFirst(visible.count))
-        omittedCount = omittedElements.isEmpty ? nil : omittedElements.count
-        omittedKeys = omittedElements.isEmpty
+    init(values: [Value], limit: Int, omissionKey: (Value) -> String) {
+        let visible = Array(values.prefix(max(0, limit)))
+        self.values = visible
+        let omitted = Array(values.dropFirst(visible.count))
+        omittedCount = omitted.isEmpty ? nil : omitted.count
+        omittedKeys = omitted.isEmpty
             ? nil
-            : omittedElements.map(Self.omissionKey(for:))
+            : omitted.map(omissionKey)
     }
 
-    var isEmpty: Bool {
-        elements.isEmpty
-    }
-
-    static func omissionKey(for element: HeistElement) -> String {
-        let assertable = element.semantics.assertable
-        if let identifier = assertable.identifier, !identifier.isEmpty {
-            return "identifier:\(identifier)"
-        }
-        if let label = assertable.label, !label.isEmpty {
-            return "label:\(label)"
-        }
-        if let value = assertable.value, !value.isEmpty {
-            return "value:\(value)"
-        }
-        return "description:\(element.semantics.spokenDescription)"
-    }
 }
 
-struct ElementUpdateProjectionBucket: Sendable {
-    let updates: [ElementUpdate]
-    let omittedCount: Int?
-    let omittedKeys: [String]?
-
-    init(updates: [ElementUpdate], limit: Int) {
-        let visible = Array(updates.prefix(max(0, limit)))
-        self.updates = visible
-        let omittedUpdates = Array(updates.dropFirst(visible.count))
-        omittedCount = omittedUpdates.isEmpty ? nil : omittedUpdates.count
-        omittedKeys = omittedUpdates.isEmpty
-            ? nil
-            : omittedUpdates.map { ElementProjectionBucket.omissionKey(for: $0.after) }
+private func deltaOmissionKey(for element: HeistElement) -> String {
+    let assertable = element.semantics.assertable
+    if let identifier = assertable.identifier, !identifier.isEmpty {
+        return "identifier:\(identifier)"
     }
-
-    var isEmpty: Bool {
-        updates.isEmpty
+    if let label = assertable.label, !label.isEmpty {
+        return "label:\(label)"
     }
+    if let value = assertable.value, !value.isEmpty {
+        return "value:\(value)"
+    }
+    return "description:\(element.semantics.spokenDescription)"
 }
 
 struct DeltaEditsProjection: Sendable {
-    let added: ElementProjectionBucket
-    let removed: ElementProjectionBucket
-    let updated: ElementUpdateProjectionBucket
+    let added: DeltaProjectionBucket<HeistElement>
+    let removed: DeltaProjectionBucket<HeistElement>
+    let updated: DeltaProjectionBucket<ElementUpdate>
 
     init(edits: ElementEdits, profile: ProjectionProfile) {
         let limit = profile.limits.deltaElementsPerBucket
-        added = ElementProjectionBucket(elements: edits.added, limit: limit)
-        removed = ElementProjectionBucket(elements: edits.removed, limit: limit)
+        added = DeltaProjectionBucket(
+            values: edits.added,
+            limit: limit,
+            omissionKey: { deltaOmissionKey(for: $0) }
+        )
+        removed = DeltaProjectionBucket(
+            values: edits.removed,
+            limit: limit,
+            omissionKey: { deltaOmissionKey(for: $0) }
+        )
         let meaningfulUpdates = edits.updated.compactMap { update -> ElementUpdate? in
             let changes = update.changes.filter { !$0.property.isGeometry }
             guard !changes.isEmpty else { return nil }
             return ElementUpdate(before: update.before, after: update.after, changes: changes)
         }
-        updated = ElementUpdateProjectionBucket(updates: meaningfulUpdates, limit: limit)
-    }
-
-    var isEmpty: Bool {
-        added.isEmpty && removed.isEmpty && updated.isEmpty
+        updated = DeltaProjectionBucket(
+            values: meaningfulUpdates,
+            limit: limit,
+            omissionKey: { deltaOmissionKey(for: $0.after) }
+        )
     }
 }
 
@@ -131,24 +116,10 @@ enum DeltaProjectionKind: String, Sendable {
     case screenChanged
 }
 
-struct DeltaProjectionMetadata: Sendable {
-    let elementCount: Int
-}
-
-struct DeltaElementsChangedProjection: Sendable {
-    let metadata: DeltaProjectionMetadata
-    let edits: DeltaEditsProjection
-}
-
-struct DeltaScreenChangedProjection: Sendable {
-    let metadata: DeltaProjectionMetadata
-    let screen: DeltaScreenProjection
-}
-
 enum DeltaProjection: Sendable {
-    case noChange(DeltaProjectionMetadata)
-    case elementsChanged(DeltaElementsChangedProjection)
-    case screenChanged(DeltaScreenChangedProjection)
+    case noChange(elementCount: Int)
+    case elementsChanged(elementCount: Int, edits: DeltaEditsProjection)
+    case screenChanged(elementCount: Int, screen: DeltaScreenProjection)
 
     var kind: DeltaProjectionKind {
         switch self {
@@ -170,26 +141,24 @@ enum DeltaProjection: Sendable {
     ) {
         guard let current = evidence.current ?? evidence.baseline else { return nil }
         let folded = DeltaObservationFold(evidence: evidence).result
-        let metadata = DeltaProjectionMetadata(
-            elementCount: current.interface.projectedElements.count
-        )
+        let elementCount = current.interface.projectedElements.count
 
         if folded.screenChanged {
-            self = .screenChanged(DeltaScreenChangedProjection(
-                metadata: metadata,
+            self = .screenChanged(
+                elementCount: elementCount,
                 screen: DeltaScreenProjection(
                     interface: current.interface,
                     profile: profile,
                     includeInterface: includeScreenInterface
                 )
-            ))
+            )
         } else if folded.elementsChanged {
-            self = .elementsChanged(DeltaElementsChangedProjection(
-                metadata: metadata,
+            self = .elementsChanged(
+                elementCount: elementCount,
                 edits: DeltaEditsProjection(edits: folded.edits, profile: profile)
-            ))
+            )
         } else if evidence.coverage == .complete {
-            self = .noChange(metadata)
+            self = .noChange(elementCount: elementCount)
         } else {
             return nil
         }
