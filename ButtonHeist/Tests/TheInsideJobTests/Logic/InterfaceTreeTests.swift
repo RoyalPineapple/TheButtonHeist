@@ -51,11 +51,11 @@ final class InterfaceTreeTests: XCTestCase {
     }
 
     func testEmptyHasNoHierarchy() {
-        XCTAssertTrue(InterfaceObservation.empty.liveCapture.hierarchy.isEmpty)
+        XCTAssertTrue(InterfaceObservation.empty.tree.viewportCapture.hierarchy.isEmpty)
     }
 
     func testEmptyHasNoFirstResponder() {
-        XCTAssertNil(InterfaceObservation.empty.liveCapture.firstResponderHeistId)
+        XCTAssertNil(InterfaceObservation.empty.tree.viewportCapture.firstResponderHeistId)
     }
 
     func testEmptyHasNoName() {
@@ -86,7 +86,7 @@ final class InterfaceTreeTests: XCTestCase {
         )
 
         XCTAssertEqual(screen.tree.elementIDs, ["button_visible", "button_known"])
-        XCTAssertEqual(screen.liveCapture.heistIds, ["button_visible"])
+        XCTAssertEqual(screen.tree.viewportCapture.heistIds, ["button_visible"])
         XCTAssertEqual(screen.tree.findElement(heistId: "button_known")?.element.label, "Known")
         XCTAssertEqual(
             screen.tree.findElement(heistId: "button_known")?.geometry,
@@ -104,7 +104,7 @@ final class InterfaceTreeTests: XCTestCase {
                 screen: TheVault.onscreenSpace(for: visible)
             )
         )
-        XCTAssertFalse(screen.liveCapture.contains(heistId: "button_known"))
+        XCTAssertFalse(screen.tree.viewportCapture.contains(heistId: "button_known"))
     }
 
     func testRemovingElementsRemapsLiveSemanticAndAnnotationPaths() {
@@ -174,8 +174,8 @@ final class InterfaceTreeTests: XCTestCase {
         let pruned = screen.removingElements(withIds: ["old"])
         let interface = pruned.tree.semanticInterface(timestamp: Date())
 
-        XCTAssertEqual(pruned.liveCapture.heistId(forPath: TreePath([0, 0])), "kept")
-        XCTAssertNil(pruned.liveCapture.heistId(forPath: TreePath([1, 0])))
+        XCTAssertEqual(pruned.tree.viewportCapture.heistId(forPath: TreePath([0, 0])), "kept")
+        XCTAssertNil(pruned.tree.viewportCapture.heistId(forPath: TreePath([1, 0])))
         XCTAssertEqual(pruned.tree.containers[TreePath([0])]?.containerName, "feed")
         XCTAssertNil(pruned.tree.containers[TreePath([1])])
         XCTAssertEqual(pruned.tree.elements["kept"]?.scrollMembership?.containerPath, TreePath([0]))
@@ -184,7 +184,7 @@ final class InterfaceTreeTests: XCTestCase {
             pruned.tree.elements["kept"]?.geometry.screen,
             TheVault.onscreenSpace(for: kept)
         )
-        XCTAssertEqual(pruned.liveCapture.firstResponderHeistId, "kept")
+        XCTAssertEqual(pruned.tree.viewportCapture.firstResponderHeistId, "kept")
         XCTAssertTrue(pruned.liveCapture.object(for: "kept") === keptObject)
         XCTAssertTrue(pruned.liveCapture.containerObject(forPath: TreePath([0])) === containerObject)
         XCTAssertTrue(pruned.liveCapture.scrollView(forContainerPath: TreePath([0])) === scrollView)
@@ -215,8 +215,8 @@ final class InterfaceTreeTests: XCTestCase {
 
         XCTAssertEqual(visibleOnly.tree.elementIDs, ["button_visible"])
         XCTAssertEqual(visibleOnly.tree.viewportElementIDs, ["button_visible"])
-        XCTAssertEqual(visibleOnly.liveCapture.hierarchy, screen.liveCapture.hierarchy)
-        XCTAssertEqual(visibleOnly.liveCapture.firstResponderHeistId, "button_visible")
+        XCTAssertEqual(visibleOnly.tree.viewportCapture.hierarchy, screen.tree.viewportCapture.hierarchy)
+        XCTAssertEqual(visibleOnly.tree.viewportCapture.firstResponderHeistId, "button_visible")
         XCTAssertNil(visibleOnly.tree.findElement(heistId: "button_known"))
     }
 

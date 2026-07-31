@@ -88,11 +88,8 @@ extension InterfaceTreeTests {
 
         XCTAssertEqual(updated.elementIDs, ["button_visible", "button_known"])
         XCTAssertEqual(updated.viewportElementIDs, ["button_visible"])
-        XCTAssertEqual(refresh.liveCapture.firstResponderHeistId, "button_visible")
-        XCTAssertEqual(
-            LiveCapture.makeForTests(snapshot: updated.viewportCapture).firstResponderHeistId,
-            "button_visible"
-        )
+        XCTAssertEqual(refresh.tree.viewportCapture.firstResponderHeistId, "button_visible")
+        XCTAssertEqual(updated.viewportCapture.firstResponderHeistId, "button_visible")
         XCTAssertEqual(updated.findElement(heistId: "button_known")?.element.label, "Known")
         XCTAssertEqual(updated.findElement(heistId: "button_known")?.geometry.screen, .offscreen)
         XCTAssertEqual(

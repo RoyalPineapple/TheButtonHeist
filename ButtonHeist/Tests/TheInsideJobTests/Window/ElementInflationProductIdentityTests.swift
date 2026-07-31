@@ -236,7 +236,11 @@ extension ElementInflationProductTests {
         var elements = tree.elements
         elements[heistId] = entry
         await brains.vault.installObservationForTesting(InterfaceObservation.makeForTests(
-            tree: InterfaceTree(elements: elements, containers: tree.containers),
+            tree: InterfaceTree(
+                elements: elements,
+                containers: tree.containers,
+                viewportCapture: tree.viewportCapture
+            ),
             liveCapture: brains.vault.currentInterfaceObservation.liveCapture
         ))
     }

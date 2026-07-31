@@ -128,8 +128,7 @@ extension TheBrainsScrollTests {
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [scrollContainerPath: .init(view: scrollView)]
         )
-        await brains.vault.semanticObservationStream
-            .commitVisibleObservationForTesting(liveScreen)
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(liveScreen)
         let prematureResolution = brains.vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Jump Target"), ordinal: 0))
         guard case .notFound = prematureResolution else {
             XCTFail("Parser exposed offscreen scroll content before semantic reveal: \(prematureResolution)")
@@ -156,15 +155,16 @@ extension TheBrainsScrollTests {
             ),
             element: interfaceElement
         )
+        let knownElements = liveScreen.tree.elements.merging([knownEntry.heistId: knownEntry]) { _, new in new }
         let knownScreen = InterfaceObservation.makeForTests(
             tree: InterfaceTree(
-                elements: [knownEntry.heistId: knownEntry],
-                containers: liveScreen.tree.containers
+                elements: knownElements,
+                containers: liveScreen.tree.containers,
+                viewportCapture: liveScreen.tree.viewportCapture
             ),
             liveCapture: liveScreen.liveCapture
         )
-        await brains.vault.semanticObservationStream
-            .commitVisibleObservationForTesting(knownScreen)
+        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(knownScreen)
         let revealedScreen = duplicateRevealObservation(
             knownEntry: knownEntry,
             firstTarget: firstTarget,

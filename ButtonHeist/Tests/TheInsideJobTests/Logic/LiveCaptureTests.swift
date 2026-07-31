@@ -424,7 +424,7 @@ struct LiveCaptureTests {
         expectElementMismatch(snapshotElement: snapshotElement, treeElement: treeElement)
     }
 
-    @Test func `valid builder keeps live lookup behavior`() throws {
+    @Test func `valid builder keeps viewport semantics and live references`() throws {
         let save = AccessibilityElement.make(label: "Save", traits: .button)
         let cancel = AccessibilityElement.make(label: "Cancel", traits: .button)
         let saveObject = NSObject()
@@ -453,15 +453,15 @@ struct LiveCaptureTests {
         )
         let capture = observation.liveCapture
 
-        #expect(capture.heistIds == ["cancel_button", "save_button"])
-        #expect(capture.contains(heistId: "save_button"))
-        #expect(capture.heistId(forPath: TreePath([0])) == "save_button")
-        #expect(capture.heistId(forPath: TreePath([1])) == "cancel_button")
+        #expect(observation.tree.viewportCapture.heistIds == ["cancel_button", "save_button"])
+        #expect(observation.tree.viewportCapture.contains(heistId: "save_button"))
+        #expect(observation.tree.viewportCapture.heistId(forPath: TreePath([0])) == "save_button")
+        #expect(observation.tree.viewportCapture.heistId(forPath: TreePath([1])) == "cancel_button")
         #expect(observation.tree.findElement(heistId: "cancel_button")?.element == cancel)
         #expect(capture.object(for: "save_button") === saveObject)
-        #expect(capture.heistId(matching: saveObject) == "save_button")
+        #expect(capture.dispatchReferences.elementRefs["save_button"]?.object === saveObject)
         #expect(capture.scrollView(for: "save_button") === saveScrollView)
-        #expect(capture.firstResponderHeistId == "save_button")
+        #expect(observation.tree.viewportCapture.firstResponderHeistId == "save_button")
     }
 
     @Test func `duplicate equal elements keep separate live entries by path`() throws {
@@ -479,10 +479,8 @@ struct LiveCaptureTests {
         let observation = try InterfaceObservation.build(
             tree: makeTree(snapshot: snapshot)
         )
-        let capture = observation.liveCapture
-
-        #expect(capture.heistId(forPath: TreePath([0])) == "repeat_button_1")
-        #expect(capture.heistId(forPath: TreePath([1])) == "repeat_button_2")
+        #expect(observation.tree.viewportCapture.heistId(forPath: TreePath([0])) == "repeat_button_1")
+        #expect(observation.tree.viewportCapture.heistId(forPath: TreePath([1])) == "repeat_button_2")
         #expect(observation.tree.findElement(heistId: "repeat_button_1")?.element == repeated)
         #expect(observation.tree.findElement(heistId: "repeat_button_2")?.element == repeated)
     }

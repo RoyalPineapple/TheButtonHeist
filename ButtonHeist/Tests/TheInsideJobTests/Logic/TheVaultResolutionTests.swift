@@ -257,7 +257,7 @@ extension TheVaultResolutionTests {
         let tree = InterfaceTree.empty.updatingViewport(with: observation.tree)
 
         XCTAssertTrue(observation.liveCapture.object(for: "save") === liveObject)
-        XCTAssertNil(LiveCapture.makeForTests(snapshot: tree.viewportCapture).object(for: "save"))
+        XCTAssertNil(LiveCapture.makeForTests(tree: tree).object(for: "save"))
         XCTAssertEqual(tree.findElement(heistId: "save")?.element.label, "Save")
     }
 

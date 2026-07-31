@@ -207,7 +207,7 @@ extension ElementInflationProductTests {
         )
 
         let screen = try await publishedVisibleObservation()
-        let paths = screen.liveCapture.scrollableContainerViewsByPath.compactMap { path, reference in
+        let paths = screen.liveCapture.dispatchReferences.scrollableContainerViewsByPath.compactMap { path, reference in
             reference.view === fixture.scrollView ? path : nil
         }
 
@@ -633,7 +633,11 @@ extension ElementInflationProductTests {
         elements[entry.heistId] = entry
 
         let discoveryObservation = InterfaceObservation.makeForTests(
-            tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
+            tree: InterfaceTree(
+                elements: elements,
+                containers: screen.tree.containers,
+                viewportCapture: screen.tree.viewportCapture
+            ),
             liveCapture: screen.liveCapture
         )
         await brains.vault.semanticObservationStream.commitDiscoveryObservationForTesting(discoveryObservation)
@@ -713,18 +717,23 @@ extension ElementInflationProductTests {
             scrollInventory: capturedInnerContainer?.scrollInventory
         )
 
+        let updatedTree = InterfaceTree(
+            elements: elements,
+            containers: containers,
+            viewportCapture: screen.tree.viewportCapture
+        )
         let liveCapture: LiveCapture
         switch decoy {
         case .absent, .separate:
             liveCapture = screen.liveCapture
         case .duplicateOuterReferenceAtDecoyPath:
-            var scrollableViews = screen.liveCapture.scrollableContainerViewsByPath
+            var scrollableViews = screen.liveCapture.dispatchReferences.scrollableContainerViewsByPath
             scrollableViews[try XCTUnwrap(decoyContainerPath)] = .init(view: fixture.outerScrollView)
             liveCapture = LiveCapture.makeForTests(
-                snapshot: screen.liveCapture.snapshot,
+                tree: updatedTree,
                 dispatchReferences: .init(
-                    elementRefs: screen.liveCapture.elementRefs,
-                    containerRefsByPath: screen.liveCapture.containerRefsByPath,
+                    elementRefs: screen.liveCapture.dispatchReferences.elementRefs,
+                    containerRefsByPath: screen.liveCapture.dispatchReferences.containerRefsByPath,
                     scrollableContainerViewsByPath: scrollableViews
                 )
             )
@@ -732,7 +741,7 @@ extension ElementInflationProductTests {
 
         await brains.vault.semanticObservationStream
             .commitDiscoveryObservationForTesting(InterfaceObservation.makeForTests(
-                tree: InterfaceTree(elements: elements, containers: containers),
+                tree: updatedTree,
                 liveCapture: liveCapture
             ))
         visibleObservationSource.useLiveCapture()

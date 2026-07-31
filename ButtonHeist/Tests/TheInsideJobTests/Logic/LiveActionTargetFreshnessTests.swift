@@ -205,12 +205,11 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
             element: fixture.element
         )
         await vault.installObservationForTesting(InterfaceObservation.makeForTests(
-            tree: InterfaceTree(elements: [heistId: treeElement]),
-            liveCapture: LiveCapture.makeForTests(
-                hierarchy: [.element(fixture.element, traversalIndex: 0)],
-                heistIdsByPath: [path: heistId],
-                elementRefs: [heistId: .init(object: object, scrollView: nil)]
-            )
+            elements: [heistId: treeElement],
+            hierarchy: [.element(fixture.element, traversalIndex: 0)],
+            heistIdsByPath: [path: heistId],
+            elementRefs: [heistId: .init(object: object, scrollView: nil)],
+            firstResponderHeistId: nil
         ))
         let installedElement = try XCTUnwrap(
             vault.currentInterfaceObservation.tree.findElement(heistId: heistId)
@@ -246,15 +245,12 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
             viewSpace: viewSpace
         )
         await vault.installObservationForTesting(InterfaceObservation.makeForTests(
-            tree: InterfaceTree(elements: [:], containers: [path: semanticContainer]),
-            liveCapture: LiveCapture.makeForTests(
-                hierarchy: [.container(container, children: [])],
-                containerNamesByPath: [path: identifier],
-                elementRefs: [:],
-                containerRefsByPath: [path: .init(object: object)],
-                containerViewSpacesByPath: [path: viewSpace],
-                firstResponderHeistId: nil
-            )
+            elements: [:],
+            hierarchy: [.container(container, children: [])],
+            containerNamesByPath: [path: identifier],
+            containerRefsByPath: [path: .init(object: object)],
+            containerViewSpacesByPath: [path: viewSpace],
+            firstResponderHeistId: nil
         ))
         guard case .resolved(let target) = vault.resolveLiveContainerTarget(for: semanticContainer) else {
             throw LiveActionTargetFixtureError.unavailable

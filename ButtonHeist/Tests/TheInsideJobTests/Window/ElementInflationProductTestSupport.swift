@@ -151,7 +151,11 @@ final class ElementInflationProductTests: ButtonHeistRuntimeTestCase {
 
         await targetBrains.vault.semanticObservationStream
             .commitDiscoveryObservationForTesting(InterfaceObservation.makeForTests(
-                tree: InterfaceTree(elements: elements, containers: screen.tree.containers),
+                tree: InterfaceTree(
+                    elements: elements,
+                    containers: screen.tree.containers,
+                    viewportCapture: screen.tree.viewportCapture
+                ),
                 liveCapture: screen.liveCapture
             ))
         if refreshesFromUIKit, targetBrains === brains {
@@ -174,7 +178,7 @@ final class ElementInflationProductTests: ButtonHeistRuntimeTestCase {
         )
     }
     func firstLiveScrollableContainerPath(in observation: InterfaceObservation) -> TreePath? {
-        for item in observation.liveCapture.hierarchy.scrollablePathIndexedContainers {
+        for item in observation.tree.viewportCapture.hierarchy.scrollablePathIndexedContainers {
             guard observation.liveCapture.scrollView(forContainerPath: item.path) != nil else { continue }
             return item.path
         }
@@ -185,7 +189,7 @@ final class ElementInflationProductTests: ButtonHeistRuntimeTestCase {
         for scrollView: UIScrollView,
         in observation: InterfaceObservation
     ) -> TreePath? {
-        let matchingPaths = observation.liveCapture.scrollableContainerViewsByPath
+        let matchingPaths = observation.liveCapture.dispatchReferences.scrollableContainerViewsByPath
             .compactMap { path, ref -> TreePath? in
                 guard ref.view === scrollView else { return nil }
                 return path
@@ -197,7 +201,7 @@ final class ElementInflationProductTests: ButtonHeistRuntimeTestCase {
     }
 
     func scrollContainerDiagnostics(in observation: InterfaceObservation) -> String {
-        let summaries = observation.liveCapture.hierarchy.scrollablePathIndexedContainers
+        let summaries = observation.tree.viewportCapture.hierarchy.scrollablePathIndexedContainers
             .map { item -> String in
                 let name = observation.tree.containers[item.path]?.containerName
                 let hasLiveScroll = observation.liveCapture.scrollView(forContainerPath: item.path) != nil

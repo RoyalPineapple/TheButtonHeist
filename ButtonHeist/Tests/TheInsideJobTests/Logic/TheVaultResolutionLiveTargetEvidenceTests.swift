@@ -319,7 +319,7 @@ extension TheVaultResolutionTests {
         await vault.semanticObservationStream.commitVisibleObservationForTesting(observation)
 
         XCTAssertNotNil(vault.liveObject(for: "save"))
-        XCTAssertNil(LiveCapture.makeForTests(snapshot: vault.interfaceTree.viewportCapture).object(for: "save"))
+        XCTAssertNil(LiveCapture.makeForTests(tree: vault.interfaceTree).object(for: "save"))
     }
 
     func testVisibleCommitSuppliesFreshContainerSemanticsAndLiveGeometryAtomically() async throws {
@@ -346,51 +346,24 @@ extension TheVaultResolutionTests {
         )
         let liveObject = NSObject()
         let settledObservationScreen = InterfaceObservation.makeForTests(
-            tree: InterfaceTree(
-                elements: [:],
-                containers: [
-                    path: .init(
-                        container: staleContainer,
-                        path: path,
-                        containerName: "actions",
-                        viewSpace: staleViewSpace
-                    ),
-                ]
-            ),
-            liveCapture: LiveCapture.makeForTests(
-                hierarchy: [.container(staleContainer, children: [])],
-                containerNamesByPath: [path: "actions"],
-                elementRefs: [:],
-                containerRefsByPath: [:],
-                containerViewSpacesByPath: [
-                    path: staleViewSpace,
-                ],
-                firstResponderHeistId: nil,
-            )
+            elements: [:],
+            hierarchy: [.container(staleContainer, children: [])],
+            containerNamesByPath: [path: "actions"],
+            containerViewSpacesByPath: [
+                path: staleViewSpace,
+            ],
+            firstResponderHeistId: nil
         )
         await vault.semanticObservationStream.commitDiscoveryObservationForTesting(settledObservationScreen)
         let liveScreen = InterfaceObservation.makeForTests(
-            tree: InterfaceTree(
-                elements: [:],
-                containers: [
-                    path: .init(
-                        container: freshContainer,
-                        path: path,
-                        containerName: "actions",
-                        viewSpace: freshViewSpace
-                    ),
-                ]
-            ),
-            liveCapture: LiveCapture.makeForTests(
-                hierarchy: [.container(freshContainer, children: [])],
-                containerNamesByPath: [path: "actions"],
-                elementRefs: [:],
-                containerRefsByPath: [path: .init(object: liveObject)],
-                containerViewSpacesByPath: [
-                    path: freshViewSpace,
-                ],
-                firstResponderHeistId: nil,
-            )
+            elements: [:],
+            hierarchy: [.container(freshContainer, children: [])],
+            containerNamesByPath: [path: "actions"],
+            containerRefsByPath: [path: .init(object: liveObject)],
+            containerViewSpacesByPath: [
+                path: freshViewSpace,
+            ],
+            firstResponderHeistId: nil
         )
         await vault.installObservationForTesting(liveScreen)
 

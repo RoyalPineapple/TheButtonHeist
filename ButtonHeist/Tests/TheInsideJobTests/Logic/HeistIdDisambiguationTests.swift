@@ -102,8 +102,8 @@ final class HeistIdDisambiguationTests: XCTestCase {
 
         XCTAssertEqual(screen.tree.elements.count, 2,
                        "Both elements should survive disambiguation")
-        XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0, 0])), "row_button_1")
-        XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0, 1])), "row_button_2")
+        XCTAssertEqual(screen.tree.viewportCapture.heistId(forPath: TreePath([0, 0])), "row_button_1")
+        XCTAssertEqual(screen.tree.viewportCapture.heistId(forPath: TreePath([0, 1])), "row_button_2")
         assertNoContentPositionSuffix(in: screen)
     }
 
@@ -118,9 +118,9 @@ final class HeistIdDisambiguationTests: XCTestCase {
 
         XCTAssertEqual(screen.tree.elements.count, 3,
                        "All three same-matcher rows should produce distinct heistIds")
-        XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0, 0])), "item_button_1")
-        XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0, 1])), "item_button_2")
-        XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0, 2])), "item_button_3")
+        XCTAssertEqual(screen.tree.viewportCapture.heistId(forPath: TreePath([0, 0])), "item_button_1")
+        XCTAssertEqual(screen.tree.viewportCapture.heistId(forPath: TreePath([0, 1])), "item_button_2")
+        XCTAssertEqual(screen.tree.viewportCapture.heistId(forPath: TreePath([0, 2])), "item_button_3")
         assertNoContentPositionSuffix(in: screen)
     }
 
@@ -136,8 +136,8 @@ final class HeistIdDisambiguationTests: XCTestCase {
 
         XCTAssertEqual(screen.tree.elements.count, 2,
                        "Phase 2 distinct-ifies before content-position epsilon collapse applies")
-        XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0, 0])), "cell_button_1")
-        XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0, 1])), "cell_button_2")
+        XCTAssertEqual(screen.tree.viewportCapture.heistId(forPath: TreePath([0, 0])), "cell_button_1")
+        XCTAssertEqual(screen.tree.viewportCapture.heistId(forPath: TreePath([0, 1])), "cell_button_2")
         assertNoContentPositionSuffix(in: screen)
     }
 
@@ -165,9 +165,9 @@ final class HeistIdDisambiguationTests: XCTestCase {
         let screen = TheVault.buildObservation(from: result)
 
         XCTAssertEqual(screen.tree.elements.count, 2)
-        XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0, 0])), "thing_element_1",
+        XCTAssertEqual(screen.tree.viewportCapture.heistId(forPath: TreePath([0, 0])), "thing_element_1",
                        "Different-matcher collisions resolve via Phase 2 `_N` suffixes")
-        XCTAssertEqual(screen.liveCapture.heistId(forPath: TreePath([0, 1])), "thing_element_2")
+        XCTAssertEqual(screen.tree.viewportCapture.heistId(forPath: TreePath([0, 1])), "thing_element_2")
         assertNoContentPositionSuffix(in: screen)
     }
 }

@@ -23,20 +23,20 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         )
 
         let parsed = TheVault.buildObservation(from: result, facts: facts)
-        let firstResponderHeistId = try XCTUnwrap(parsed.liveCapture.heistId(forPath: secondPath))
+        let firstResponderHeistId = try XCTUnwrap(parsed.tree.viewportCapture.heistId(forPath: secondPath))
         let valueOnly = try InterfaceObservation.build(tree: parsed.tree)
 
-        XCTAssertNotEqual(firstResponderHeistId, parsed.liveCapture.heistId(forPath: firstPath))
+        XCTAssertNotEqual(firstResponderHeistId, parsed.tree.viewportCapture.heistId(forPath: firstPath))
         XCTAssertEqual(parsed.tree.viewportCapture.firstResponderHeistId, firstResponderHeistId)
-        XCTAssertEqual(valueOnly.liveCapture.firstResponderHeistId, firstResponderHeistId)
-        XCTAssertTrue(valueOnly.liveCapture.elementRefs.isEmpty)
+        XCTAssertEqual(valueOnly.tree.viewportCapture.firstResponderHeistId, firstResponderHeistId)
+        XCTAssertTrue(valueOnly.liveCapture.dispatchReferences.elementRefs.isEmpty)
     }
 
     func testFirstResponderSnapshotDoesNotRetainUIKitObject() async {
         let heistId: HeistId = "email_field"
         var responder: UITextField? = UITextField()
         weak let releasedResponder: UITextField? = responder
-        let capture = InterfaceObservation.makeForTests(
+        let observation = InterfaceObservation.makeForTests(
             [
                 InterfaceObservation.TestEntry(
                     label: "Email",
@@ -46,15 +46,15 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
                 ),
             ],
             firstResponderHeistId: heistId
-        ).liveCapture
+        )
+        let capture = observation.liveCapture
 
         XCTAssertTrue(capture.object(for: heistId) === responder)
         responder = nil
 
         XCTAssertNil(releasedResponder)
         XCTAssertNil(capture.object(for: heistId))
-        XCTAssertEqual(capture.firstResponderHeistId, heistId)
-        XCTAssertEqual(capture.snapshot.firstResponderHeistId, heistId)
+        XCTAssertEqual(observation.tree.viewportCapture.firstResponderHeistId, heistId)
     }
 
     func testReplacementCaptureDoesNotInheritStaleFirstResponderEvidence() async {
@@ -272,7 +272,6 @@ final class FirstResponderEvidenceInvariantTests: XCTestCase {
         let parsed = TheVault.buildObservation(from: result, facts: facts)
 
         XCTAssertNil(parsed.tree.viewportCapture.firstResponderHeistId)
-        XCTAssertNil(parsed.liveCapture.firstResponderHeistId)
     }
 
     func testFilteringPreservesOnlyFirstResponderStillInCommittedTree() async {

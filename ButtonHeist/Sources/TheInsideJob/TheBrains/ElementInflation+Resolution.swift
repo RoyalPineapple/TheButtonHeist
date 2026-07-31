@@ -274,7 +274,7 @@ extension ElementInflation {
                 ActionCapabilityDiagnostic.gestureTargetUnavailable(
                     method: method,
                     element: currentElement,
-                    isVisible: vault.currentLiveCapture.contains(heistId: currentElement.heistId)
+                    isVisible: vault.liveContains(heistId: currentElement.heistId)
                 )
             ))
         }

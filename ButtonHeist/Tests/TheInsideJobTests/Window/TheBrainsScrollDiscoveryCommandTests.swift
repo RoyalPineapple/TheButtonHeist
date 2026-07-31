@@ -176,10 +176,13 @@ extension TheBrainsScrollTests {
             ),
             element: staleRootRow
         )
+        var staleElements = visibleScreen.tree.elements
+        staleElements[staleEntry.heistId] = staleEntry
         let staleScreen = InterfaceObservation.makeForTests(
             tree: InterfaceTree(
-                elements: [staleEntry.heistId: staleEntry],
-                containers: visibleScreen.tree.containers
+                elements: staleElements,
+                containers: visibleScreen.tree.containers,
+                viewportCapture: visibleScreen.tree.viewportCapture
             ),
             liveCapture: visibleScreen.liveCapture
         )

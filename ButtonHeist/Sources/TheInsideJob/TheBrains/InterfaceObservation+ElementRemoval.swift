@@ -6,23 +6,24 @@ import TheScore
 extension InterfaceObservation {
     func removingElements(withIds removedIds: Set<HeistId>) -> InterfaceObservation {
         guard !removedIds.isEmpty else { return self }
-        let filteredViewport = liveCapture.hierarchy.removingElements(
+        let viewportCapture = tree.viewportCapture
+        let filteredViewport = viewportCapture.hierarchy.removingElements(
             withIds: removedIds,
-            idsByPath: liveCapture.snapshot.heistIdsByPath
+            idsByPath: viewportCapture.heistIdsByPath
         )
         let pathMap = filteredViewport.pathMap
         let snapshot = LiveCapture.Snapshot(
             hierarchy: filteredViewport.hierarchy,
             heistIdsByPath: filteredViewport.idsByPath,
-            firstResponderHeistId: liveCapture.snapshot.firstResponderHeistId.flatMap {
+            firstResponderHeistId: viewportCapture.firstResponderHeistId.flatMap {
                 removedIds.contains($0) ? nil : $0
             }
         )
         let dispatchReferences = LiveCapture.DispatchReferences(
-            elementRefs: liveCapture.elementRefs.filter { !removedIds.contains($0.key) },
-            containerRefsByPath: Self.remap(liveCapture.containerRefsByPath, using: pathMap),
+            elementRefs: liveCapture.dispatchReferences.elementRefs.filter { !removedIds.contains($0.key) },
+            containerRefsByPath: Self.remap(liveCapture.dispatchReferences.containerRefsByPath, using: pathMap),
             scrollableContainerViewsByPath: Self.remap(
-                liveCapture.scrollableContainerViewsByPath,
+                liveCapture.dispatchReferences.scrollableContainerViewsByPath,
                 using: pathMap
             )
         )

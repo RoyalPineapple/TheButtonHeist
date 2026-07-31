@@ -127,63 +127,12 @@ private func makeTestTree(
 
 extension LiveCapture {
     static func makeForTests(
-        hierarchy: [AccessibilityHierarchy] = [],
-        containerNamesByPath: [TreePath: ContainerName] = [:],
-        heistIdsByPath: [TreePath: HeistId] = [:],
-        elementRefs: [HeistId: ElementRef] = [:],
-        containerRefsByPath: [TreePath: ContainerRef] = [:],
-        containerScrollMembershipsByPath: [TreePath: InterfaceTree.ScrollMembership] = [:],
-        containerViewSpacesByPath: [
-            TreePath: HeistElement.Geometry.ViewSpace
-        ] = [:],
-        scrollInventoriesByPath: [TreePath: ScrollInventory] = [:],
-        firstResponderHeistId: HeistId? = nil,
-        scrollableContainerViewsByPath: [TreePath: ScrollableViewRef] = [:]
-    ) -> LiveCapture {
-        let containersByPath = Dictionary(
-            uniqueKeysWithValues: hierarchy.pathIndexedContainers.map { item in
-                (
-                    item.path,
-                    InterfaceTree.Container(
-                        container: item.container,
-                        path: item.path,
-                        containerName: containerNamesByPath[item.path],
-                        viewSpace: containerViewSpacesByPath[item.path]
-                            ?? HeistElement.Geometry.ViewSpace(
-                                ownerPath: containerScrollMembershipsByPath[item.path]?.containerPath ?? .root,
-                                frame: try? ViewRect(validating: item.container.frame.cgRect),
-                                activationPoint: nil
-                            ),
-                        scrollMembership: containerScrollMembershipsByPath[item.path],
-                        scrollInventory: scrollInventoriesByPath[item.path]
-                    )
-                )
-            }
-        )
-        let snapshot = Snapshot(
-            hierarchy: hierarchy,
-            heistIdsByPath: heistIdsByPath,
-            firstResponderHeistId: firstResponderHeistId
-        )
-        return requireValidTestValue {
-            try LiveCapture.build(
-                validating: makeTestTree(snapshot: snapshot, containers: containersByPath),
-                dispatchReferences: DispatchReferences(
-                    elementRefs: elementRefs,
-                    containerRefsByPath: containerRefsByPath,
-                    scrollableContainerViewsByPath: scrollableContainerViewsByPath
-                )
-            )
-        }
-    }
-
-    static func makeForTests(
-        snapshot: Snapshot,
+        tree: InterfaceTree = .empty,
         dispatchReferences: DispatchReferences = .empty
     ) -> LiveCapture {
-        requireValidTestValue {
+        return requireValidTestValue {
             try LiveCapture.build(
-                validating: makeTestTree(snapshot: snapshot),
+                validating: tree,
                 dispatchReferences: dispatchReferences
             )
         }
@@ -204,14 +153,9 @@ extension InterfaceObservation {
         tree: InterfaceTree,
         liveCapture: LiveCapture
     ) -> InterfaceObservation {
-        let snapshotTree = makeTestTree(
-            snapshot: liveCapture.snapshot,
-            elements: tree.elements,
-            containers: tree.containers
-        )
         return requireValidTestValue {
             try InterfaceObservation.build(
-                tree: snapshotTree,
+                tree: tree,
                 dispatchReferences: liveCapture.dispatchReferences
             )
         }

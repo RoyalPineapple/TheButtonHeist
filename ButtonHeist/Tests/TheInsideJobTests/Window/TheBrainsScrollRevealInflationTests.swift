@@ -203,7 +203,8 @@ extension TheBrainsScrollTests {
         let mismatchedObservation = InterfaceObservation.makeForTests(
             tree: InterfaceTree(
                 elements: mismatchedElements,
-                containers: matchingObservation.tree.containers
+                containers: matchingObservation.tree.containers,
+                viewportCapture: matchingObservation.tree.viewportCapture
             ),
             liveCapture: matchingObservation.liveCapture
         )

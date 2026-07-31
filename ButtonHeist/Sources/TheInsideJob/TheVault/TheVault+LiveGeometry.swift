@@ -110,7 +110,7 @@ extension TheVault {
         aliasedTo semanticElement: InterfaceTree.Element
     ) -> InterfaceTree.Element? {
         guard interfaceTree.viewportElementIDs.contains(semanticElement.heistId),
-              currentLiveCapture.contains(heistId: semanticElement.heistId),
+              currentInterfaceObservation.tree.viewportCapture.contains(heistId: semanticElement.heistId),
               let evidence = currentInterfaceObservation.tree.findElement(heistId: semanticElement.heistId)
         else { return nil }
         let semanticIdentity = AccessibilityPolicy.matcherIdentityFacts(
@@ -252,7 +252,7 @@ extension TheVault {
         let path = semanticContainer.path
         guard let observedContainer = currentInterfaceObservation.tree.containers[path],
               Self.container(observedContainer, matches: semanticContainer),
-              case .container(let evidence, _) = currentLiveCapture.hierarchy.node(at: path),
+              case .container(let evidence, _) = currentInterfaceObservation.tree.viewportCapture.hierarchy.node(at: path),
               Self.container(evidence, matches: semanticContainer)
         else {
             return nil

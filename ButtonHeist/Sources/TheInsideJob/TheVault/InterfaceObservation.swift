@@ -14,9 +14,9 @@ struct InterfaceCaptureID: Equatable, Hashable, Sendable {
     fileprivate let id = UUID()
 }
 
-/// One interface-tree state paired with the live UIKit evidence for its viewport.
-/// Exploration may merge tree facts, but live evidence always comes from the
-/// latest parser read and is never merged.
+/// One interface-tree state paired with current weak UIKit dispatch references.
+/// Exploration may merge tree facts, but dispatch references always come from
+/// the latest parser read and are never merged.
 struct InterfaceObservation {
 
     let tree: InterfaceTree

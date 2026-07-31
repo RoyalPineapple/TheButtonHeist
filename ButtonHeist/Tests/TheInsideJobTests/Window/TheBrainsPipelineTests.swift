@@ -235,8 +235,7 @@ final class TheBrainsPipelineTests: XCTestCase {
             traits: .button,
             respondsToUserInteraction: false
         )
-        let viewportObservation = InterfaceObservation.makeForTests(
-            tree: InterfaceTree(
+        let tree = InterfaceTree(
                 elements: [
                     "visible_button": InterfaceTree.Element(
                         heistId: "visible_button",
@@ -292,19 +291,19 @@ final class TheBrainsPipelineTests: XCTestCase {
                             index: 1
                         )
                     ),
-                ]
-            ),
-            liveCapture: LiveCapture.makeForTests(
+                ],
+            viewportCapture: .init(
                 hierarchy: [
                     .container(rootContainer, children: [
                         .element(visible, traversalIndex: 0),
                     ]),
                 ],
-                containerNamesByPath: [rootPath: "root"],
-                heistIdsByPath: [visiblePath: "visible_button"],
-                elementRefs: [:],
-                firstResponderHeistId: nil
+                heistIdsByPath: [visiblePath: "visible_button"]
             )
+        )
+        let viewportObservation = InterfaceObservation.makeForTests(
+            tree: tree,
+            liveCapture: LiveCapture.makeForTests(tree: tree)
         )
         return viewportObservation
     }
