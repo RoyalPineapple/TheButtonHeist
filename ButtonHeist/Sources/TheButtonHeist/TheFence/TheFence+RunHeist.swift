@@ -106,10 +106,10 @@ extension TheFence {
             return wait.timeout.seconds + config.postActionExpectationTimeoutBuffer
         case .action(_, let expectationPayload, let actionBudget):
             guard let predicate = expectationPayload.expectation else {
-                guard let timeout = expectationPayload.timeout else {
-                    return actionBudget
-                }
-                return max(actionBudget, timeout.seconds)
+                let requestedActionBudget = expectationPayload.timeout.map(\.seconds) ?? actionBudget
+                return max(actionBudget, requestedActionBudget)
+                    + config.actionExpectationTimeoutPolicy.standard.seconds
+                    + config.postActionExpectationTimeoutBuffer
             }
             let expectationTimeout = ActionExpectation(
                 predicate: predicate,
@@ -127,7 +127,11 @@ extension TheFence {
             let actionBudget = performActionTimeout(for: action.command)
             guard let expectation = action.expectationPolicy.expectedExpectation?
                 .waitStep(using: config.actionExpectationTimeoutPolicy)
-            else { return actionBudget }
+            else {
+                return actionBudget
+                    + config.actionExpectationTimeoutPolicy.standard.seconds
+                    + config.postActionExpectationTimeoutBuffer
+            }
             return actionBudget
                 + expectation.timeout.seconds
                 + config.postActionExpectationTimeoutBuffer
