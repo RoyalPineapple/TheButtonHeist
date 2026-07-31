@@ -120,7 +120,6 @@ final class RuntimeResourceObservationTests: XCTestCase {
     private func activateRuntime() async {
         let request = TheInsideJob.InsideJobTransportStartRequest(
             id: UUID(),
-            phase: .startup,
             transport: resources.transport,
             idleTimerBaseline: resources.idleTimerBaseline
         )

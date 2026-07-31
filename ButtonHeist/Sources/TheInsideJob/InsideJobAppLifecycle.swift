@@ -7,7 +7,7 @@ extension TheInsideJob {
     // MARK: - App Lifecycle
 
     func installLifecycleObservationIfNeeded() {
-        guard lifecycleObservation.installIfNeeded() != nil else { return }
+        guard lifecycleObservation.installIfNeeded() else { return }
         NotificationCenter.default.addObserver(
             self, selector: #selector(appWillResignActive),
             name: UIApplication.willResignActiveNotification, object: nil
@@ -31,7 +31,7 @@ extension TheInsideJob {
     }
 
     func stopLifecycleObservationIfNeeded() {
-        guard lifecycleObservation.uninstallIfNeeded() != nil else { return }
+        guard lifecycleObservation.uninstallIfNeeded() else { return }
         NotificationCenter.default.removeObserver(self, name: UIApplication.willResignActiveNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.didEnterBackgroundNotification, object: nil)
         NotificationCenter.default.removeObserver(self, name: UIApplication.willEnterForegroundNotification, object: nil)
@@ -126,7 +126,6 @@ extension TheInsideJob {
 
                 let request = InsideJobTransportStartRequest(
                     id: resumeID,
-                    phase: .resume,
                     transport: transport,
                     idleTimerBaseline: suspendedRuntime.idleTimerBaseline
                 )

@@ -275,7 +275,6 @@ public final class TheInsideJob {
         let attemptID = UUID()
         let request = InsideJobTransportStartRequest(
             id: attemptID,
-            phase: .startup,
             transport: makeRuntimeTransport(),
             idleTimerBaseline: UIApplication.shared.isIdleTimerDisabled
         )
@@ -290,6 +289,10 @@ public final class TheInsideJob {
                 throw CancellationError()
             }
             await performLifecycleEffects(finishChange.effects)
+            logStartupSummary(
+                actualPort: resources.actualPort,
+                bonjourServiceName: resources.bonjourServiceName
+            )
         } catch {
             let failureChange = applyLifecycleEvent(.startFailed(attemptID))
             switch failureChange {
