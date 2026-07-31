@@ -86,8 +86,7 @@ struct ActionProjection: Sendable {
              .dismissKeyboard,
              .scroll,
              .scrollToVisible,
-             .scrollToEdge,
-             .wait:
+             .scrollToEdge:
             return .none
         }
     }
