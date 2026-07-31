@@ -3,6 +3,7 @@
 import os
 import runpy
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -535,6 +536,29 @@ class TestRunnerTests(unittest.TestCase):
             RUNNER["clear_simulator_results"](SIMULATOR)
 
         remove.assert_called_once_with(Path("/result-dir"))
+
+    def test_failure_diagnostics_bound_logs_to_button_heist_processes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, mock.patch.dict(
+            os.environ,
+            {"SIM_UDID": "TEST-UDID"},
+        ), mock.patch.object(RUNNER["subprocess"], "run") as run:
+            root = Path(directory)
+            RUNNER["collect"](
+                SUITES["TheInsideJobWindowTests"],
+                {
+                    "heist_results": root / "heist-results",
+                    "diagnostics": root / "diagnostics",
+                },
+                include_diagnostics=True,
+            )
+
+        log_call = run.call_args_list[2]
+        self.assertIn("--predicate", log_call.args[0])
+        self.assertIn(
+            'process == "BHDemo" OR subsystem BEGINSWITH "com.buttonheist."',
+            log_call.args[0],
+        )
+        self.assertEqual(log_call.kwargs["timeout"], 60)
 
     def test_simulator_deletion_shuts_down_and_deletes_the_selected_udid(self) -> None:
         completed = mock.Mock(returncode=0, stderr="", stdout="")

@@ -206,10 +206,12 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
     func testFreshSnapshotBecomesReplayBaselineAfterAdmissionInvalidation() async throws {
         let observation = hostObservation(label: "Home")
         let source = HostVisibleObservationSource(observation)
+        let tripwire = TheTripwire(pulseSource: .injected)
         let brains = TheBrains(
-            tripwire: TheTripwire(),
+            tripwire: tripwire,
             failureEvidencePolicy: .hierarchy,
-            visibleObservationSource: source.capture
+            visibleObservationSource: source.capture,
+            notificationIngress: .injected
         )
         await brains.startTestObservation()
         defer { brains.stopTestObservation() }
@@ -217,15 +219,21 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         _ = await stream.commitVisibleObservationForTesting(observation)
         stream.invalidateCurrentAdmission()
 
-        let completion = try await HeistExecution.Host(brains: brains).execute(
-            try HeistPlan(body: [
-                .wait(WaitStep(
-                    predicate: .missing(.label("Never Existed")),
-                    timeout: try .seconds(1)
-                )),
-            ]),
-            timeout: try .seconds(5)
-        )
+        let execution = Task { @MainActor in
+            try await HeistExecution.Host(brains: brains).execute(
+                try HeistPlan(body: [
+                    .wait(WaitStep(
+                        predicate: .missing(.label("Never Existed")),
+                        timeout: try .seconds(1)
+                    )),
+                ]),
+                timeout: try .seconds(5)
+            )
+        }
+        defer { execution.cancel() }
+        try await waitForObservationWaiter(in: stream)
+        tripwire.onTick()
+        let completion = try await execution.value
         let step = try XCTUnwrap(completion.steps.first)
         let evidence = try XCTUnwrap(step.waitObservation)
         let predicate = try AccessibilityPredicate

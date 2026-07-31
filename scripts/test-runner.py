@@ -419,12 +419,21 @@ def collect(
         subprocess.run(["xcrun", "simctl", "list", "devices"], stdout=output, check=False)
     if simulator:
         with (paths["diagnostics"] / "simulator.log").open("w", encoding="utf-8") as output:
-            subprocess.run(
-                ["xcrun", "simctl", "spawn", simulator, "log", "show", "--style", "compact", "--last", "30m"],
-                stdout=output,
-                stderr=subprocess.STDOUT,
-                check=False,
-            )
+            try:
+                subprocess.run(
+                    [
+                        "xcrun", "simctl", "spawn", simulator,
+                        "log", "show", "--style", "compact", "--last", "30m",
+                        "--predicate",
+                        'process == "BHDemo" OR subsystem BEGINSWITH "com.buttonheist."',
+                    ],
+                    stdout=output,
+                    stderr=subprocess.STDOUT,
+                    check=False,
+                    timeout=60,
+                )
+            except subprocess.TimeoutExpired:
+                output.write("\nButton Heist simulator log collection timed out after 60s.\n")
 
 
 def clear_simulator_results(simulator: dict[str, str] | None) -> None:

@@ -117,6 +117,13 @@ loop, and report failures with `XCTFail` at the call site. Use this path when
 your test host shares teardown machinery with KIF/RKT-style app tests; async
 XCTest teardown can race app cleanup in those targets.
 
+Hosted failures lead with the authored action or wait and a human control-flow
+breadcrumb such as `Otherwise, when .exists(.label("Add-ons")) was not met`.
+They also show the five most recent action/wait steps and summarize the failed
+wait's recorded screen, element, notification, quiet-time, and coverage facts.
+The typed execution path remains available as `Heist.Failure.failedStepPath`
+and in recorded results, but is not printed as the human failure location.
+
 Passing runs can record results without relying on inherited environment
 variables:
 
