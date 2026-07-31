@@ -212,15 +212,15 @@ incomplete ingress as `noChange`.
 ```mermaid
 sequenceDiagram
     participant Demand
-    participant Link as CADisplayLink
+    participant DisplayLink as CADisplayLink
     participant Stream as Observation.Stream
     participant Bus as Notification bus
     participant Vault
     participant Machine
 
     Demand->>Stream: visible or discovery demand
-    Stream->>Link: resume with canonical demand
-    Link->>Stream: pulse
+    Stream->>DisplayLink: resume with canonical demand
+    DisplayLink->>Stream: pulse
     Stream->>Bus: freeze cycle claim
     Bus-->>Stream: exact notification batch
     Stream->>Vault: admitted snapshot + normalized notification payloads
@@ -231,9 +231,9 @@ sequenceDiagram
     Machine->>Machine: reduce active action/wait predicate
     Stream->>Bus: acknowledge committed claim
     alt demand remains
-        Stream->>Link: await next pulse
+        Stream->>DisplayLink: await next pulse
     else zero demand
-        Stream->>Link: pause
+        Stream->>DisplayLink: pause
     end
 ```
 
