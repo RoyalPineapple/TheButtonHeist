@@ -452,7 +452,9 @@ final class TargetConfigTests: XCTestCase {
             XCTFail("Expected sessionState response, got \(response)")
             return
         }
-        XCTAssertEqual(payload.connected, true)
+        guard case .connected = payload.state else {
+            return XCTFail("Expected connected session state, got \(payload.state)")
+        }
         XCTAssertEqual(fence.config.deviceFilter, "127.0.0.1:1456")
         XCTAssertEqual(fence.config.token, "tok2")
     }
@@ -470,7 +472,9 @@ final class TargetConfigTests: XCTestCase {
             XCTFail("Expected sessionState response, got \(response)")
             return
         }
-        XCTAssertEqual(payload.connected, true)
+        guard case .connected = payload.state else {
+            return XCTFail("Expected connected session state, got \(payload.state)")
+        }
         XCTAssertEqual(fence.config.deviceFilter, "127.0.0.1:9999")
         XCTAssertEqual(fence.config.token, "direct-tok")
     }

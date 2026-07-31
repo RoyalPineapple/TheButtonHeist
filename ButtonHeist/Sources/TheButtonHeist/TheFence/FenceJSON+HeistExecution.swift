@@ -151,17 +151,6 @@ struct PublicHeistElementEditOmissions: Encodable {
         self.updatedKeys = updatedKeys
     }
 
-    init(projection: DeltaEditsProjection) {
-        self.init(
-            added: projection.added.omittedCount,
-            removed: projection.removed.omittedCount,
-            updated: projection.updated.omittedCount,
-            addedKeys: projection.added.omittedKeys,
-            removedKeys: projection.removed.omittedKeys,
-            updatedKeys: projection.updated.omittedKeys
-        )
-    }
-
     var isEmpty: Bool {
         added == nil
             && removed == nil

@@ -127,25 +127,4 @@ struct ActionProjection: Sendable {
 
     var timing: ActionPerformanceTiming? { result.timing }
 
-    var omitted: ActionResultOmissionsProjection? {
-        guard publicContext.includesOmissions, result.subjectEvidence != nil else { return nil }
-        return ActionResultOmissionsProjection()
-    }
-}
-
-struct ActionResultOmissionsProjection: Encodable, Sendable {
-    private enum CodingKeys: String, CodingKey { case subjectEvidence }
-    private enum SubjectEvidenceCodingKeys: String, CodingKey { case reason }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        var subjectEvidence = container.nestedContainer(
-            keyedBy: SubjectEvidenceCodingKeys.self,
-            forKey: .subjectEvidence
-        )
-        try subjectEvidence.encode(
-            ProjectionOmissionReason.rawSubjectEvidence.rawValue,
-            forKey: .reason
-        )
-    }
 }

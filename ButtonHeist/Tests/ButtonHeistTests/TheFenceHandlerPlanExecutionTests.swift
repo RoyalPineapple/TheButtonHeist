@@ -691,7 +691,7 @@ extension TheFenceHandlerTests {
             report: HeistReport.project(result: result)
         )
         XCTAssertTrue(response.isFailure)
-        XCTAssertEqual(result.abortedAtPath, "$.body[0]")
+        XCTAssertEqual(result.outcome, .failed(abortedAtPath: "$.body[0]"))
     }
 
 }

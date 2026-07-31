@@ -2,7 +2,7 @@ import ButtonHeistTestSupport
 import Foundation
 import ThePlans
 import TheScore
-@_spi(ButtonHeistInternals) @testable import ButtonHeist
+@_spi(ButtonHeistInternals) @_spi(ButtonHeistTooling) @testable import ButtonHeist
 import XCTest
 
 enum PublicHeistJSONFixtureValue {

@@ -36,13 +36,13 @@ package struct HeistResultCodecLimits: Sendable, Equatable {
     }
 }
 
-public enum HeistResultCodec {
-    public static func write(_ recording: HeistResultRecording, to url: URL) throws {
+package enum HeistResultCodec {
+    package static func write(_ recording: HeistResultRecording, to url: URL) throws {
         let data = try encode(recording, format: .gzipJSON)
         try data.write(to: url, options: .atomic)
     }
 
-    public static func decode(contentsOf url: URL) throws -> HeistResultRecording {
+    package static func decode(contentsOf url: URL) throws -> HeistResultRecording {
         try decode(contentsOf: url, limits: .default)
     }
 
@@ -69,7 +69,7 @@ public enum HeistResultCodec {
         return try decode(data, format: format, limits: limits)
     }
 
-    public static func decode(_ data: Data, format: HeistResultFormat = .json) throws -> HeistResultRecording {
+    package static func decode(_ data: Data, format: HeistResultFormat = .json) throws -> HeistResultRecording {
         try decode(data, format: format, limits: .default)
     }
 
@@ -102,7 +102,7 @@ public enum HeistResultCodec {
         return try decoder.decode(HeistResultRecording.self, from: jsonData)
     }
 
-    public static func encode(
+    package static func encode(
         _ recording: HeistResultRecording,
         format: HeistResultFormat = .json
     ) throws -> Data {
@@ -150,12 +150,12 @@ public enum HeistResultCodec {
     }
 }
 
-public enum HeistResultFormat: Sendable, Equatable {
+package enum HeistResultFormat: Sendable, Equatable {
     case json
     case gzipJSON
 }
 
-public enum HeistResultCodecError: Error, Sendable, Equatable, CustomStringConvertible {
+package enum HeistResultCodecError: Error, Sendable, Equatable, CustomStringConvertible {
     case gzipInitializationFailed(operation: String, code: Int32)
     case gzipStreamFailed(operation: String, code: Int32)
     case jsonDataTooLarge(limit: Int, observed: Int)
@@ -174,7 +174,7 @@ public enum HeistResultCodecError: Error, Sendable, Equatable, CustomStringConve
     case incoherentExecutionEvidence(path: HeistExecutionPath, reason: String)
     case gzipCorruptData
 
-    public var description: String {
+    package var description: String {
         switch self {
         case .gzipInitializationFailed(let operation, let code):
             return "gzip \(operation) initialization failed with zlib code \(code)"

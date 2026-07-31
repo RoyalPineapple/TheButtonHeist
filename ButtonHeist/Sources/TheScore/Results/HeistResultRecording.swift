@@ -5,12 +5,12 @@ import ThePlans
 
 private let heistResultLogger = ButtonHeistLog.logger(.score(.results))
 
-public enum HeistResultRecordingMode: String, Sendable, Equatable {
+package enum HeistResultRecordingMode: String, Sendable, Equatable {
     case off
     case failures
     case all
 
-    public init?(environmentValue: String?) {
+    package init?(environmentValue: String?) {
         guard let environmentValue = environmentValue?.nilIfBlank else {
             self = .failures
             return
@@ -33,13 +33,13 @@ public enum HeistResultRecordingMode: String, Sendable, Equatable {
     }
 }
 
-public struct HeistResultRecordingConfiguration: Sendable, Equatable {
-    public static let processTemporaryDirectoryValue = "process-temporary-directory"
+package struct HeistResultRecordingConfiguration: Sendable, Equatable {
+    package static let processTemporaryDirectoryValue = "process-temporary-directory"
 
-    public let rootDirectory: URL
-    public let mode: HeistResultRecordingMode
+    package let rootDirectory: URL
+    package let mode: HeistResultRecordingMode
 
-    public init(
+    package init(
         rootDirectory: URL,
         mode: HeistResultRecordingMode = .failures
     ) {
@@ -47,7 +47,7 @@ public struct HeistResultRecordingConfiguration: Sendable, Equatable {
         self.mode = mode
     }
 
-    public static var environment: HeistResultRecordingConfiguration? {
+    package static var environment: HeistResultRecordingConfiguration? {
         guard let directory = EnvironmentKey.buttonheistResultsDir.value?.nilIfBlank else {
             return nil
         }
@@ -69,11 +69,11 @@ public struct HeistResultRecordingConfiguration: Sendable, Equatable {
     }
 }
 
-public enum HeistResultRecordingError: Error, Sendable, Equatable, CustomStringConvertible {
+package enum HeistResultRecordingError: Error, Sendable, Equatable, CustomStringConvertible {
     case unsupportedSchemaVersion(Int)
     case invalidPlanFingerprint(String)
 
-    public var description: String {
+    package var description: String {
         switch self {
         case .unsupportedSchemaVersion(let version):
             "Unsupported heist result recording schema version: \(version)"
@@ -83,17 +83,17 @@ public enum HeistResultRecordingError: Error, Sendable, Equatable, CustomStringC
     }
 }
 
-public struct HeistResultRecording: Codable, Sendable, Equatable {
-    public static let currentSchemaVersion = 1
+package struct HeistResultRecording: Codable, Sendable, Equatable {
+    package static let currentSchemaVersion = 1
 
-    public var schemaVersion: Int { Self.currentSchemaVersion }
-    public let result: HeistResult
-    public let planName: HeistPlanName?
-    public let planFingerprint: String
-    public let recordedAt: Date
-    public let producerVersion: ButtonHeistVersion
+    package var schemaVersion: Int { Self.currentSchemaVersion }
+    package let result: HeistResult
+    package let planName: HeistPlanName?
+    package let planFingerprint: String
+    package let recordedAt: Date
+    package let producerVersion: ButtonHeistVersion
 
-    public init(
+    package init(
         result: HeistResult,
         plan: HeistPlan,
         recordedAt: Date = Date(),
@@ -115,7 +115,7 @@ public struct HeistResultRecording: Codable, Sendable, Equatable {
         case producerVersion
     }
 
-    public init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(allowed: CodingKeys.self, typeName: "heist result recording")
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
@@ -142,7 +142,7 @@ public struct HeistResultRecording: Codable, Sendable, Equatable {
         producerVersion = try container.decode(ButtonHeistVersion.self, forKey: .producerVersion)
     }
 
-    public func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(schemaVersion, forKey: .schemaVersion)
         try container.encode(result, forKey: .result)
@@ -164,7 +164,7 @@ extension HeistResultRecording {
     }
 
     @discardableResult
-    public static func recordIfEnabled(
+    package static func recordIfEnabled(
         _ result: HeistResult,
         plan: HeistPlan
     ) -> URL? {
@@ -182,7 +182,7 @@ extension HeistResultRecording {
     }
 
     @discardableResult
-    public static func write(
+    package static func write(
         _ result: HeistResult,
         plan: HeistPlan,
         configuration: HeistResultRecordingConfiguration
@@ -202,7 +202,7 @@ extension HeistResultRecording {
         return url
     }
 
-    public static func planFingerprint(for plan: HeistPlan) throws -> String {
+    package static func planFingerprint(for plan: HeistPlan) throws -> String {
         let data = try plan.canonicalHeistJSONData()
         return SHA256.hash(data: data).prefix(12).map { String(format: "%02x", $0) }.joined()
     }

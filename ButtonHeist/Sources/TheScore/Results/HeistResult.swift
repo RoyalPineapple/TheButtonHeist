@@ -15,11 +15,6 @@ public struct HeistResult: Codable, Sendable, Equatable {
         return .passed
     }
 
-    public var abortedAtPath: HeistExecutionPath? {
-        guard case .failed(let abortedAtPath) = outcome else { return nil }
-        return abortedAtPath
-    }
-
     package init(steps: [HeistExecutionStepResult], durationMs: ElapsedMilliseconds) throws {
         try self.init(steps: steps, failureCapture: nil, durationMs: durationMs)
     }

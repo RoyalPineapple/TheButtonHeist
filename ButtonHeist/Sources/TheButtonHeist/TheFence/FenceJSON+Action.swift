@@ -29,6 +29,14 @@ private enum PublicActionResultCodingKey: String, CodingKey {
     case omitted
 }
 
+private enum PublicActionResultOmissionCodingKey: String, CodingKey {
+    case subjectEvidence
+}
+
+private enum PublicActionResultSubjectEvidenceOmissionCodingKey: String, CodingKey {
+    case reason
+}
+
 enum PublicActionResultContext: Sendable, Equatable {
     case standaloneAction
     case heistReportEvidence
@@ -67,8 +75,19 @@ extension ActionProjection: Encodable {
         try container.encodeIfPresent(expectation, forKey: .expectation)
         try container.encodeIfPresent(activationTrace, forKey: .activationTrace)
         try container.encodeIfPresent(timing, forKey: .timing)
-        if publicContext.includesOmissions {
-            try container.encodeIfPresent(omitted, forKey: .omitted)
+        if publicContext.includesOmissions, result.subjectEvidence != nil {
+            var omitted = container.nestedContainer(
+                keyedBy: PublicActionResultOmissionCodingKey.self,
+                forKey: .omitted
+            )
+            var subjectEvidence = omitted.nestedContainer(
+                keyedBy: PublicActionResultSubjectEvidenceOmissionCodingKey.self,
+                forKey: .subjectEvidence
+            )
+            try subjectEvidence.encode(
+                ProjectionOmissionReason.rawSubjectEvidence.rawValue,
+                forKey: .reason
+            )
         }
     }
 
@@ -241,8 +260,15 @@ struct PublicElementEdits: Encodable {
             : projection.removed.values.map { PublicElement(element: $0, detail: .summary) }
         self.updated = projection.updated.values.isEmpty
             ? nil
-            : projection.updated.values.compactMap(PublicElementUpdate.init(update:))
-        let omitted = PublicHeistElementEditOmissions(projection: projection)
+            : projection.updated.values.map(PublicElementUpdate.init(update:))
+        let omitted = PublicHeistElementEditOmissions(
+            added: projection.added.omittedCount,
+            removed: projection.removed.omittedCount,
+            updated: projection.updated.omittedCount,
+            addedKeys: projection.added.omittedKeys,
+            removedKeys: projection.removed.omittedKeys,
+            updatedKeys: projection.updated.omittedKeys
+        )
         self.omitted = omitted.isEmpty ? nil : omitted
     }
 }
@@ -252,12 +278,10 @@ struct PublicElementUpdate: Encodable {
     let after: PublicElement
     let changes: [PublicPropertyChange]
 
-    init?(update: ElementUpdate) {
-        let meaningfulChanges = update.changes.filter { !$0.property.isGeometry }
-        guard !meaningfulChanges.isEmpty else { return nil }
+    init(update: ElementUpdate) {
         self.before = PublicElement(element: update.before, detail: .summary)
         self.after = PublicElement(element: update.after, detail: .summary)
-        self.changes = meaningfulChanges.map(PublicPropertyChange.init(change:))
+        self.changes = update.changes.map(PublicPropertyChange.init(change:))
     }
 }
 

@@ -66,7 +66,6 @@ extension TheFenceHandlerTests {
             return XCTFail("Expected typed error response")
         }
         XCTAssertEqual(encodedFailure, failure)
-        XCTAssertEqual(response.diagnosticFailure, failure)
 
         let data = try response.jsonData()
         let encoded = try JSONDecoder().decode(JSONValue.self, from: data)
@@ -123,7 +122,9 @@ extension TheFenceHandlerTests {
             ),
         ]
         let response = FenceResponse.failure(FenceError.heistBuildDiagnostics(diagnostics))
-        let failure = try XCTUnwrap(response.diagnosticFailure)
+        guard case .error(let failure) = response else {
+            return XCTFail("Expected typed error response")
+        }
         let expectedFailureCode = KnownFailureCode.requestInvalid.rawValue
 
         XCTAssertEqual(failure.details.code, .requestInvalid)
@@ -216,7 +217,9 @@ extension TheFenceHandlerTests {
 
     func testKnownFailuresExposeCompleteDiagnosticFields() throws {
         for expected in Self.expectedDiagnosticFailures {
-            let failure = try XCTUnwrap(expected.response.diagnosticFailure, expected.name)
+            guard case .error(let failure) = expected.response else {
+                return XCTFail("Expected typed error response: \(expected.name)")
+            }
             let json = try publicJSONProbe(expected.response).object()
             let detailsJSON = try json.object("details")
 
@@ -251,7 +254,9 @@ extension TheFenceHandlerTests {
             filter: "Demo",
             matches: ["Demo#one", "Demo#two"]
         ))
-        let failure = try XCTUnwrap(response.diagnosticFailure)
+        guard case .error(let failure) = response else {
+            return XCTFail("Expected typed error response")
+        }
 
         XCTAssertEqual(failure.details.code, .discoveryAmbiguousDeviceTarget)
         XCTAssertNotEqual(failure.details.code, .discoveryNoMatchingDevice)
@@ -273,7 +278,9 @@ extension TheFenceHandlerTests {
     func testTransportDisconnectFailureUsesNetworkDiagnosticShape() throws {
         let transportFailure = NetworkTransportFailure(.posix(.ECONNRESET))
         let response = FenceResponse.failure(HandoffConnectionError.disconnected(.networkError(transportFailure)))
-        let failure = try XCTUnwrap(response.diagnosticFailure)
+        guard case .error(let failure) = response else {
+            return XCTFail("Expected typed error response")
+        }
 
         XCTAssertEqual(failure.details.code, .transportNetworkError)
         XCTAssertEqual(failure.details.errorCode, KnownFailureCode.transportNetworkError.rawValue)
@@ -289,7 +296,9 @@ extension TheFenceHandlerTests {
         let response = FenceResponse.failure(HandoffConnectionError.disconnected(
             .authFailed("Invalid token", hint: hint)
         ))
-        let failure = try XCTUnwrap(response.diagnosticFailure)
+        guard case .error(let failure) = response else {
+            return XCTFail("Expected typed error response")
+        }
 
         XCTAssertEqual(failure.details.code, .authFailed)
         XCTAssertEqual(failure.details.errorCode, KnownFailureCode.authFailed.rawValue)
@@ -317,7 +326,9 @@ extension TheFenceHandlerTests {
         let response = FenceResponse.failure(HandoffConnectionError.disconnected(
             .authFailed(reason, hint: "Retry with the configured token.")
         ))
-        let failure = try XCTUnwrap(response.diagnosticFailure)
+        guard case .error(let failure) = response else {
+            return XCTFail("Expected typed error response")
+        }
 
         XCTAssertEqual(failure.details.code, .authFailed)
         XCTAssertTrue(failure.message.contains(reason), failure.message)
@@ -343,7 +354,9 @@ extension TheFenceHandlerTests {
         } catch {
             response = FenceResponse.failure(error)
         }
-        let failure = try XCTUnwrap(response.diagnosticFailure)
+        guard case .error(let failure) = response else {
+            return XCTFail("Expected typed error response")
+        }
 
         XCTAssertEqual(failure.details.code, .transportNetworkError)
         XCTAssertNotEqual(failure.details.code, .requestActionFailed)
@@ -394,7 +407,9 @@ extension TheFenceHandlerTests {
             expected: "object"
         )
         let response = FenceResponse.failure(validationError)
-        let failure = try XCTUnwrap(response.diagnosticFailure)
+        guard case .error(let failure) = response else {
+            return XCTFail("Expected typed error response")
+        }
 
         XCTAssertEqual(failure.details.code, .requestValidationError)
         XCTAssertEqual(failure.details.errorCode, KnownFailureCode.requestValidationError.rawValue)

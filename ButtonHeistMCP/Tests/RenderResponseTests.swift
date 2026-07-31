@@ -185,7 +185,10 @@ struct RenderResponseTests {
     @Test("error render uses canonical public failure mapping")
     func errorRenderUsesCanonicalDiagnosticFailureMapping() throws {
         let response = FenceResponse.failure(FenceError.connectionTimeout)
-        let expected = try #require(response.diagnosticFailure)
+        guard case .error(let expected) = response else {
+            Issue.record("Expected error response")
+            return
+        }
 
         let result = ButtonHeistMCPServer.renderResponse(response)
         let root = try #require(result.structuredContent?.objectValue)

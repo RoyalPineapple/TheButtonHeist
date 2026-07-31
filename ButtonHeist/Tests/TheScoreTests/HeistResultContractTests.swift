@@ -95,7 +95,6 @@ import TheScore
         #expect(result.isFailure)
         #expect(result.outcome == .failed(abortedAtPath: "$.body[0]"))
         #expect(passed.outcome == .passed)
-        #expect(result.abortedAtPath == "$.body[0]")
         #expect(Set(object.keys) == ["steps", "durationMs"])
         #expect(try JSONDecoder().decode(
             HeistResult.self,
