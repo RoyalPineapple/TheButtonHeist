@@ -239,29 +239,6 @@ private func assertCanonicalSourceRoundTripPreservesBranchSemantics() throws {
     }
 }
 
-@Test func `planning admission exposes typed diagnostics before rendering`() {
-    let diagnostics: [HeistBuildDiagnostic]
-    do {
-        try HeistPlanSourceAdmission.rejectRawStructuredJSONIRSourceFields(
-            commandName: "run_heist",
-            fields: [.body, .version]
-        )
-        Issue.record("Expected raw JSON IR fields to fail planning admission")
-        return
-    } catch let error {
-        diagnostics = error.diagnostics
-    }
-    guard let diagnostic = diagnostics.first else {
-        Issue.record("Expected raw JSON IR fields to report a diagnostic")
-        return
-    }
-
-    #expect(diagnostic.code.rawValue == "heist.planning.raw_json_ir_fields")
-    #expect(diagnostic.kind == .error)
-    #expect(diagnostic.phase == .planning)
-    #expect(diagnostic.sourceSpan == nil)
-}
-
 @Test func `canonical ForEach string compiles without body try`() throws {
     let plan = try HeistSourceCompilation.compile(root("""
     ForEach("a") { item in

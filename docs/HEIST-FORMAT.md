@@ -34,9 +34,9 @@ the test-process entry points that replay plans are drawn in the
 `run_heist` accepts durable plans only: canonical ButtonHeist source that parses
 to a `HeistPlan`, or a generated `.heist` package through `path`. CLI authoring
 helpers MAY accept trusted local Swift input only by compiling it to a validated
-`HeistPlan` before dispatch. Public run input MUST NOT accept raw structured
-wire IR fields, generated wire payloads, or direct viewport/debug/session
-commands.
+`HeistPlan` before dispatch. The closed command descriptor rejects generated
+wire payload keys and all other unknown top-level fields. Public run input MUST
+NOT accept direct viewport/debug/session commands.
 
 ## Package Shape
 

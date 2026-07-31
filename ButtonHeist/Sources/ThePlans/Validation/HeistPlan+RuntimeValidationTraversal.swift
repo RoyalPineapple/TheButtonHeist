@@ -155,6 +155,14 @@ package struct HeistPlanRuntimeSafetyValidator {
             )
         }
         validateParameterDeclaration(plan.parameter, path: path.child(.parameter))
+        if plan.body.isEmpty, plan.definitions.isEmpty {
+            fail(
+                path: path.child(.body),
+                contract: "heist plan must contain a body or nested definitions",
+                observed: "empty heist",
+                correction: "Add body steps, or use this plan only as a namespace with nested definitions."
+            )
+        }
     }
 
     mutating func validateDefinitions(

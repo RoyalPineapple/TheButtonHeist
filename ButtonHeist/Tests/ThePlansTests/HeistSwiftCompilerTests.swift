@@ -21,7 +21,6 @@ struct HeistSwiftCompilerTests {
             (.swiftCompilationCompileFailed, "heist.swift_compilation.compile_failed"),
             (.directoryNoSources, "heist.directory.no_sources"),
             (.catalogDuplicateCapability, "heist.catalog.duplicate_capability"),
-            (.planningRawJSONIRFields, "heist.planning.raw_json_ir_fields"),
         ]
 
         for (code, rawValue) in representativeCodes {

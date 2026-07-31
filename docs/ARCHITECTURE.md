@@ -710,10 +710,9 @@ plan locations are component-backed `HeistPlanPath` values; only source,
 diagnostic, and response rendering turns them into strings.
 
 Swift DSL construction, JSON decoding, source compilation, and live command
-composition each return one root-admitted `HeistPlan`. Recursive source
-assembly is private to `HeistPlanSourceProgramParser.swift`; it never becomes a
-stored, returned, package-visible, or cross-file architectural currency.
-`HeistPlan` owns root structural admission, and one
+composition each return one root-admitted `HeistPlan`. `HeistPlan` owns the
+single internal structural constructor for recursive source fragments and root
+assembly; only root admission returns a public plan. One
 `HeistPlanRuntimeSafetyValidator` owns cross-tree bounds, references, expansion,
 and cycle safety before the root crosses its boundary. There is no candidate
 tree or node, graph projection, runtime-input wrapper, validation alias, or

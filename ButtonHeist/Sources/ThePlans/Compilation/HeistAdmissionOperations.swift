@@ -1,24 +1,10 @@
 import Foundation
 
 public enum HeistPlanSourceAdmission {
-    public static func rejectRawStructuredJSONIRSourceFields(
-        commandName: String,
-        fields: Set<HeistPlanRejectedPublicSourceField>
-    ) throws(HeistPlanBuildError) {
-        guard !fields.isEmpty else { return }
-        throw HeistPlanBuildError(diagnostics: [
-            HeistAdmissionFailure.rawStructuredJSONIRFields(
-                commandName: commandName,
-                fields: fields.sorted { $0.rawValue < $1.rawValue }
-            ).diagnostic,
-        ])
-    }
-
     public static func admit(
         commandName: String,
         path: String?,
-        inlineDSL: String?,
-        sourcePolicy: HeistPlanSourceAdmissionPolicy = .artifactOrInlineDSL
+        inlineDSL: String?
     ) throws(HeistPlanBuildError) -> HeistPlanLoadRequest {
         switch (path, inlineDSL) {
         case (.some, .some):
@@ -32,11 +18,6 @@ public enum HeistPlanSourceAdmission {
         case (.some(let path), .none):
             return HeistPlanLoadRequest(commandName: commandName, source: .artifactPath(path))
         case (.none, .some(let source)):
-            guard sourcePolicy.acceptsInlineDSL else {
-                throw HeistPlanBuildError(
-                    diagnostics: HeistAdmissionFailure.inlineSourceNotAccepted(commandName: commandName).diagnostics
-                )
-            }
             return HeistPlanLoadRequest(commandName: commandName, source: .inlineDSL(source))
         }
     }
@@ -97,8 +78,6 @@ package extension HeistAdmissionFailure {
             return planningDiagnostic(code: .planningMissingPlanSource, message: description)
         case .multiplePlanSources:
             return planningDiagnostic(code: .planningMultiplePlanSources, message: description)
-        case .inlineSourceNotAccepted:
-            return planningDiagnostic(code: .planningInlineSourceNotAccepted, message: description)
         case .emptyPath:
             return planningDiagnostic(code: .planningEmptyPath, message: description)
         case .unsupportedPath(_, let path):
@@ -109,8 +88,6 @@ package extension HeistAdmissionFailure {
             )
         case .emptyInlineSource:
             return planningDiagnostic(code: .planningEmptyInlineSource, message: description)
-        case .rawStructuredJSONIRFields:
-            return planningDiagnostic(code: .planningRawJSONIRFields, message: description)
         case .invalidArgument(let source, _):
             return planningDiagnostic(
                 code: .planningInvalidArgument,

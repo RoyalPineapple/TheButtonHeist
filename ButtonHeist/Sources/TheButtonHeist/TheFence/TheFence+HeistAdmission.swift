@@ -84,8 +84,7 @@ extension TheFence {
     func decodeRunHeistRequest(_ arguments: CommandArgumentEnvelope) throws -> RunHeistRequest {
         let plan = try admitRuntimeSafeHeistPlanSource(
             from: arguments,
-            commandName: Command.runHeist.rawValue,
-            droppingPlanKeys: [.argument, .timeout]
+            commandName: Command.runHeist.rawValue
         )
         let argument = try decodeRootHeistArgument(from: arguments)
         try validateRootHeistArgument(argument, for: plan)
@@ -105,10 +104,6 @@ extension TheFence {
         let inlineDSL = try arguments.value(FenceParameters.inlinePlan)
         let source: HeistPlanLoadRequest
         do {
-            try HeistPlanSourceAdmission.rejectRawStructuredJSONIRSourceFields(
-                commandName: Command.validateHeist.rawValue,
-                fields: rawStructuredJSONIRSourceFields(in: arguments, dropping: [.argument, .lint])
-            )
             source = try HeistPlanSourceAdmission.admit(
                 commandName: Command.validateHeist.rawValue,
                 path: path,
@@ -183,8 +178,7 @@ extension TheFence {
         do {
             let plan = try admitRuntimeSafeHeistPlanSource(
                 from: arguments,
-                commandName: Command.listHeists.rawValue,
-                droppingPlanKeys: [.detail]
+                commandName: Command.listHeists.rawValue
             )
             return ListHeistsRequest(catalog: try plan.heistCatalog(detail: detail))
         } catch let error as HeistCatalogError {
@@ -198,8 +192,7 @@ extension TheFence {
             let requestedPath = try HeistDefinitionPath(validating: requestedName)
             let plan = try admitRuntimeSafeHeistPlanSource(
                 from: arguments,
-                commandName: Command.describeHeist.rawValue,
-                droppingPlanKeys: [.heist]
+                commandName: Command.describeHeist.rawValue
             )
             return DescribeHeistRequest(description: try plan.describeHeist(at: requestedPath))
         } catch let error as HeistPathValidationError {
@@ -230,8 +223,7 @@ private extension TheFence {
 
     func admitRuntimeSafeHeistPlanSource(
         from arguments: CommandArgumentEnvelope,
-        commandName: String,
-        droppingPlanKeys: Set<FenceParameterKey> = []
+        commandName: String
     ) throws -> HeistPlan {
         // Admission: accept exactly one public source shape for a plan. ThePlans
         // then returns a RuntimeSafety-validated executable `HeistPlan`.
@@ -239,10 +231,6 @@ private extension TheFence {
         let path = try arguments.value(FenceParameters.planPath)
         let inlineDSL = try arguments.value(FenceParameters.inlinePlan)
         do {
-            try HeistPlanSourceAdmission.rejectRawStructuredJSONIRSourceFields(
-                commandName: commandName,
-                fields: rawStructuredJSONIRSourceFields(in: arguments, dropping: droppingPlanKeys)
-            )
             let request = try HeistPlanSourceAdmission.admit(
                 commandName: commandName,
                 path: path,
@@ -252,15 +240,6 @@ private extension TheFence {
         } catch let error {
             throw buildDiagnosticFenceError(error.diagnostics)
         }
-    }
-
-    func rawStructuredJSONIRSourceFields(
-        in arguments: CommandArgumentEnvelope,
-        dropping keys: Set<FenceParameterKey>
-    ) -> Set<HeistPlanRejectedPublicSourceField> {
-        var fieldNames = arguments.keySet
-        fieldNames.subtract(keys.map(\.rawValue))
-        return HeistPlanRejectedPublicSourceField.sourceFields(in: fieldNames)
     }
 
     func decodeRootHeistArgument(from arguments: CommandArgumentEnvelope) throws -> HeistArgument {

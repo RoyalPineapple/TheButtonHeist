@@ -56,7 +56,7 @@ flowchart TD
 
 Notes:
 
-- JSON decoding, source parsing, and Swift DSL construction each keep recursive assembly inside their boundary owner. Only the root leaves that boundary, after strict structural admission and the single `HeistPlanRuntimeSafetyValidator`, as the admitted `HeistPlan`. The runtime never compiles Swift. Live composition enters the same root admission boundary.
+- JSON decoding, source parsing, and Swift DSL construction each keep recursive assembly inside their boundary owner. Only the root leaves that boundary after strict structural admission and one runtime-safety validation pass as the admitted `HeistPlan`; nested fragments use the same structural constructor without independent admission. The runtime never compiles Swift. Live composition enters the same root admission boundary.
 - Admission rejects unknown JSON keys with an explicit allowed list per step type. The runtime-safety validator consumes canonical `HeistPlanTraversal.Event` values, whose invocation stack observes recursive definition cycles ("heist runs must not be recursive"), and applies `HeistPlanRuntimeSafetyLimits` (see [totality.md](totality.md)).
 - Traversal owns event order, invocation expansion, and invocation-stack cycle observation; no graph projection or alternate cycle route exists.
 - Discovery and `.compositionQuality` / `.strictTest` lint consume the admitted plan through the same event currency. They are projections and quality checks, not additional admission paths.

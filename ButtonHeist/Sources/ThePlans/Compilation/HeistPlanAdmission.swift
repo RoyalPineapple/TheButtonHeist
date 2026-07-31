@@ -5,18 +5,6 @@ public enum HeistPlanSource: Sendable, Equatable {
     case inlineDSL(String)
 }
 
-public enum HeistPlanRejectedPublicSourceField: String, CaseIterable, Sendable, Hashable {
-    case version
-    case name
-    case parameter
-    case definitions
-    case body
-
-    public static func sourceFields<S: Sequence>(in fieldNames: S) -> Set<Self> where S.Element == String {
-        Set(fieldNames.compactMap(Self.init(rawValue:)))
-    }
-}
-
 public struct HeistPlanLoadRequest: Sendable, Equatable {
     public let commandName: String
     public let source: HeistPlanSource
@@ -27,28 +15,12 @@ public struct HeistPlanLoadRequest: Sendable, Equatable {
     }
 }
 
-public enum HeistPlanSourceAdmissionPolicy: Sendable, Equatable {
-    case artifactOrInlineDSL
-    case artifactOnly
-
-    var acceptsInlineDSL: Bool {
-        switch self {
-        case .artifactOrInlineDSL:
-            return true
-        case .artifactOnly:
-            return false
-        }
-    }
-}
-
 package enum HeistAdmissionFailure: Error, Sendable, Equatable, CustomStringConvertible {
     case missingPlanSource(commandName: String)
     case multiplePlanSources(commandName: String)
-    case inlineSourceNotAccepted(commandName: String)
     case emptyPath(commandName: String)
     case unsupportedPath(commandName: String, path: String)
     case emptyInlineSource(commandName: String)
-    case rawStructuredJSONIRFields(commandName: String, fields: [HeistPlanRejectedPublicSourceField])
     case invalidArgument(source: String, reason: String)
     case invalidRootArgument(String)
 
@@ -64,8 +36,6 @@ package enum HeistAdmissionFailure: Error, Sendable, Equatable, CustomStringConv
             \(commandName) accepts exactly one plan source: ButtonHeist DSL source in `plan` \
             or a generated `.heist` package artifact in `path`.
             """
-        case .inlineSourceNotAccepted(let commandName):
-            return "\(commandName) does not accept inline ButtonHeist DSL source; use a generated `.heist` artifact."
         case .emptyPath(let commandName):
             return "\(commandName) path must not be empty."
         case .unsupportedPath(let commandName, let path):
@@ -76,13 +46,6 @@ package enum HeistAdmissionFailure: Error, Sendable, Equatable, CustomStringConv
             """
         case .emptyInlineSource(let commandName):
             return "\(commandName) ButtonHeist DSL source must not be empty."
-        case .rawStructuredJSONIRFields(let commandName, let fields):
-            let fieldNames = fields.map(\.rawValue).joined(separator: ", ")
-            return """
-            \(commandName) received raw JSON HeistPlan IR field(s): \(fieldNames). \
-            Raw JSON IR and `plan.json` are internal generated artifact content. Use ButtonHeist DSL \
-            source in `plan` or a generated `.heist` package artifact in `path`.
-            """
         case .invalidArgument(let source, let reason):
             return "Invalid heist argument at \(source): \(reason)"
         case .invalidRootArgument(let reason):
