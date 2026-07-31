@@ -119,9 +119,9 @@ final class ClientAdmissionRateLimitTests: XCTestCase {
         }
         XCTAssertEqual(clientId, 1)
         XCTAssertEqual(disconnectedClientId, 1)
-        XCTAssertEqual(serverVersion, "0.6.32")
+        XCTAssertEqual(serverVersion, buttonHeistVersion)
         XCTAssertEqual(clientVersion, oldVersion)
-        XCTAssertEqual(payload.serverButtonHeistVersion, "0.6.32")
+        XCTAssertEqual(payload.serverButtonHeistVersion, buttonHeistVersion)
         XCTAssertEqual(payload.clientButtonHeistVersion, oldVersion)
     }
 
