@@ -8,7 +8,7 @@ extension TheFence {
     // MARK: - Heist Execution and Session State
 
     func handleRunHeist(_ request: RunHeistRequest) async throws -> FenceResponse {
-        try await runHeistPlan(
+        try await dispatchHeistPlan(
             request.plan,
             argument: request.argument,
             timeout: request.timeout
@@ -37,18 +37,6 @@ extension TheFence {
     /// Dispatch a `HeistPlan` to the device and project its execution into a
     /// `.heistExecution` response. Durable single commands and composed heists
     /// share this one path; transient commands use direct client dispatch.
-    func runHeistPlan(
-        _ plan: HeistPlan,
-        argument: HeistArgument = .none,
-        timeout: HeistTimeout
-    ) async throws -> FenceResponse {
-        try await dispatchHeistPlan(
-            plan,
-            argument: argument,
-            timeout: timeout
-        )
-    }
-
     private func dispatchHeistPlan(
         _ plan: HeistPlan,
         argument: HeistArgument = .none,

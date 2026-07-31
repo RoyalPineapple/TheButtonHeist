@@ -8,7 +8,7 @@ extension TheInsideJob {
         getaway.identity.tlsActive = true
 
         installLifecycleObservationIfNeeded()
-        engageIdleTimerProtection(baseline: resources.idleTimerBaseline)
+        engageIdleTimerProtection()
 
         tripwire.startPulse()
         await brains.startSemanticObservation()
@@ -29,7 +29,7 @@ extension TheInsideJob {
         brains.safecracker.stopKeyboardObservation()
     }
 
-    func engageIdleTimerProtection(baseline: Bool) {
+    func engageIdleTimerProtection() {
         UIApplication.shared.isIdleTimerDisabled = true
     }
 
