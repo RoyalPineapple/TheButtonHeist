@@ -107,7 +107,7 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         XCTAssertEqual(observation.tree.elementIDs, ["visible_button", "offscreen_button"])
         XCTAssertEqual(observation.tree.viewportElementIDs, ["visible_button"])
         XCTAssertFalse(observation.tree.viewportCapture.contains(heistId: "offscreen_button"))
-        XCTAssertEqual(observation.viewportOnly.tree.elementIDs, ["visible_button"])
+        XCTAssertEqual(observation.tree.viewportOnly.elementIDs, ["visible_button"])
         XCTAssertNotNil(observation.tree.findElement(heistId: "offscreen_button"))
         guard let visibleGeometry = observation.tree.elements["visible_button"]?.geometry.screen,
               let offscreenGeometry = observation.tree.elements["offscreen_button"]?.geometry.screen
@@ -174,7 +174,7 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         XCTAssertFalse(observation.tree.viewportElementIDs.contains(target.heistId))
         XCTAssertFalse(observation.tree.viewportCapture.contains(heistId: target.heistId))
         XCTAssertNil(observation.liveCapture.object(for: target.heistId))
-        XCTAssertEqual(observation.viewportOnly.tree.elementIDs, ["visible_button"])
+        XCTAssertEqual(observation.tree.viewportOnly.elementIDs, ["visible_button"])
 
         let interface = TheVault.WireConversion.discoveryProjection(from: observation.tree).interface
         XCTAssertEqual(

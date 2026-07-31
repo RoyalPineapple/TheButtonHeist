@@ -206,13 +206,13 @@ final class InterfaceTreeTests: XCTestCase {
             firstResponderHeistId: "button_visible"
         )
 
-        let visibleOnly = screen.viewportOnly
+        let visibleOnly = screen.tree.viewportOnly
 
-        XCTAssertEqual(visibleOnly.tree.elementIDs, ["button_visible"])
-        XCTAssertEqual(visibleOnly.tree.viewportElementIDs, ["button_visible"])
-        XCTAssertEqual(visibleOnly.tree.viewportCapture.hierarchy, screen.tree.viewportCapture.hierarchy)
-        XCTAssertEqual(visibleOnly.tree.viewportCapture.firstResponderHeistId, "button_visible")
-        XCTAssertNil(visibleOnly.tree.findElement(heistId: "button_known"))
+        XCTAssertEqual(visibleOnly.elementIDs, ["button_visible"])
+        XCTAssertEqual(visibleOnly.viewportElementIDs, ["button_visible"])
+        XCTAssertEqual(visibleOnly.viewportCapture.hierarchy, screen.tree.viewportCapture.hierarchy)
+        XCTAssertEqual(visibleOnly.viewportCapture.firstResponderHeistId, "button_visible")
+        XCTAssertNil(visibleOnly.findElement(heistId: "button_known"))
     }
 
     func testOrderedElementsReturnsViewportOrderThenOffViewportSortedByHeistId() {

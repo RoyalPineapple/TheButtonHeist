@@ -48,10 +48,6 @@ struct InterfaceObservation {
         self.liveCapture = liveCapture
     }
 
-    var viewportOnly: InterfaceObservation {
-        removingElements(withIds: tree.elementIDs.subtracting(tree.viewportElementIDs))
-    }
-
     func replacingTreeWithCurrentCapture(_ tree: InterfaceTree) throws -> InterfaceObservation {
         try Self.build(
             tree: tree,
