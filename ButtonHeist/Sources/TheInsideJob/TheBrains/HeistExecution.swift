@@ -50,7 +50,6 @@ extension HeistExecution {
     internal struct Completion {
         internal let steps: [HeistExecutionStepResult]
         internal let failureCapture: HeistFailureCapture?
-        internal let abortedAtPath: HeistExecutionPath?
     }
 
 }

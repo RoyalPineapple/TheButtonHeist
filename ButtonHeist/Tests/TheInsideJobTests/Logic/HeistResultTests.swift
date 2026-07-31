@@ -135,37 +135,13 @@ final class HeistResultTests: XCTestCase {
             elements: [(currentHeader, HeistId(rawValue: "buttonheist_demo"))]
         )
 
-        _ = try await Heist(runtime: .insideJob(job)) {
+        _ = try await job.executeInAppHeist(try HeistPlan {
             Warn("bootstrapped")
-        }
+        })
 
         XCTAssertEqual(job.brains.vault.lastScreenName, "ButtonHeist Demo")
         XCTAssertEqual(job.brains.vault.interfaceElementIDs, ["buttonheist_demo"])
         XCTAssertNil(job.brains.vault.interfaceElement(heistId: "stale_row"))
-    }
-
-    func testSingleStringRootHeistBindsOneRootArgument() async throws {
-        let capture = RuntimeCapture()
-
-        _ = try await Heist("milk", runtime: capture.runtime) { _ in
-            Warn("string root")
-        }
-
-        XCTAssertEqual(capture.argument, .string("milk"))
-        XCTAssertEqual(capture.plan?.parameter, .string(name: "input"))
-    }
-
-    func testInProcessHeistPropagatesWholeHeistTimeout() async throws {
-        let capture = RuntimeCapture()
-        let timeout = try HeistTimeout(validatingSeconds: 123.5)
-
-        _ = try await Heist(
-            try HeistPlan { Warn("timeout") },
-            timeout: timeout,
-            runtime: capture.runtime
-        )
-
-        XCTAssertEqual(capture.timeout, timeout)
     }
 
     func testRunHeistTestingFacadeNoArgumentUsesCanonicalInvocationTopology() async throws {
@@ -207,17 +183,6 @@ final class HeistResultTests: XCTestCase {
         XCTAssertEqual(request.argument, .accessibilityTarget(.label("Milk")))
         XCTAssertEqual(invocation.path, "RowsActivate")
         XCTAssertEqual(invocation.argument, .accessibilityTarget(AccessibilityTarget(ref: "input")))
-    }
-
-    func testSingleAccessibilityTargetRootHeistBindsOneRootArgument() async throws {
-        let capture = RuntimeCapture()
-
-        _ = try await Heist(AccessibilityTarget.label("Delete"), runtime: capture.runtime) { _ in
-            Warn("target root")
-        }
-
-        XCTAssertEqual(capture.argument, .accessibilityTarget(.label("Delete")))
-        XCTAssertEqual(capture.plan?.parameter, .accessibilityTarget(name: "input"))
     }
 
     func testFailureDescriptionIncludesScreenshotInterfaceDump() async throws {
@@ -378,22 +343,6 @@ final class HeistResultTests: XCTestCase {
         )
     }
 
-}
-
-@MainActor
-private final class RuntimeCapture {
-    private(set) var plan: HeistPlan?
-    private(set) var argument: HeistArgument?
-    private(set) var timeout: HeistTimeout?
-
-    var runtime: InAppHeistRuntime {
-        InAppHeistRuntime { plan, argument, timeout in
-            self.plan = plan
-            self.argument = argument
-            self.timeout = timeout
-            return try HeistResult(steps: [], durationMs: 0)
-        }
-    }
 }
 
 private func invocationStep(in plan: HeistPlan) throws -> HeistInvocationStep {

@@ -162,7 +162,7 @@ final class HeistMachineStepExecutionTests: XCTestCase {
 
         XCTAssertEqual(completion.steps.map(\.status), [.failed, .skipped])
         XCTAssertEqual(completion.steps.first?.actionEvidence?.result?.outcome.failureKind, .actionFailed)
-        XCTAssertEqual(completion.abortedAtPath, completion.steps.first?.path)
+        XCTAssertEqual(completion.steps.first(where: { $0.status == .failed })?.path, completion.steps.first?.path)
     }
 
     func testCancelledActionIsTerminalFailure() throws {
@@ -203,7 +203,7 @@ final class HeistMachineStepExecutionTests: XCTestCase {
             completion.steps.map(\.path.description),
             ["$.body[0]", "$.body[1]", "$.body[2]"]
         )
-        XCTAssertEqual(completion.abortedAtPath, completion.steps[1].path)
+        XCTAssertEqual(completion.steps.first(where: { $0.status == .failed })?.path, completion.steps[1].path)
     }
 
     func testFailureScreenshotIsAHostRequestNotASecondExecutor() throws {
@@ -238,7 +238,7 @@ final class HeistMachineStepExecutionTests: XCTestCase {
         XCTAssertEqual(completion.steps.map(\.kind), [.fail])
         XCTAssertEqual(completion.steps.map(\.status), [.failed])
         XCTAssertEqual(completion.failureCapture, .captured(screenshot))
-        XCTAssertEqual(completion.abortedAtPath, completion.steps.first?.path)
+        XCTAssertEqual(completion.steps.first(where: { $0.status == .failed })?.path, completion.steps.first?.path)
     }
 }
 

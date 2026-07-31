@@ -25,23 +25,7 @@ public struct Heist: Sendable {
         self.result = try await Self.execute(
             plan,
             argument: argument,
-            timeout: timeout,
-            runtime: .shared
-        )
-    }
-
-    @MainActor
-    init(
-        _ plan: HeistPlan,
-        argument: HeistArgument = .none,
-        timeout: HeistTimeout = .default,
-        runtime: InAppHeistRuntime
-    ) async throws {
-        self.result = try await Self.execute(
-            plan,
-            argument: argument,
-            timeout: timeout,
-            runtime: runtime
+            timeout: timeout
         )
     }
 
@@ -54,23 +38,7 @@ public struct Heist: Sendable {
         self.result = try await Self.execute(
             plan,
             argument: .none,
-            timeout: timeout,
-            runtime: .shared
-        )
-    }
-
-    @MainActor
-    init(
-        runtime: InAppHeistRuntime,
-        timeout: HeistTimeout = .default,
-        @HeistBuilder _ content: () throws -> HeistContent
-    ) async throws {
-        let plan = try HeistPlan(content)
-        self.result = try await Self.execute(
-            plan,
-            argument: .none,
-            timeout: timeout,
-            runtime: runtime
+            timeout: timeout
         )
     }
 
@@ -85,25 +53,7 @@ public struct Heist: Sendable {
         self.result = try await Self.execute(
             plan,
             argument: .string(input),
-            timeout: timeout,
-            runtime: .shared
-        )
-    }
-
-    @MainActor
-    init(
-        _ input: String,
-        parameter: HeistReferenceName = "input",
-        runtime: InAppHeistRuntime,
-        timeout: HeistTimeout = .default,
-        @HeistBuilder _ content: (HeistReferenceName) throws -> HeistContent
-    ) async throws {
-        let plan = try HeistPlan(parameter: parameter, content)
-        self.result = try await Self.execute(
-            plan,
-            argument: .string(input),
-            timeout: timeout,
-            runtime: runtime
+            timeout: timeout
         )
     }
 
@@ -111,23 +61,6 @@ public struct Heist: Sendable {
     public init(
         _ input: AccessibilityTarget,
         parameter: HeistReferenceName = "input",
-        timeout: HeistTimeout = .default,
-        @HeistBuilder _ content: (AccessibilityTarget) throws -> HeistContent
-    ) async throws {
-        try await self.init(
-            input,
-            parameter: parameter,
-            runtime: .shared,
-            timeout: timeout,
-            content
-        )
-    }
-
-    @MainActor
-    init(
-        _ input: AccessibilityTarget,
-        parameter: HeistReferenceName = "input",
-        runtime: InAppHeistRuntime,
         timeout: HeistTimeout = .default,
         @HeistBuilder _ content: (AccessibilityTarget) throws -> HeistContent
     ) async throws {
@@ -135,8 +68,7 @@ public struct Heist: Sendable {
         self.result = try await Self.execute(
             plan,
             argument: .accessibilityTarget(input),
-            timeout: timeout,
-            runtime: runtime
+            timeout: timeout
         )
     }
 
@@ -144,10 +76,13 @@ public struct Heist: Sendable {
     private static func execute(
         _ plan: HeistPlan,
         argument: HeistArgument,
-        timeout: HeistTimeout,
-        runtime: InAppHeistRuntime
+        timeout: HeistTimeout
     ) async throws -> HeistResult {
-        let result = try await runtime.execute(plan, argument, timeout)
+        let result = try await TheInsideJob.shared.executeInAppHeist(
+            plan,
+            argument: argument,
+            timeout: timeout
+        )
         HeistResultRecording.recordIfEnabled(result, plan: plan)
         guard !result.isFailure else {
             throw Failure(result)
@@ -228,30 +163,6 @@ public extension Heist {
         }
     }
 
-}
-
-struct InAppHeistRuntime {
-    let execute: @MainActor (
-        HeistPlan,
-        HeistArgument,
-        HeistTimeout
-    ) async throws -> HeistResult
-
-    @MainActor
-    static var shared: InAppHeistRuntime {
-        insideJob(.shared)
-    }
-
-    @MainActor
-    static func insideJob(_ job: TheInsideJob) -> InAppHeistRuntime {
-        InAppHeistRuntime { plan, argument, timeout in
-            try await job.executeInAppHeist(
-                plan,
-                argument: argument,
-                timeout: timeout
-            )
-        }
-    }
 }
 
 @MainActor

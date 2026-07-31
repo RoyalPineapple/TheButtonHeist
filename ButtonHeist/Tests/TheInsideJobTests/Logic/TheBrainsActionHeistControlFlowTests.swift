@@ -126,7 +126,7 @@ final class HeistMachineControlFlowTests: XCTestCase {
         XCTAssertEqual(conditional.status, .failed)
         XCTAssertEqual(conditional.children.map(\.status), [.failed, .skipped])
         XCTAssertEqual(completion.steps.map(\.status), [.failed, .skipped])
-        XCTAssertEqual(completion.abortedAtPath, conditional.children.first?.path)
+        XCTAssertEqual(completion.steps.first(where: { $0.status == .failed })?.path, conditional.children.first?.path)
     }
 
     func testRepeatUntilExecutesBodyBeforeEvaluatingCompletion() throws {

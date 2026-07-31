@@ -232,20 +232,12 @@ final class TheBrainsScrollTests: XCTestCase {
         guard case .resolved(let liveTarget) = brains.vault.resolveLiveActionTarget(for: treeElement) else {
             return XCTFail("Expected live geometry fixture to resolve")
         }
-        var now = RuntimeElapsed.now
         let inflation = brains.navigation.elementInflation
-        inflation.geometryEnvironment = .init(
-            now: { now },
-            refreshVisibleObservation: {
-                now = now.advanced(by: .seconds(1))
-                return .unavailable(.sourceTreeUnavailable)
-            }
-        )
         let inflatedTarget = ElementInflation.InflatedElementTarget(
             target: try resolvedTarget(.label("Deadline Target")),
             treeElement: treeElement,
             liveTarget: liveTarget,
-            deadline: SemanticObservationDeadline(start: now, timeoutSeconds: 1),
+            deadline: SemanticObservationDeadline(start: RuntimeElapsed.now, timeoutSeconds: 0),
             resolution: ActionSubjectResolution(origin: .visible)
         )
 

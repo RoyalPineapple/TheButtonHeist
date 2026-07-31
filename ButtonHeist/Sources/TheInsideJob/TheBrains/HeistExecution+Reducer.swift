@@ -96,8 +96,7 @@ extension HeistExecution {
                 }
                 return complete(
                     steps: children.values,
-                    failureCapture: failureCapture,
-                    abortedAtPath: children.abortedAtPath
+                    failureCapture: failureCapture
                 )
             case .ready, .complete:
                 return decision
@@ -136,8 +135,7 @@ extension HeistExecution {
             guard let failedPath = children.abortedAtPath,
                   let failureCaptureMode else {
                 return complete(
-                    steps: children.values,
-                    abortedAtPath: children.abortedAtPath
+                    steps: children.values
                 )
             }
             let id = nextID()
@@ -151,13 +149,11 @@ extension HeistExecution {
 
         private mutating func complete(
             steps: [HeistExecutionStepResult],
-            failureCapture: HeistFailureCapture? = nil,
-            abortedAtPath: HeistExecutionPath?
+            failureCapture: HeistFailureCapture? = nil
         ) -> Decision {
             let completion = Completion(
                 steps: steps,
-                failureCapture: failureCapture,
-                abortedAtPath: abortedAtPath
+                failureCapture: failureCapture
             )
             state = .complete(completion)
             return .complete(completion)

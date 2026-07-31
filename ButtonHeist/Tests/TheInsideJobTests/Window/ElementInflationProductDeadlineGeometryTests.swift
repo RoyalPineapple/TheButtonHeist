@@ -18,10 +18,27 @@ extension ElementInflationProductTests {
             identifier: heistId.rawValue
         )
         let refreshObservationSource = VisibleObservationSourceFixture()
+        let tripwire = TheTripwire(pulseSource: .injected)
         let refreshBrains = TheBrains(
-            tripwire: TheTripwire(),
+            tripwire: tripwire,
             visibleObservationSource: refreshObservationSource.capture
         )
+        tripwire.startPulse()
+        await refreshBrains.startSemanticObservation()
+        let stream = refreshBrains.vault.semanticObservationStream
+        let ticker = Task { @MainActor in
+            while !Task.isCancelled {
+                if stream.observationWaiterCount > 0 {
+                    tripwire.onTick()
+                }
+                await Task.yield()
+            }
+        }
+        defer {
+            ticker.cancel()
+            refreshBrains.stopSemanticObservation()
+            tripwire.stopPulse()
+        }
         let staleObject = UIButton(frame: CGRect(x: 20, y: 20, width: 160, height: 44))
         await refreshBrains.vault.installObservationForTesting(.makeForTests([
             .init(element, heistId: heistId, object: staleObject),
@@ -42,27 +59,9 @@ extension ElementInflationProductTests {
         refreshObservationSource.observation = .makeForTests([
             .init(element, heistId: heistId, object: replacementObject),
         ])
-        var now = RuntimeElapsed.now
         let deadline = SemanticObservationDeadline(
-            start: now,
+            start: RuntimeElapsed.now,
             timeoutSeconds: 7
-        )
-        refreshBrains.navigation.elementInflation.geometryEnvironment = .init(
-            now: { now },
-            refreshVisibleObservation: {
-                now = now.advanced(by: .milliseconds(10))
-                guard let observation = refreshObservationSource.observation else {
-                    return .unavailable(.sourceTreeUnavailable)
-                }
-                await refreshBrains.vault.installObservationForTesting(
-                    observation
-                )
-                guard let current = refreshBrains.vault.state.current
-                else {
-                    return .unavailable(.sourceTreeUnavailable)
-                }
-                return .committed(current)
-            }
         )
 
         let result = await refreshBrains.navigation.elementInflation.refreshCommittedTarget(

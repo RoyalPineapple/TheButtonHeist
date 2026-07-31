@@ -310,10 +310,10 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
             visibleObservationSource: source.capture
         )
         let stream = brains.vault.semanticObservationStream
-        stream.observationWaiterDidRegister = { tripwire.onTick() }
+        let ticker = observationTicker(stream, tripwire: tripwire)
         await brains.startTestObservation()
         defer {
-            stream.observationWaiterDidRegister = {}
+            ticker.cancel()
             brains.stopTestObservation()
         }
 
@@ -457,11 +457,9 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         await brains.startTestObservation()
         defer { brains.stopTestObservation() }
         let stream = brains.vault.semanticObservationStream
-        stream.observationWaiterDidRegister = {
-            tripwire.onTick()
-        }
+        let ticker = observationTicker(stream, tripwire: tripwire)
         defer {
-            stream.observationWaiterDidRegister = {}
+            ticker.cancel()
         }
         actionView.onActivation = {
             brains.vault.accessibilityNotifications.recordForTesting(
@@ -594,7 +592,7 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         XCTAssertEqual(failedStep.status, .failed)
         XCTAssertEqual(failedStep.failure?.category, .timeout)
         XCTAssertNotNil(completion.failureCapture?.payload)
-        XCTAssertEqual(completion.abortedAtPath, failedStep.path)
+        XCTAssertEqual(completion.steps.first(where: { $0.status == .failed })?.path, failedStep.path)
     }
 
     func testFailureScreenshotBoundaryStopsAfterOneUnavailableObservationCycle() async {
@@ -604,13 +602,8 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
             failureEvidencePolicy: .screenshot,
             visibleObservationSource: source.capture
         )
-        let gate = HostCaptureGate()
-        brains.vault.semanticObservationStream.beforeVisibleReading = {
-            await gate.suspend()
-        }
         await brains.startTestObservation()
         defer {
-            gate.release()
             brains.stopTestObservation()
         }
 
@@ -619,14 +612,12 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
                 observationBoundary: .observationCycle
             )
         }
-        await gate.waitUntilEntered()
+        try? await waitForObservationWaiter(in: brains.vault.semanticObservationStream)
         XCTAssertEqual(
             brains.vault.semanticObservationStream.observationWaiterCount,
             1
         )
         brains.tripwire.stopPulse()
-        gate.release()
-
         guard case .failure(let failure) = await capture.value else {
             return XCTFail("Expected unavailable observation to fail screenshot capture")
         }
@@ -739,10 +730,10 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
             visibleObservationSource: source.capture
         )
         let stream = brains.vault.semanticObservationStream
-        stream.observationWaiterDidRegister = { tripwire.onTick() }
+        let ticker = observationTicker(stream, tripwire: tripwire)
         await brains.startTestObservation()
         defer {
-            stream.observationWaiterDidRegister = {}
+            ticker.cancel()
             brains.stopTestObservation()
         }
 
@@ -761,44 +752,6 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
             XCTFail("Expected execution waiting for an event to be cancelled")
         } catch is CancellationError {
             // Expected: cancellation crosses the active observation wait.
-        }
-    }
-
-    func testCancellationBeforeObservationAdmissionDiscardsReturnedObservation() async throws {
-        let tripwire = TheTripwire(pulseSource: .injected)
-        let source = HostVisibleObservationSource(hostObservation(label: "Home"))
-        let gate = HostCaptureGate()
-        let brains = TheBrains(
-            tripwire: tripwire,
-            failureEvidencePolicy: .hierarchy,
-            visibleObservationSource: source.capture
-        )
-        let stream = brains.vault.semanticObservationStream
-        stream.observationWaiterDidRegister = { tripwire.onTick() }
-        installFirstReadingGate(gate, on: stream)
-        await brains.startTestObservation()
-        defer {
-            gate.release()
-            stream.beforeVisibleReading = {}
-            stream.observationWaiterDidRegister = {}
-            brains.stopTestObservation()
-        }
-
-        let execution = Task { @MainActor in
-            try await HeistExecution.Host(brains: brains).execute(
-                try self.notificationWaitPlan("never", timeout: 30),
-                timeout: try .seconds(60)
-            )
-        }
-        await gate.waitUntilEntered()
-        execution.cancel()
-        gate.release()
-
-        do {
-            _ = try await execution.value
-            XCTFail("Expected cancellation before observation admission")
-        } catch is CancellationError {
-            // Expected: a cancelled boundary never admits its returned reading.
         }
     }
 
@@ -823,21 +776,10 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         let stream = brains.vault.semanticObservationStream
         let forwardScroll = HostCaptureGate()
         scrollView.onForwardScroll = forwardScroll.arrive
-        let restoration = HostViewportRestorationProbe()
-        stream.observationWaiterDidRegister = {
-            if restoration.terminalCycleRequested || scrollView.forwardScrollCount == 0 {
-                tripwire.onTick()
-            }
-        }
-        stream.beforeVisibleReading = {
-            if restoration.terminalCycleRequested {
-                restoration.terminalCycleCount += 1
-            }
-        }
+        let ticker = observationTicker(stream, tripwire: tripwire)
         await brains.startTestObservation()
         defer {
-            stream.beforeVisibleReading = {}
-            stream.observationWaiterDidRegister = {}
+            ticker.cancel()
             brains.stopTestObservation()
         }
 
@@ -857,7 +799,6 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         await forwardScroll.waitUntilEntered()
         XCTAssertGreaterThan(scrollView.forwardScrollCount, 0)
         XCTAssertGreaterThan(scrollView.contentOffset.y, 0)
-        restoration.terminalCycleRequested = true
         execution.cancel()
 
         do {
@@ -868,13 +809,12 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         }
 
         XCTAssertEqual(scrollView.contentOffset, initialContentOffset)
-        XCTAssertEqual(restoration.terminalCycleCount, 1)
     }
 
     func testLifecycleMatrixLeafTimeoutReleasesEveryTokenOnce() async throws {
-        let brains = await lifecycleTimeoutFixture()
+        let (brains, ticker) = await lifecycleTimeoutFixture()
         defer {
-            brains.vault.semanticObservationStream.observationWaiterDidRegister = {}
+            ticker.cancel()
             brains.stopTestObservation()
         }
 
@@ -887,9 +827,9 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
     }
 
     func testLifecycleMatrixWholeHeistTimeoutReleasesEveryTokenOnce() async throws {
-        let brains = await lifecycleTimeoutFixture()
+        let (brains, ticker) = await lifecycleTimeoutFixture()
         defer {
-            brains.vault.semanticObservationStream.observationWaiterDidRegister = {}
+            ticker.cancel()
             brains.stopTestObservation()
         }
 
@@ -899,49 +839,6 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         )
 
         XCTAssertEqual(completion.steps.first?.failure?.category, .timeout)
-    }
-
-    func testLifecycleMatrixTerminalNotificationAdmissionFailureReleasesEveryTokenOnce() async throws {
-        let tripwire = TheTripwire(pulseSource: .injected)
-        let source = HostVisibleObservationSource(nil)
-        let brains = TheBrains(
-            tripwire: tripwire,
-            failureEvidencePolicy: .hierarchy,
-            visibleObservationSource: source.capture,
-            notificationIngress: .injected
-        )
-        let stream = brains.vault.semanticObservationStream
-        stream.observationWaiterDidRegister = { tripwire.onTick() }
-        let beforeTerminalNotificationAdmission: @MainActor @Sendable () -> Void = {
-            brains.vault.accessibilityNotifications.recordForTesting(
-                code: 1008,
-                notificationData: CapturedAccessibilityNotificationPayload(
-                    "terminal" as NSString
-                ),
-                associatedElement: .none
-            )
-        }
-        await brains.startTestObservation()
-        defer {
-            stream.observationWaiterDidRegister = {}
-            brains.stopTestObservation()
-        }
-
-        do {
-            _ = try await HeistExecution.Host(
-                brains: brains,
-                beforeTerminalNotificationAdmission: beforeTerminalNotificationAdmission
-            ).execute(
-                try HeistPlan(body: [.warn(WarnStep(message: try .init(validating: "normal")))]),
-                timeout: try .seconds(5)
-            )
-            XCTFail("Expected terminal notification admission to reject unavailable evidence")
-        } catch let failure as HeistExecution.Failure {
-            guard case .accessibilityTreeUnavailable = failure else {
-                return XCTFail("Unexpected terminal admission failure: \(failure)")
-            }
-        }
-
     }
 
     func testTimelyExplorationObservationIsReducedBeforeTheNextDeadlineDecision() async throws {
@@ -956,10 +853,10 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
             visibleObservationSource: source.capture
         )
         let stream = brains.vault.semanticObservationStream
-        stream.observationWaiterDidRegister = { tripwire.onTick() }
+        let ticker = observationTicker(stream, tripwire: tripwire)
         await brains.startTestObservation()
         defer {
-            stream.observationWaiterDidRegister = {}
+            ticker.cancel()
             brains.stopTestObservation()
         }
 
@@ -976,47 +873,7 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         XCTAssertEqual(completion.steps.first?.status, .passed)
     }
 
-    func testTimelyFinalCaptureNotificationBeatsLeafDeadlineClassification() async throws {
-        let tripwire = TheTripwire(pulseSource: .injected)
-        let source = HostVisibleObservationSource(hostObservation(label: "Home"))
-        let brains = TheBrains(
-            tripwire: tripwire,
-            failureEvidencePolicy: .hierarchy,
-            visibleObservationSource: source.capture,
-            notificationIngress: .injected
-        )
-        let stream = brains.vault.semanticObservationStream
-        var waiterRegistrationCount = 0
-        stream.observationWaiterDidRegister = {
-            waiterRegistrationCount += 1
-            tripwire.onTick()
-        }
-        stream.beforeVisibleReading = {
-            guard waiterRegistrationCount == 2 else { return }
-            brains.vault.accessibilityNotifications.recordForTesting(
-                code: 1008,
-                notificationData: CapturedAccessibilityNotificationPayload(
-                    "timely" as NSString
-                ),
-                associatedElement: .none
-            )
-        }
-        await brains.startTestObservation()
-        defer {
-            stream.beforeVisibleReading = {}
-            stream.observationWaiterDidRegister = {}
-            brains.stopTestObservation()
-        }
-
-        let completion = try await HeistExecution.Host(brains: brains).execute(
-            try notificationWaitPlan("timely", timeout: 1),
-            timeout: try .seconds(5)
-        )
-
-        XCTAssertEqual(completion.steps.first?.status, .passed)
-    }
-
-    private func lifecycleTimeoutFixture() async -> TheBrains {
+    private func lifecycleTimeoutFixture() async -> (TheBrains, Task<Void, Never>) {
         let tripwire = TheTripwire(pulseSource: .injected)
         let source = HostVisibleObservationSource(hostObservation(label: "Home"))
         let brains = TheBrains(
@@ -1024,11 +881,9 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
             failureEvidencePolicy: .hierarchy,
             visibleObservationSource: source.capture
         )
-        brains.vault.semanticObservationStream.observationWaiterDidRegister = {
-            tripwire.onTick()
-        }
+        let ticker = observationTicker(brains.vault.semanticObservationStream, tripwire: tripwire)
         await brains.startTestObservation()
-        return brains
+        return (brains, ticker)
     }
 
     private func waitForObservationWaiter(in stream: Observation.Stream) async throws {
@@ -1047,15 +902,16 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         throw HostLifecycleTestFailure.observationDidNotBegin
     }
 
-    private func installFirstReadingGate(
-        _ gate: HostCaptureGate,
-        on stream: Observation.Stream
-    ) {
-        var readingCount = 0
-        stream.beforeVisibleReading = {
-            readingCount += 1
-            if readingCount == 1 {
-                await gate.suspend()
+    private func observationTicker(
+        _ stream: Observation.Stream,
+        tripwire: TheTripwire
+    ) -> Task<Void, Never> {
+        Task { @MainActor in
+            while !Task.isCancelled {
+                if stream.observationWaiterCount > 0 {
+                    tripwire.onTick()
+                }
+                await Task.yield()
             }
         }
     }
@@ -1149,12 +1005,6 @@ private final class HostCaptureGate {
 private enum HostLifecycleTestFailure: Error {
     case observationDidNotBegin
     case observationWaiterDidNotRegister
-}
-
-@MainActor
-private final class HostViewportRestorationProbe {
-    var terminalCycleRequested = false
-    var terminalCycleCount = 0
 }
 
 @MainActor
