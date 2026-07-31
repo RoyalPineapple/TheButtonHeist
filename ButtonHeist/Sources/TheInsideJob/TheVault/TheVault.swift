@@ -65,10 +65,6 @@ final class TheVault {
         currentInterfaceObservation.liveCapture
     }
 
-    var captureID: InterfaceCaptureID {
-        currentInterfaceObservation.captureID
-    }
-
     // MARK: - Observation Scheduling
 
     lazy var semanticObservationStream = Observation.Stream(
@@ -133,11 +129,6 @@ final class TheVault {
     /// HeistId captured for the current viewport's first responder.
     var firstResponderHeistId: HeistId? {
         interfaceTree.firstResponderHeistId
-    }
-
-    /// Current screen name derived from the interface tree's viewport capture.
-    var lastScreenName: String? {
-        interfaceTree.name
     }
 
     static func captureVisibleObservation(from vault: TheVault) -> InterfaceObservation? {

@@ -58,11 +58,6 @@ final class InterfaceTreeTests: XCTestCase {
         XCTAssertNil(InterfaceObservation.empty.tree.viewportCapture.firstResponderHeistId)
     }
 
-    func testEmptyHasNoName() {
-        XCTAssertNil(InterfaceObservation.empty.tree.name)
-        XCTAssertNil(InterfaceObservation.empty.tree.id)
-    }
-
     func testEmptyInterfaceIdsIsEmpty() {
         XCTAssertTrue(InterfaceObservation.empty.tree.elementIDs.isEmpty)
     }
@@ -86,7 +81,7 @@ final class InterfaceTreeTests: XCTestCase {
         )
 
         XCTAssertEqual(screen.tree.elementIDs, ["button_visible", "button_known"])
-        XCTAssertEqual(screen.tree.viewportCapture.heistIds, ["button_visible"])
+        XCTAssertEqual(screen.tree.viewportElementIDs, ["button_visible"])
         XCTAssertEqual(screen.tree.findElement(heistId: "button_known")?.element.label, "Known")
         XCTAssertEqual(
             screen.tree.findElement(heistId: "button_known")?.geometry,

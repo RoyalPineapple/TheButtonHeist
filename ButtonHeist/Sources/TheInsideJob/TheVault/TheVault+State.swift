@@ -158,7 +158,7 @@ extension TheVault {
             scope: SemanticObservationScope
         ) -> Result<Current?, Observation.History.ReadError> {
             guard let current,
-                  current.scope.canFulfill(scope)
+                  current.scope >= scope
             else { return .success(nil) }
             guard let historyIndex else { return .success(current) }
             do {
@@ -346,12 +346,13 @@ extension TheVault {
                     isKeyWindow: window.isKeyWindow
                 )
             }
+            let interface = tree.semanticInterface(timestamp: admission.timestamp)
             return Observation.Snapshot(
-                interface: tree.semanticInterface(timestamp: admission.timestamp),
+                interface: interface,
                 context: Observation.Context(
                     firstResponder: tree.firstResponderTarget,
                     keyboardVisible: admission.keyboardVisible,
-                    screenId: tree.id,
+                    screenId: InterfaceSummary.screenId(for: interface),
                     windowStack: windows
                 )
             )

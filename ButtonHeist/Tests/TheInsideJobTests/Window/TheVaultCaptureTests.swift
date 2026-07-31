@@ -36,9 +36,9 @@ final class TheVaultCaptureTests: XCTestCase {
             }
         )
 
-        XCTAssertEqual(injectedVault.captureVisibleObservation()?.captureID, observation.captureID)
+        XCTAssertNotNil(injectedVault.captureVisibleObservation())
         await injectedVault.resetInterfaceForLifecycle()
-        XCTAssertEqual(injectedVault.captureVisibleObservation()?.captureID, observation.captureID)
+        XCTAssertNotNil(injectedVault.captureVisibleObservation())
         XCTAssertEqual(captureCount, 2)
     }
 

@@ -40,27 +40,12 @@ struct LiveCapture {
         dispatchReferences.elementRefs[heistId]?.scrollView
     }
 
-    func scrollView(for container: InterfaceTree.Container) -> UIScrollView? {
-        scrollView(forContainerPath: container.path)
-    }
-
     func containerObject(forPath path: TreePath) -> NSObject? {
         dispatchReferences.containerRefsByPath[path]?.object
     }
 
     func scrollView(forContainerPath path: TreePath) -> UIScrollView? {
         dispatchReferences.scrollableContainerViewsByPath[path]?.view
-    }
-
-    func nearestScrollEntry(for path: TreePath) -> ScrollEntry? {
-        var candidate: TreePath? = path
-        while let current = candidate {
-            if let view = scrollView(forContainerPath: current) {
-                return ScrollEntry(path: current, view: view)
-            }
-            candidate = current.parent
-        }
-        return nil
     }
 
     func scrollEntries() -> [ScrollEntry] {
@@ -129,15 +114,11 @@ struct LiveCapture {
             hierarchy: []
         )
 
-        var heistIds: Set<HeistId> {
-            Set(hierarchy.pathIndexedElements.compactMap { entry in
-                guard entry.element.visibility == .onscreen else { return nil }
-                return heistIdsByPath[entry.path]
-            })
-        }
-
         func contains(heistId: HeistId) -> Bool {
-            heistIds.contains(heistId)
+            hierarchy.pathIndexedElements.contains { entry in
+                entry.element.visibility == .onscreen
+                    && heistIdsByPath[entry.path] == heistId
+            }
         }
 
         func heistId(forPath path: TreePath) -> HeistId? {

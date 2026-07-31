@@ -9,16 +9,8 @@ import ThePlans
 
 extension TheVault {
 
-    func liveHeistIds() -> Set<HeistId> {
-        interfaceTree.viewportCapture.heistIds
-    }
-
     func liveContains(heistId: HeistId) -> Bool {
         interfaceTree.viewportCapture.contains(heistId: heistId)
-    }
-
-    func liveObject(for heistId: HeistId) -> NSObject? {
-        currentLiveCapture.object(for: heistId)
     }
 
     func liveScrollView(for element: InterfaceTree.Element) -> UIScrollView? {

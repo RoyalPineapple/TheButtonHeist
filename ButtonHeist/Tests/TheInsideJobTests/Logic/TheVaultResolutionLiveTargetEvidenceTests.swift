@@ -304,7 +304,6 @@ extension TheVaultResolutionTests {
         XCTAssertEqual(state.notificationIndex, priorNotificationIndex)
         XCTAssertEqual(state.current, priorCurrent)
         XCTAssertEqual(state.interfaceObservation?.tree, priorObservation?.tree)
-        XCTAssertEqual(state.interfaceObservation?.captureID, priorObservation?.captureID)
         XCTAssertEqual(initial.current, priorCurrent)
     }
 
@@ -318,7 +317,7 @@ extension TheVaultResolutionTests {
 
         await vault.semanticObservationStream.commitVisibleObservationForTesting(observation)
 
-        XCTAssertNotNil(vault.liveObject(for: "save"))
+        XCTAssertNotNil(vault.currentLiveCapture.object(for: "save"))
         XCTAssertNil(LiveCapture.makeForTests(tree: vault.interfaceTree).object(for: "save"))
     }
 
@@ -454,7 +453,6 @@ extension TheVaultResolutionTests {
                 ),
             ]
         )
-        XCTAssertEqual(previousDiscovery.tree.id, "controls_demo")
         await vault.semanticObservationStream.commitDiscoveryObservationForTesting(previousDiscovery)
 
         let currentHeader = element(label: "ButtonHeist Demo", traits: .header)
@@ -463,7 +461,6 @@ extension TheVaultResolutionTests {
             (currentHeader, "buttonheist_demo"),
             (sharedCurrentAction, "shared_action"),
         ])
-        XCTAssertEqual(currentVisible.tree.id, "buttonheist_demo")
         await vault.semanticObservationStream.commitVisibleObservationForTesting(currentVisible)
 
         XCTAssertEqual(vault.viewportElementIDs, ["buttonheist_demo", "shared_action"])

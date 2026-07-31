@@ -10,17 +10,6 @@ enum SemanticObservationScope: Int, Comparable, Sendable {
         lhs.rawValue < rhs.rawValue
     }
 
-    func canFulfill(_ requested: SemanticObservationScope) -> Bool {
-        switch (self, requested) {
-        case (.visible, .visible),
-             (.discovery, .visible),
-             (.discovery, .discovery):
-            return true
-        case (.visible, .discovery):
-            return false
-        }
-    }
-
 }
 
 @MainActor

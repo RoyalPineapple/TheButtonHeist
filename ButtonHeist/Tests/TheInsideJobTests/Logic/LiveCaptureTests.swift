@@ -453,8 +453,8 @@ struct LiveCaptureTests {
         )
         let capture = observation.liveCapture
 
-        #expect(observation.tree.viewportCapture.heistIds == ["cancel_button", "save_button"])
         #expect(observation.tree.viewportCapture.contains(heistId: "save_button"))
+        #expect(observation.tree.viewportCapture.contains(heistId: "cancel_button"))
         #expect(observation.tree.viewportCapture.heistId(forPath: TreePath([0])) == "save_button")
         #expect(observation.tree.viewportCapture.heistId(forPath: TreePath([1])) == "cancel_button")
         #expect(observation.tree.findElement(heistId: "cancel_button")?.element == cancel)
@@ -538,7 +538,6 @@ struct LiveCaptureTests {
             )
         )
 
-        #expect(capture.nearestScrollEntry(for: innerPath.appending(0))?.path == innerPath)
         #expect(capture.isDirectScrollChild(at: aliasPath, of: outer))
         #expect(capture.isDirectScrollChild(at: innerPath, of: outer))
         #expect(capture.parentScrollViewID(of: ObjectIdentifier(inner)) == ObjectIdentifier(outer))

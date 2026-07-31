@@ -106,7 +106,6 @@ final class TheVaultObservationBuildingTests: XCTestCase {
 
         XCTAssertEqual(observation.tree.elementIDs, ["visible_button", "offscreen_button"])
         XCTAssertEqual(observation.tree.viewportElementIDs, ["visible_button"])
-        XCTAssertEqual(observation.tree.viewportCapture.heistIds, ["visible_button"])
         XCTAssertFalse(observation.tree.viewportCapture.contains(heistId: "offscreen_button"))
         XCTAssertEqual(observation.viewportOnly.tree.elementIDs, ["visible_button"])
         XCTAssertNotNil(observation.tree.findElement(heistId: "offscreen_button"))
@@ -323,61 +322,6 @@ final class TheVaultObservationBuildingTests: XCTestCase {
             reviewID(in: reorderedObservation, category: "Work", priority: "Low"),
             "review_pr_button_2"
         )
-    }
-
-    // MARK: - InterfaceObservation name derivation
-
-    func testScreenNameFromFirstHeader() {
-        let header = makeElement(label: "Settings", traits: .header)
-        let button = makeElement(label: "Save", traits: .button)
-        let result = TheVault.CaptureResult(
-            hierarchy: [
-                .element(header, traversalIndex: 0),
-                .element(button, traversalIndex: 1),
-            ]
-        )
-
-        let observation = TheVault.buildObservation(from: result)
-
-        XCTAssertEqual(observation.tree.name, "Settings")
-    }
-
-    func testScreenIdIsSlugifiedName() {
-        let header = makeElement(label: "My Profile", traits: .header)
-        let result = TheVault.CaptureResult(
-            hierarchy: [.element(header, traversalIndex: 0)]
-        )
-
-        let observation = TheVault.buildObservation(from: result)
-
-        XCTAssertEqual(observation.tree.id, TheScore.slugify("My Profile"))
-    }
-
-    func testScreenNameNilWhenNoHeaders() {
-        let button = makeElement(label: "OK", traits: .button)
-        let result = TheVault.CaptureResult(
-            hierarchy: [.element(button, traversalIndex: 0)]
-        )
-
-        let observation = TheVault.buildObservation(from: result)
-
-        XCTAssertNil(observation.tree.name)
-        XCTAssertNil(observation.tree.id)
-    }
-
-    func testScreenNameIgnoresHeaderWithNilLabel() {
-        let headerNoLabel = makeElement(label: nil, traits: .header)
-        let button = makeElement(label: "OK", traits: .button)
-        let result = TheVault.CaptureResult(
-            hierarchy: [
-                .element(headerNoLabel, traversalIndex: 0),
-                .element(button, traversalIndex: 1),
-            ]
-        )
-
-        let observation = TheVault.buildObservation(from: result)
-
-        XCTAssertNil(observation.tree.name)
     }
 
     // MARK: - First responder detection

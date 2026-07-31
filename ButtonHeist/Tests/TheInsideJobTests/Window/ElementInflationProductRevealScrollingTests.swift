@@ -435,7 +435,7 @@ extension ElementInflationProductTests {
             "innerReveals=\(fixture.innerScrollView.revealRequestCount)",
             "targetHidden=\(fixture.target.isHidden)",
             "targetAccessible=\(fixture.target.isAccessibilityElement)",
-            "liveIds=\(brains.vault.liveHeistIds().map(\.rawValue).sorted())",
+            "liveIds=\(brains.vault.viewportElementIDs.map(\.rawValue).sorted())",
             "semanticPath=\(brains.vault.interfaceElement(heistId: fixture.knownHeistId)?.scrollContainerPath?.indices ?? [])",
             brains.vault.liveScrollContainerDiagnostics(),
         ].joined(separator: "; ")

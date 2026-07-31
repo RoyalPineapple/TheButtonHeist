@@ -207,7 +207,7 @@ extension Observation.Stream {
             if case .observationCycle = waiter.boundary,
                let completedScope,
                observationCommitted == false,
-               completedScope.canFulfill(waiter.scope) {
+               completedScope >= waiter.scope {
                 return .cycleCompletedWithoutObservation
             }
             return nil
