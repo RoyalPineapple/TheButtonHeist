@@ -288,6 +288,11 @@ extension ElementInflationProductTests {
             label: "Customer Name"
         )
         defer { fixture.cleanup() }
+        let keyboardImpl = ProductTextInputKeyboardImpl(textField: fixture.target) {}
+        keyboardInput = SafecrackerKeyboardInput(
+            keyboardBridgeProvider: { keyboardImpl.bridge() }
+        )
+        try await restartRuntime()
         _ = try await publishedVisibleObservation()
 
         XCTAssertEqual(fixture.scrollView.contentOffset, .zero)
