@@ -17,8 +17,8 @@ public struct PredicateEvaluationResult: Sendable, Equatable {
     }
 }
 
-/// The result of checking an `AccessibilityPredicate`, including the predicate
-/// and observed evidence.
+/// The result of checking a structural expectation, including an optional
+/// authored predicate and observed evidence.
 public enum ExpectationResult: Codable, Sendable, Equatable {
     public struct Met: Codable, Sendable, Equatable {
         public let predicate: AccessibilityPredicate?

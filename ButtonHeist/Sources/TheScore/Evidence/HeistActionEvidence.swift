@@ -3,7 +3,7 @@ import ThePlans
 
 public enum HeistActionEvidence: Codable, Sendable, Equatable {
     case commandResolutionFailure
-    case completed(result: ActionResult, expectation: HeistExpectationEvidence?)
+    case completed(result: ActionResult, expectation: HeistExpectationEvidence)
 
     public var result: ActionResult? {
         guard case .completed(let result, _) = self else { return nil }
@@ -53,7 +53,7 @@ public enum HeistActionEvidence: Codable, Sendable, Equatable {
         case .completed:
             self = .completed(
                 result: try container.decode(ActionResult.self, forKey: .result),
-                expectation: try container.decodeIfPresent(
+                expectation: try container.decode(
                     HeistExpectationEvidence.self,
                     forKey: .expectationEvidence
                 )
@@ -73,7 +73,7 @@ public enum HeistActionEvidence: Codable, Sendable, Equatable {
         case .completed(let result, let expectation):
             try container.encode(EvidenceType.completed, forKey: .type)
             try container.encode(result, forKey: .result)
-            try container.encodeIfPresent(expectation, forKey: .expectationEvidence)
+            try container.encode(expectation, forKey: .expectationEvidence)
         }
     }
 }

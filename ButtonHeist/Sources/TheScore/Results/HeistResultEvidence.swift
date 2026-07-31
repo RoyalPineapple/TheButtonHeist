@@ -222,7 +222,7 @@ package enum HeistPassedActionRule: HeistResultEvidenceRule {
     package static let rejection = "passed action evidence must prove success"
     package static func admits(_ evidence: HeistActionEvidence) -> Bool {
         guard evidence.result?.outcome.isSuccess == true else { return false }
-        guard let expectation = evidence.expectationEvidence else { return true }
+        guard let expectation = evidence.expectationEvidence else { return false }
         return (try? expectation.replay().met) == true
     }
 }

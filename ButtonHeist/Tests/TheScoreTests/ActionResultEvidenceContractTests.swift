@@ -83,7 +83,7 @@ final class ActionResultEvidenceContractTests: XCTestCase {
     func testActionEvidenceRejectsMismatchedCanonicalCommandType() {
         let evidence = HeistActionEvidence.completed(
             result: .success(payload: .customAction),
-            expectation: nil
+            expectation: HeistResultFixture.defaultActionExpectationEvidence()
         )
 
         XCTAssertTrue(evidence.matches(command: .customAction(name: "Archive", target: .label("Mail"))))

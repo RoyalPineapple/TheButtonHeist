@@ -76,7 +76,7 @@ package enum HeistResultFixture {
         path: String = "$.body[0]",
         command: HeistActionCommand = .activate(.predicate(ElementPredicate(label: "Button"))),
         result: ActionResult = actionResult(),
-        expectation: HeistExpectationEvidence? = nil,
+        expectation: HeistExpectationEvidence = defaultActionExpectationEvidence(),
         failure: HeistFailureDetail? = nil
     ) -> HeistExecutionStepResult {
         let evidence = HeistActionEvidence.completed(result: result, expectation: expectation)
@@ -339,6 +339,18 @@ package enum HeistResultFixture {
                 baseline: nil,
                 events: [.elementsChanged(current), .noChange],
                 current: current,
+                coverage: .complete
+            )
+        )
+    }
+
+    package static func defaultActionExpectationEvidence() -> HeistExpectationEvidence {
+        expectationEvidence(
+            predicate: nil,
+            observation: Observation.Evidence(
+                baseline: nil,
+                events: [.noChange],
+                current: nil,
                 coverage: .complete
             )
         )
