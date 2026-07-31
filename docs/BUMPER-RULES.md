@@ -18,9 +18,12 @@ that access control already makes unconstructible are intentionally absent.
 | `duplicate_ownership` | Every included path and module has one Button Heist component owner, so scoped rules have an unambiguous lane. | Remove the overlapping `Owns` or `Modules` declaration. | Verification: Bumper validates its component configuration before applying scoped rules. Delete when Bumper no longer uses component ownership for scoping. |
 | `forbidden_import` | ThePlans and TheScore remain value layers. ThePlans excludes UI, persistence, testing, CLI, MCP, networking, Objective-C, and live accessibility parser authority; TheScore excludes UI, persistence, and testing authority. | Normalize boundary evidence into Button Heist values before it enters a value layer. | Verification: Bumper evaluates imports against the component shapes on every repository run. Delete an exclusion when the build graph makes that import impossible. |
 
-The component declarations in `BumperBowling.swift` are a scoping map, not a
-second dependency graph. Package manifests, Tuist projects, and compilation
-remain authoritative for target dependencies and cycles.
+The component declarations in `BumperBowling.swift` follow the source roots of
+the actual targets. In particular, the embedded iOS runtime (`TheInsideJob` and
+`ThePlant`), macOS client (`ButtonHeist`), and shared support
+(`ButtonHeistSupport`) have distinct scopes so capability rules can express
+their different platform boundaries. Package manifests, Tuist projects, and
+compilation remain authoritative for target dependencies and cycles.
 
 ## Typed Capability Boundaries
 
@@ -29,17 +32,11 @@ files. Moving code inside its owning component does not change policy.
 
 | Rule ID | Shape | Repair | Verification and deletion condition |
 | --- | --- | --- | --- |
-| `buttonheist.ui_framework_ownership` | UIKit and SwiftUI remain in runtime and demo components. | Perform UI work at the runtime or demo boundary and pass values inward. | Verification: focused valid and invalid import fixtures plus repository evaluation. Delete when target dependencies make these imports impossible elsewhere. |
-| `buttonheist.network_framework_ownership` | Network.framework remains in runtime transport or TheScore's typed TLS boundary. | Move network authority to transport or TLS code and pass typed outcomes inward. | Verification: focused component mutation fixtures plus repository evaluation. Delete when the build graph encodes the same capability boundary. |
+| `buttonheist.ui_framework_ownership` | UIKit and SwiftUI remain in the embedded runtime and demo components. | Perform UI work at the embedded runtime or demo boundary and pass values inward. | Verification: focused valid and invalid import fixtures plus repository evaluation. Delete when target dependencies make these imports impossible elsewhere. |
+| `buttonheist.network_framework_ownership` | Network.framework remains in embedded transport, the macOS client, shared support, or TheScore's typed TLS boundary. | Move network authority to one of those transport boundaries and pass typed outcomes inward. | Verification: focused component mutation fixtures plus repository evaluation. Delete when the build graph encodes the same capability boundary. |
 | `buttonheist.security_framework_ownership` | Security.framework remains in TheScore's TLS material boundary. | Keep key material conversion in TheScore and expose typed values. | Verification: focused component mutation fixtures plus repository evaluation. Delete when Security is isolated in a dedicated target. |
-| `buttonheist.objective_c_framework_ownership` | Objective-C runtime authority remains in the runtime component. | Keep private-SPI and method-override work behind the runtime boundary. | Verification: focused component mutation fixtures plus repository evaluation. Delete when the bridge is isolated in an inaccessible target. |
-| `buttonheist.accessibility_parser_ownership` | Live accessibility parser, Core, and preview authority remains in the runtime component. | Parse live evidence in the runtime and pass semantic Button Heist values outward. | Verification: focused component mutation fixtures plus repository evaluation. Delete when parser products are inaccessible outside the runtime target. |
-
-## User Accessibility
-
-| Rule ID | Shape | Repair | Verification and deletion condition |
-| --- | --- | --- | --- |
-| `buttonheist.demo_accessibility_identifier` | Demo controls are discoverable through the semantics available to accessibility users, rather than test-only identifiers. Named SPI research fixtures remain exempt. | Improve the control's label, value, traits, hint, or actions. | Verification: standard `memberReferenceOwnership` with demo, research-fixture, and non-demo fixtures. Delete when demo and research targets split and the demo target cannot call the identifier API. |
+| `buttonheist.objective_c_framework_ownership` | Objective-C runtime authority remains in the embedded runtime component. | Keep private-SPI and method-override work behind the embedded runtime boundary. | Verification: focused component mutation fixtures plus repository evaluation. Delete when the bridge is isolated in an inaccessible target. |
+| `buttonheist.accessibility_parser_ownership` | Live accessibility parser, Core, and preview authority remains in the embedded runtime component. | Parse live evidence in the embedded runtime and pass semantic Button Heist values outward. | Verification: focused component mutation fixtures plus repository evaluation. Delete when parser products are inaccessible outside the embedded runtime target. |
 
 ## Typed Source Boundaries
 
@@ -51,22 +48,6 @@ resolve Swift types or infer runtime ownership.
 | `buttonheist.any_boundary` | Production `Any` appears only in the three current Foundation and Objective-C boundary declarations and is normalized immediately. | Add a typed boundary value and convert the external object there. | Verification: invalid arbitrary API and valid named-boundary fixtures plus repository evaluation. Delete when Foundation exposes typed equivalents or the bridges move into isolated targets. |
 | `buttonheist.callback_isolation` | Stored `onFoo` callback types declare `@Sendable` or a global actor, including file-local callback aliases. | State the callback's actor or Sendability contract in its type. | Verification: direct and aliased valid and invalid fixtures plus strict-concurrency compilation. Delete when Swift requires equivalent isolation for every stored callback shape. |
 | `buttonheist.checked_concurrency` | Production code does not use `@preconcurrency` or `nonisolated(unsafe)` escape hatches. | Model actor isolation or Sendability explicitly. | Verification: focused attribute and modifier mutations plus repository evaluation. Delete when the compiler settings reject both forms directly. |
-
-## Canonical Runtime Owners
-
-These shapers guard semantic effect boundaries that Swift access control cannot
-express across files in the runtime target.
-
-| Rule ID | Shape | Repair | Verification and deletion condition |
-| --- | --- | --- | --- |
-| `buttonheist.observation_pulse_clock_ownership` | `TheTripwire+Pulse.swift` exclusively constructs `CADisplayLink`. | Use the Tripwire pulse boundary instead of constructing another display link. | Verification: one canonical-construction fixture and one competing-construction fixture plus repository evaluation. Delete when `CADisplayLink` construction is inaccessible outside the pulse owner. |
-| `buttonheist.semantic_observation_cycle_ownership` | Only `SemanticObservationStream.swift` may call `observePulses`, `stopObservingPulses`, `setObservationPulseDemand`, or `freezeObservationCycleClaim`, keeping observation-cycle acquisition and control under one owner. | Request and consume observations through `Observation.Stream`; do not acquire or control its pulse and notification inputs directly. | Verification: one canonical-owner fixture and one parameterized competing-owner fixture cover the four guarded calls plus repository evaluation. Delete once capability or access control makes those APIs inaccessible outside `SemanticObservationStream.swift`. |
-| `buttonheist.heist_execution_machine_ownership` | `HeistExecution.Host` is the only runtime owner that constructs the complete-heist machine. Actions, waits, and control flow advance through that one machine instead of creating per-operation executors. | Run the plan through the existing heist host. | Verification: standard `constructionOwnership` with valid host and invalid competing-owner fixtures plus repository evaluation. Delete when the machine initializer becomes inaccessible outside its host. |
-| `buttonheist.heist_execution_host_ownership` | `TheBrains+HeistExecution` is the only runtime entry that constructs a heist host, so transport and in-app requests cannot introduce a second execution pipeline beside canonical request admission. | Submit the heist through the existing `TheBrains.executeHeistPlan` entry. | Verification: standard `constructionOwnership` with valid canonical-entry and invalid competing-entry fixtures plus repository evaluation. Delete when the host initializer becomes file-private to the canonical entry. |
-| `buttonheist.heist_action_dispatch_ownership` | `HeistExecution.Host` is the sole caller of the platform action dispatcher, so plans and transient wire actions share one machine, deadline, observation, and result pipeline. | Submit the authored action to the canonical heist entry; Host requests dispatch when the machine reaches that leaf. | Verification: one Host fixture and one competing-dispatch fixture plus repository evaluation. Delete when the dispatcher becomes a private Host implementation detail. |
-| `buttonheist.action_notification_window_ownership` | `HeistExecution.Host` is the sole opener of action notification windows, preserving one sequential evidence window per active action. | Let the execution Host open and close the window around its dispatched action; other runtime code consumes admitted observation evidence. | Verification: one Host fixture and one competing-window fixture plus repository evaluation. Delete when the window API becomes private to Host. |
-| `buttonheist.scroll_content_offset_ownership` | `TheSafecracker+Scroll.swift` owns the physical `UIScrollView.setContentOffset` effect; discovery and inflation own typed movement commands and request observation publications after dispatch. | Express viewport movement as a `Navigation.ViewportMovementIntent`, dispatch it through TheSafecracker, and await the stream publication. | Verification: standard `memberReferenceOwnership` with one valid owner fixture, one invalid competing runtime fixture, and repository evaluation. Delete when direct content-offset mutation becomes inaccessible outside TheSafecracker. |
-| `buttonheist.transport_event_consumption_ownership` | `TransportControlPlane.swift` is the only production owner that consumes `ServerTransport.transportEvents`, so request admission and transport-control sideband messages cannot acquire a competing MainActor-bound event loop. | Consume transport events through the existing off-main `TransportControlPlane` and yield admitted app work through its capacity-admitted MainActor stream. | Verification: standard `memberReferenceOwnership` with a valid canonical-owner fixture, an invalid competing consumer fixture, and repository evaluation. Delete when `ServerTransport` can expose its event stream only to `TransportControlPlane`. |
 
 ## Plan Language Boundaries
 
@@ -83,8 +64,9 @@ reparses or reinterprets Swift.
 
 ## Rule Lifecycle
 
-A new blocking shaper must demonstrate valid Swift that can construct a
-competing owner, explain why the compiler, build graph, and tests cannot own the
-boundary, and include one valid and one invalid in-memory fixture. When a native
-boundary makes that competing owner unconstructible, delete the shaper, its
-fixture, and its documentation in the same change.
+A new blocking shaper must protect a component-wide capability or a public
+contract, never an implementation filename. It must demonstrate valid Swift
+that can construct the violation, explain why the compiler, build graph, and
+tests cannot own the boundary, and include one valid and one invalid in-memory
+fixture. When a native boundary makes that violation unconstructible, delete the
+shaper, its fixture, and its documentation in the same change.

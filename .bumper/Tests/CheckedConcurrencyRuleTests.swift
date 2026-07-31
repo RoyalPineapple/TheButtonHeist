@@ -45,6 +45,6 @@ struct CheckedConcurrencyRuleTests {
     }
 
     private func evaluate(path: RelativeFilePath, source: String) throws -> RuleReport {
-        try evaluateButtonHeistRules(path: path, component: .runtime, source: source)
+        try evaluateButtonHeistRules(path: path, component: .embeddedRuntime, source: source)
     }
 }

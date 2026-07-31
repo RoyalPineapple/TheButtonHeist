@@ -4,12 +4,15 @@ import SwiftSyntax
 let buttonHeistRules = RuleSet {
     Rules.importOwnership(
         ["UIKit", "SwiftUI"],
-        allowed: runtimeScope.union(demoScope),
+        allowed: embeddedRuntimeScope.union(demoScope),
         id: "buttonheist.ui_framework_ownership"
     )
     Rules.importOwnership(
         ["Network"],
-        allowed: runtimeScope.union(scoreScope),
+        allowed: embeddedRuntimeScope
+            .union(clientScope)
+            .union(supportScope)
+            .union(scoreScope),
         id: "buttonheist.network_framework_ownership"
     )
     Rules.importOwnership(
@@ -19,20 +22,13 @@ let buttonHeistRules = RuleSet {
     )
     Rules.importOwnership(
         ["ObjectiveC", "ObjectiveC.runtime"],
-        allowed: runtimeScope,
+        allowed: embeddedRuntimeScope,
         id: "buttonheist.objective_c_framework_ownership"
     )
     Rules.importOwnership(
         ["AccessibilitySnapshotCore", "AccessibilitySnapshotParser", "AccessibilitySnapshotPreviews"],
-        allowed: runtimeScope,
+        allowed: embeddedRuntimeScope,
         id: "buttonheist.accessibility_parser_ownership"
-    )
-    Rules.memberReferenceOwnership(
-        "accessibilityIdentifier",
-        allowed: RuleScope.repository
-            .excluding(demoScope)
-            .union(.files(demoAccessibilityIdentifierResearchFixtures)),
-        id: "buttonheist.demo_accessibility_identifier"
     )
 
     anyBoundaryRule
@@ -41,28 +37,14 @@ let buttonHeistRules = RuleSet {
     heistContentOpacityRule
     planElseOwnershipRule
     exportedTupleContractRule
-    Rules.constructionOwnership(
-        "CADisplayLink",
-        allowed: .files([observationPulseClockPath]),
-        id: "buttonheist.observation_pulse_clock_ownership"
-    )
 }
 
-private let runtimeScope = RuleScope.component(ButtonHeistComponent.runtime)
+private let embeddedRuntimeScope = RuleScope.component(ButtonHeistComponent.embeddedRuntime)
+private let clientScope = RuleScope.component(ButtonHeistComponent.client)
+private let supportScope = RuleScope.component(ButtonHeistComponent.support)
 private let scoreScope = RuleScope.component(ButtonHeistComponent.score)
 private let demoScope = RuleScope.component(ButtonHeistComponent.demo)
 private let plansScope = RuleScope.component(ButtonHeistComponent.plans)
-
-private let demoAccessibilityIdentifierResearchFixtures: Set<RelativeFilePath> = [
-    "TestApp/Sources/ScrollSPIHarnessView.swift",
-    "TestApp/Sources/TraitProbeView.swift",
-    "TestApp/Sources/TraitValidationView.swift",
-]
-
-private let observationPulseClockPath: RelativeFilePath =
-    "ButtonHeist/Sources/TheInsideJob/TheTripwire/TheTripwire+Pulse.swift"
-private let scrollContentOffsetOwnerPath: RelativeFilePath =
-    "ButtonHeist/Sources/TheInsideJob/TheSafecracker/TheSafecracker+Scroll.swift"
 private let startupConfigurationPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/Lifecycle/StartupConfiguration.swift"
 
