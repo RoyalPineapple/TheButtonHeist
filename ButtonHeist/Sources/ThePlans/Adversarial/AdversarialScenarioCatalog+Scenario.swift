@@ -10,6 +10,9 @@ extension AdversarialScenarioCatalog {
         case dynamicCellsStaleTargetFails
         case textFieldFallbackPass
         case textFieldFallbackTargetlessFails
+        case keyboardViewportReplacementPass
+        case keyboardViewportAmbiguousReplacementFails
+        case keyboardViewportIdentityMismatchFails
         case staleLiveObjectPass
         case staleLiveObjectAmbiguousFails
         case modalObstructionPass
@@ -29,6 +32,9 @@ extension AdversarialScenarioCatalog {
                 .dynamicCells
             case .textFieldFallbackPass, .textFieldFallbackTargetlessFails:
                 .textFieldFallback
+            case .keyboardViewportReplacementPass, .keyboardViewportAmbiguousReplacementFails,
+                 .keyboardViewportIdentityMismatchFails:
+                .keyboardViewport
             case .staleLiveObjectPass, .staleLiveObjectAmbiguousFails:
                 .staleLiveObject
             case .modalObstructionPass, .modalObstructionBackgroundFails:
@@ -53,7 +59,10 @@ extension AdversarialScenarioCatalog {
         public var expectedEvidence: [Evidence] {
             switch self {
             case .asyncRevealNotificationPass:
-                [.notification("Delayed code: 7429")]
+                [
+                    .notification("Delayed code: 7429"),
+                    .element("Silent terminal state", value: "Generation 2"),
+                ]
             case .asyncRevealSilentPass:
                 [.element("Delayed code: 7429")]
             case .asyncRevealWrongDestinationFails:
@@ -72,6 +81,18 @@ extension AdversarialScenarioCatalog {
                 [.element("Fallback field", value: "fallback typed")]
             case .textFieldFallbackTargetlessFails:
                 [.diagnostic("text entry failed")]
+            case .keyboardViewportReplacementPass:
+                [
+                    .element("Post interaction viewport value", value: "admitted viewport text"),
+                    .element("Original viewport edits", value: "0"),
+                    .element("Replacement viewport value", value: "admitted viewport text"),
+                    .element("Keyboard continuation actions", value: "1"),
+                    .element("Decoy continuation actions", value: "0"),
+                ]
+            case .keyboardViewportAmbiguousReplacementFails:
+                [.diagnostic("ambiguous")]
+            case .keyboardViewportIdentityMismatchFails:
+                [.diagnostic("Viewport note")]
             case .staleLiveObjectPass:
                 [.element("Submit Order", value: "Generation 2, actions 1, generation 1 actions 0")]
             case .staleLiveObjectAmbiguousFails:
@@ -112,6 +133,10 @@ extension AdversarialScenarioCatalog {
                 try HeistPlan {
                     Activate(.label("Reveal with notification"))
                         .expect(.exists(.label("Delayed code: 7429")), timeout: 3)
+                    WaitFor(.exists(.element(
+                        .label("Silent terminal state"),
+                        .value("Generation 2")
+                    )), timeout: 3)
                 }
             case .asyncRevealSilentPass:
                 try HeistPlan {
@@ -180,6 +205,8 @@ extension AdversarialScenarioCatalog {
                     ))
                 }
             case .textFieldFallbackPass, .textFieldFallbackTargetlessFails,
+                 .keyboardViewportReplacementPass, .keyboardViewportAmbiguousReplacementFails,
+                 .keyboardViewportIdentityMismatchFails,
                  .staleLiveObjectPass, .staleLiveObjectAmbiguousFails,
                  .modalObstructionPass, .modalObstructionBackgroundFails,
                  .nestedScrollPass, .nestedScrollImpossibleFails:
@@ -188,6 +215,27 @@ extension AdversarialScenarioCatalog {
         }
 
         private func remainingBodyPlan() throws -> HeistPlan {
+            switch self {
+            case .textFieldFallbackPass, .textFieldFallbackTargetlessFails:
+                try textFieldFallbackBodyPlan()
+            case .keyboardViewportReplacementPass, .keyboardViewportAmbiguousReplacementFails,
+                 .keyboardViewportIdentityMismatchFails:
+                try keyboardViewportBodyPlan()
+            case .staleLiveObjectPass, .staleLiveObjectAmbiguousFails:
+                try staleLiveObjectBodyPlan()
+            case .modalObstructionPass, .modalObstructionBackgroundFails:
+                try modalObstructionBodyPlan()
+            case .nestedScrollPass, .nestedScrollImpossibleFails:
+                try nestedScrollBodyPlan()
+            case .asyncRevealNotificationPass, .asyncRevealSilentPass,
+                 .asyncRevealWrongDestinationFails, .offscreenCheckoutPass,
+                 .offscreenCheckoutDisabledFails, .duplicateLabelIdentityPass,
+                 .dynamicCellsPass, .dynamicCellsStaleTargetFails:
+                preconditionFailure("Scenario is not in the remaining plan partition")
+            }
+        }
+
+        private func textFieldFallbackBodyPlan() throws -> HeistPlan {
             switch self {
             case .textFieldFallbackPass:
                 try HeistPlan {
@@ -203,6 +251,77 @@ extension AdversarialScenarioCatalog {
                 try HeistPlan {
                     TypeText("orphan typed")
                 }
+            default:
+                preconditionFailure("Scenario is not a text-field fallback case")
+            }
+        }
+
+        private func keyboardViewportBodyPlan() throws -> HeistPlan {
+            switch self {
+            case .keyboardViewportReplacementPass:
+                try keyboardViewportReplacementPlan()
+            case .keyboardViewportAmbiguousReplacementFails:
+                try keyboardViewportFailurePlan(
+                    preparationLabel: "Prepare ambiguous viewport replacement",
+                    mode: "ambiguous"
+                )
+            case .keyboardViewportIdentityMismatchFails:
+                try keyboardViewportFailurePlan(
+                    preparationLabel: "Prepare mismatched viewport replacement",
+                    mode: "mismatched"
+                )
+            default:
+                preconditionFailure("Scenario is not a keyboard viewport case")
+            }
+        }
+
+        private func keyboardViewportReplacementPlan() throws -> HeistPlan {
+            try HeistPlan {
+                let note = AccessibilityTarget.element(
+                    .label("Viewport note"),
+                    .traits([.textEntry]),
+                    .customContent(.init(label: "Semantic role", value: "body"))
+                )
+                let commit = AccessibilityTarget.element(
+                    .label("Continue after keyboard"),
+                    .traits([.button]),
+                    .customContent(.init(label: "Action role", value: "commit"))
+                )
+                TypeText(.replacing("admitted viewport text"), into: note)
+                    .expect(.exists(.element(
+                        .label("Post interaction viewport value"),
+                        .value("admitted viewport text")
+                    )), timeout: 6)
+                WaitFor(.exists(.element(.label("Original viewport edits"), .value("0"))), timeout: 2)
+                WaitFor(.exists(.element(
+                    .label("Replacement viewport value"),
+                    .value("admitted viewport text")
+                )), timeout: 2)
+                dismissKeyboard()
+                    .withoutExpectation("Dismisses the real keyboard before the next semantic action")
+                Activate(commit)
+                    .expect(.exists(.element(.label("Keyboard continuation actions"), .value("1"))), timeout: 4)
+                WaitFor(.exists(.element(.label("Decoy continuation actions"), .value("0"))), timeout: 2)
+            }
+        }
+
+        private func keyboardViewportFailurePlan(
+            preparationLabel: String,
+            mode: String
+        ) throws -> HeistPlan {
+            try HeistPlan {
+                Activate(.label(preparationLabel))
+                    .expect(.exists(.element(.label("Viewport replacement mode"), .value(mode))), timeout: 2)
+                TypeText(.replacing("must not commit"), into: .element(
+                    .label("Viewport note"),
+                    .traits([.textEntry]),
+                    .customContent(.init(label: "Semantic role", value: "body"))
+                ))
+            }
+        }
+
+        private func staleLiveObjectBodyPlan() throws -> HeistPlan {
+            switch self {
             case .staleLiveObjectPass:
                 try HeistPlan {
                     Activate(.label("Submit Order"))
@@ -224,6 +343,13 @@ extension AdversarialScenarioCatalog {
                         )), timeout: 2)
                     Activate(.label("Submit Order"))
                 }
+            default:
+                preconditionFailure("Scenario is not a stale live-object case")
+            }
+        }
+
+        private func modalObstructionBodyPlan() throws -> HeistPlan {
+            switch self {
             case .modalObstructionPass:
                 try HeistPlan {
                     Activate(.label("Review order"))
@@ -239,6 +365,13 @@ extension AdversarialScenarioCatalog {
                         .expect(.exists(.element(.label("Order review"), .value("Ready"))), timeout: 4)
                     Activate(.label("Archive order 3"))
                 }
+            default:
+                preconditionFailure("Scenario is not a modal-obstruction case")
+            }
+        }
+
+        private func nestedScrollBodyPlan() throws -> HeistPlan {
+            switch self {
             case .nestedScrollPass:
                 try HeistPlan {
                     Activate(.element(
@@ -253,11 +386,8 @@ extension AdversarialScenarioCatalog {
                 try HeistPlan {
                     Activate(.label("Album That Does Not Exist"))
                 }
-            case .asyncRevealNotificationPass, .asyncRevealSilentPass,
-                 .asyncRevealWrongDestinationFails, .offscreenCheckoutPass,
-                 .offscreenCheckoutDisabledFails, .duplicateLabelIdentityPass,
-                 .dynamicCellsPass, .dynamicCellsStaleTargetFails:
-                preconditionFailure("Scenario is not in the remaining plan partition")
+            default:
+                preconditionFailure("Scenario is not a nested-scroll case")
             }
         }
     }

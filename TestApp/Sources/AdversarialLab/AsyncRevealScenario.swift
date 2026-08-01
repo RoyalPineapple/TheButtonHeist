@@ -6,6 +6,7 @@ internal struct AsyncRevealScenarioView: View {
         case idle
         case pending
         case revealed
+        case settled
     }
 
     @State private var phase: Phase = .idle
@@ -14,8 +15,8 @@ internal struct AsyncRevealScenarioView: View {
     var body: some View {
         Form {
             Section {
-                Button("Reveal with notification") { reveal(postNotification: true) }
-                Button("Reveal silently") { reveal(postNotification: false) }
+                Button("Reveal with notification") { reveal(.notificationBurst) }
+                Button("Reveal silently") { reveal(.silent) }
             }
 
             Section("Destination") {
@@ -27,6 +28,12 @@ internal struct AsyncRevealScenarioView: View {
                 case .revealed:
                     Text("Delayed code: 7429")
                         .accessibilityAddTraits(.isHeader)
+                case .settled:
+                    Text("Delayed code: 7429")
+                        .accessibilityAddTraits(.isHeader)
+                    Text("Silent terminal state")
+                        .accessibilityValue("Generation 2")
+                    Text("Burst notification order: layout, announcement, screen")
                 }
             }
         }
@@ -44,7 +51,12 @@ internal struct AsyncRevealScenarioView: View {
         phase = .idle
     }
 
-    private func reveal(postNotification: Bool) {
+    private enum RevealMode: Equatable {
+        case notificationBurst
+        case silent
+    }
+
+    private func reveal(_ mode: RevealMode) {
         revealTask?.cancel()
         phase = .pending
         revealTask = Task {
@@ -54,8 +66,16 @@ internal struct AsyncRevealScenarioView: View {
                 return
             }
             phase = .revealed
-            if postNotification {
+            if mode == .notificationBurst {
+                UIAccessibility.post(notification: .layoutChanged, argument: "Async reveal layout updated")
                 UIAccessibility.post(notification: .announcement, argument: "Delayed code: 7429")
+                UIAccessibility.post(notification: .screenChanged, argument: "Async reveal screen updated")
+                do {
+                    try await Task.sleep(for: .milliseconds(150))
+                } catch {
+                    return
+                }
+                phase = .settled
             }
         }
     }

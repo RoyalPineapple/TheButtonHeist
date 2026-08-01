@@ -39,6 +39,20 @@ from e2e_runtime import (  # noqa: E402
 )
 
 DEFAULT_REPORT = Path(os.environ.get("TMPDIR", "/tmp")) / "buttonheist-lifecycle-report.json"
+TRANSIENT_FLOW_ROUTE_PLAN = '''HeistPlan("LifecycleRoute") {
+    WaitFor(.exists(.label("Transient Flow")), timeout: 4)
+    Activate(.label("Transient Flow")).expect(.screenChanged, timeout: 4)
+    WaitFor(.exists(.label("Submit")), timeout: 4)
+}'''
+ACTIVE_LIFECYCLE_PLAN = '''HeistPlan("LifecycleBackgroundForeground") {
+    WaitFor(.exists(.label("Submit")), timeout: 4)
+    Activate(.label("Submit"))
+        .withoutExpectation("The lifecycle gate owns the active expectation transition")
+    WaitFor(.exists(.label("Transaction complete")), timeout: 8)
+}'''
+ACTIVE_LIFECYCLE_DRIVER = "lifecycle-active-driver"
+ACTIVE_LIFECYCLE_PROBE_DRIVER = "lifecycle-active-probe"
+TRANSIENT_FLOW_ROUTE_FACT = "Transient Flow"
 
 
 def write_report(path: Path, report: dict[str, Any]) -> None:
@@ -230,6 +244,206 @@ def cli_once(cli: Path, app: DemoApp, driver_id: str, command: str, *, connect_t
     }
 
 
+def heist_command(
+    cli: Path,
+    app: DemoApp,
+    plan: str,
+    *,
+    connect_timeout: float,
+) -> list[str]:
+    return [
+        str(cli),
+        "run_heist",
+        "--plan",
+        plan,
+        "--device",
+        app.device,
+        "--token",
+        app.token,
+        "--connect-timeout",
+        str(connect_timeout),
+        "--format",
+        "json",
+        "--quiet",
+    ]
+
+
+def heist_environment(app: DemoApp, driver_id: str) -> dict[str, str]:
+    env = os.environ.copy()
+    env.update(
+        {
+            "BUTTONHEIST_TOKEN": app.token,
+            "BUTTONHEIST_DRIVER_ID": driver_id,
+        }
+    )
+    return env
+
+
+def run_heist_once(
+    cli: Path,
+    app: DemoApp,
+    driver_id: str,
+    plan: str,
+    *,
+    connect_timeout: float,
+    timeout: float = 20,
+) -> dict[str, Any]:
+    result = run(
+        heist_command(cli, app, plan, connect_timeout=connect_timeout),
+        env=heist_environment(app, driver_id),
+        timeout=timeout,
+        check=False,
+    )
+    return {
+        "returncode": result.returncode,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "json": parse_jsonish(result.stdout) or parse_jsonish(result.stderr),
+    }
+
+
+def start_heist(
+    cli: Path,
+    app: DemoApp,
+    driver_id: str,
+    plan: str,
+    *,
+    connect_timeout: float,
+    popen_factory: Any = subprocess.Popen,
+) -> subprocess.Popen[str]:
+    return popen_factory(
+        heist_command(cli, app, plan, connect_timeout=connect_timeout),
+        env=heist_environment(app, driver_id),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+
+def collect_heist(process: subprocess.Popen[str], *, timeout: float) -> dict[str, Any]:
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired as error:
+        process.kill()
+        stdout, stderr = process.communicate()
+        raise TimeoutError(
+            f"active run_heist did not complete within {timeout:g}s; "
+            f"stdout={stdout!r}; stderr={stderr!r}"
+        ) from error
+    return {
+        "returncode": process.returncode,
+        "stdout": stdout,
+        "stderr": stderr,
+        "json": parse_jsonish(stdout) or parse_jsonish(stderr),
+    }
+
+
+def session_is_locked(response: dict[str, Any]) -> bool:
+    return response["returncode"] != 0 and contains_text(response["json"], "session.locked")
+
+
+def wait_for_active_heist(
+    cli: Path,
+    app: DemoApp,
+    *,
+    connect_timeout: float,
+    timeout: float = 10,
+    request: Any = cli_once,
+    now: Any = time.monotonic,
+    sleep: Any = time.sleep,
+) -> list[dict[str, Any]]:
+    deadline = now() + timeout
+    attempts: list[dict[str, Any]] = []
+    while now() < deadline:
+        response = request(
+            cli,
+            app,
+            ACTIVE_LIFECYCLE_PROBE_DRIVER,
+            "get_interface",
+            connect_timeout=connect_timeout,
+            timeout=5,
+        )
+        attempts.append(response)
+        if session_is_locked(response):
+            return attempts
+        sleep(0.2)
+    raise AssertionError(f"active run_heist never acquired the session lock: attempts={attempts}")
+
+
+def report_nodes(nodes: list[Any]) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for node in nodes:
+        if not isinstance(node, dict):
+            raise AssertionError("run_heist report nodes must be objects")
+        result.append(node)
+        children = node.get("children")
+        if not isinstance(children, list):
+            raise AssertionError("run_heist report node children must be arrays")
+        result.extend(report_nodes(children))
+    return result
+
+
+def terminal_lifecycle_outcome(response: dict[str, Any]) -> dict[str, Any]:
+    if response["returncode"] == 124:
+        raise AssertionError("active run_heist hung")
+    payload = response["json"]
+    if not isinstance(payload, dict):
+        raise AssertionError(f"active run_heist returned no structured JSON: {response}")
+    status = payload.get("status")
+    if status not in {"ok", "partial"}:
+        raise AssertionError(f"active run_heist returned a non-canonical status: {payload}")
+    if status == "ok" and response["returncode"] != 0:
+        raise AssertionError("successful active run_heist must exit zero")
+    if status == "partial" and response["returncode"] == 0:
+        raise AssertionError("partial active run_heist must exit non-zero")
+    report = payload.get("report")
+    if not isinstance(report, dict):
+        raise AssertionError("active run_heist response must contain a report")
+    summary = report.get("summary")
+    nodes = report.get("nodes")
+    if not isinstance(summary, dict) or not isinstance(nodes, list):
+        raise AssertionError("active run_heist report must contain summary and nodes")
+    if summary.get("executedTopLevelStepCount") != 3:
+        raise AssertionError(f"active run_heist must execute one three-step plan: {summary}")
+
+    flattened = report_nodes(nodes)
+    terminal = next((node for node in flattened if node.get("status") == "failed"), None)
+    final_summaries = [
+        node.get("evidence", {}).get("wait", {}).get("finalSummary")
+        for node in flattened
+        if isinstance(node.get("evidence"), dict)
+    ]
+    current_evidence = any(
+        isinstance(summary, dict) and contains_text(summary, TRANSIENT_FLOW_ROUTE_FACT)
+        for summary in final_summaries
+    )
+    if status == "ok":
+        if terminal is not None:
+            raise AssertionError(f"successful active run_heist reported a failed node: {terminal}")
+        if not current_evidence:
+            raise AssertionError("successful active run_heist omitted its current Transient Flow evidence")
+        return {"outcome": "completed", "currentEvidence": True}
+
+    if terminal is None:
+        raise AssertionError("partial active run_heist must identify its failed terminal step")
+    failure = terminal.get("failure")
+    if not isinstance(failure, dict):
+        raise AssertionError("partial active run_heist terminal step must carry typed failure evidence")
+    category = failure.get("category")
+    observed = failure.get("observed")
+    cancelled = category == "wait" and isinstance(observed, str) and "cancel" in observed.lower()
+    if not cancelled and not current_evidence:
+        raise AssertionError(
+            "active run_heist failure must be a canonical cancellation or contain current Transient Flow evidence"
+        )
+    return {
+        "outcome": "cancelled" if cancelled else "current-evidence-failure",
+        "currentEvidence": current_evidence,
+        "failureCategory": category,
+    }
+
+
 def assert_success(response: Any, label: str) -> Any:
     if response is None:
         raise AssertionError(f"{label}: no JSON response")
@@ -395,6 +609,84 @@ def scenario_background_foreground(cli: Path, sim: str, connect_timeout: float) 
         app.terminate()
 
 
+def scenario_active_execution_lifecycle(
+    cli: Path,
+    sim: str,
+    connect_timeout: float,
+) -> dict[str, Any]:
+    app, pid_before = start_app(sim, "active-execution", timeout=5.0)
+    process: subprocess.Popen[str] | None = None
+    try:
+        route = run_heist_once(
+            cli,
+            app,
+            "lifecycle-route-driver",
+            TRANSIENT_FLOW_ROUTE_PLAN,
+            connect_timeout=connect_timeout,
+        )
+        one_shot_success(route, "open Transient Flow before active lifecycle execution")
+
+        process = start_heist(
+            cli,
+            app,
+            ACTIVE_LIFECYCLE_DRIVER,
+            ACTIVE_LIFECYCLE_PLAN,
+            connect_timeout=connect_timeout,
+        )
+        lock_attempts = wait_for_active_heist(
+            cli,
+            app,
+            connect_timeout=connect_timeout,
+        )
+        background_method = background_app(sim)
+        time.sleep(1.0)
+        pid_after_foreground = app.launch()
+        if pid_before is None or pid_after_foreground is None:
+            raise AssertionError(
+                "active lifecycle scenario could not prove process identity: "
+                + f"before={pid_before} after={pid_after_foreground}"
+            )
+        if pid_before != pid_after_foreground:
+            raise AssertionError(
+                "BHDemo relaunched during active lifecycle execution: "
+                + f"before={pid_before} after={pid_after_foreground}"
+            )
+
+        terminal = collect_heist(process, timeout=20)
+        process = None
+        outcome = terminal_lifecycle_outcome(terminal)
+        foreground, attempts = wait_one_shot_success(
+            cli,
+            app,
+            ACTIVE_LIFECYCLE_DRIVER,
+            "get_interface",
+            "foreground command after active lifecycle execution",
+            connect_timeout=connect_timeout,
+            timeout=15,
+        )
+        if not contains_text(foreground, TRANSIENT_FLOW_ROUTE_FACT):
+            raise AssertionError("foreground interface after active lifecycle execution lost the current route")
+        return {
+            "pid_before": pid_before,
+            "pid_after_foreground": pid_after_foreground,
+            "same_pid_after_foreground": pid_before == pid_after_foreground,
+            "background_method": background_method,
+            "session_lock_attempt_count": len(lock_attempts),
+            "session_lock_seen": True,
+            "terminal_returncode": terminal["returncode"],
+            "terminal": outcome,
+            "foreground_attempt_count": len(attempts),
+            "foreground_transient_failures": [
+                attempt for attempt in attempts if attempt["returncode"] != 0
+            ],
+        }
+    finally:
+        if process is not None:
+            process.kill()
+            process.communicate()
+        app.terminate()
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run BHDemo lifecycle release gate")
     parser.add_argument("--cli", default=os.environ.get("BUTTONHEIST_CLI", "ButtonHeistCLI/.build/debug/buttonheist"))
@@ -441,6 +733,11 @@ def main() -> None:
             ("session_lock", lambda: scenario_session_lock(cli, sim, args.connect_timeout)),
             ("reconnect", lambda: scenario_reconnect(cli, sim)),
             ("background_foreground", lambda: scenario_background_foreground(cli, sim, args.connect_timeout)),
+            ("active_execution_lifecycle", lambda: scenario_active_execution_lifecycle(
+                cli,
+                sim,
+                args.connect_timeout,
+            )),
         ]
         for name, run_scenario in scenarios:
             report["current_scenario"] = name
