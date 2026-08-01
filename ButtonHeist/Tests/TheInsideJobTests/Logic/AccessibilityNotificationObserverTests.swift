@@ -386,6 +386,43 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(secondValue, firstValue)
     }
 
+    func testPrivateCallbackFromBackgroundQueuePublishesOnMainInIngressOrder() async throws {
+        var callback: ButtonHeistPrivateSPI.AccessibilityNotificationCallbackBlock?
+        let observer = AccessibilityNotificationObserver(
+            installPrivateCallbackForTesting: { callback = $0 },
+            uninstallCallbackForTesting: {}
+        )
+        defer { observer.uninstall() }
+        let bus = AccessibilityNotificationBus()
+        observer.subscribe(bus)
+        let privateCallback = BackgroundPrivateCallback(
+            try XCTUnwrap(callback)
+        )
+        let callbacksQueued = expectation(description: "private callbacks queued")
+
+        DispatchQueue.global().async {
+            privateCallback.invoke(1001, notificationData: nil, associatedElement: nil)
+            privateCallback.invoke(
+                1008,
+                notificationData: "Delivered from background" as NSString,
+                associatedElement: nil
+            )
+            DispatchQueue.main.async {
+                callbacksQueued.fulfill()
+            }
+        }
+
+        await fulfillment(of: [callbacksQueued], timeout: 1)
+
+        let events = bus.checkpoint(after: .origin, selection: .all).events
+        XCTAssertEqual(events.map(\.sequence), [1, 2])
+        XCTAssertEqual(events.map(\.kind), [.layoutChanged, .announcement])
+        guard case .string(let text) = events[1].notificationData else {
+            return XCTFail("Expected main-queue normalization of the announcement")
+        }
+        XCTAssertEqual(text, "Delivered from background")
+    }
+
     func testObserverAdvancesPastSubscriberSequenceFromAnotherIngressSource() async throws {
         var callback: AccessibilityNotificationCallback?
         let observer = AccessibilityNotificationObserver(
@@ -572,6 +609,24 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
             guard let subscriber = subscriberAddedDuringUninstall else { return }
             subscriberAddedDuringUninstall = nil
             observer?.subscribe(subscriber)
+        }
+    }
+
+    /// The C block is deliberately invoked from a foreign queue in this test,
+    /// matching the private UIAccessibility callback boundary.
+    private final class BackgroundPrivateCallback: @unchecked Sendable {
+        private let callback: ButtonHeistPrivateSPI.AccessibilityNotificationCallbackBlock
+
+        init(_ callback: @escaping ButtonHeistPrivateSPI.AccessibilityNotificationCallbackBlock) {
+            self.callback = callback
+        }
+
+        func invoke(
+            _ code: UInt32,
+            notificationData: AnyObject?,
+            associatedElement: AnyObject?
+        ) {
+            callback(code, notificationData, associatedElement)
         }
     }
 }
