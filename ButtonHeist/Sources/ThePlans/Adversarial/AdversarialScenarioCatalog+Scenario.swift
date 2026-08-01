@@ -204,18 +204,6 @@ extension AdversarialScenarioCatalog {
                         .actions([.custom("Add to Cart")])
                     ))
                 }
-            case .textFieldFallbackPass, .textFieldFallbackTargetlessFails,
-                 .keyboardViewportReplacementPass, .keyboardViewportAmbiguousReplacementFails,
-                 .keyboardViewportIdentityMismatchFails,
-                 .staleLiveObjectPass, .staleLiveObjectAmbiguousFails,
-                 .modalObstructionPass, .modalObstructionBackgroundFails,
-                 .nestedScrollPass, .nestedScrollImpossibleFails:
-                try remainingBodyPlan()
-            }
-        }
-
-        private func remainingBodyPlan() throws -> HeistPlan {
-            switch self {
             case .textFieldFallbackPass, .textFieldFallbackTargetlessFails:
                 try textFieldFallbackBodyPlan()
             case .keyboardViewportReplacementPass, .keyboardViewportAmbiguousReplacementFails,
@@ -227,11 +215,6 @@ extension AdversarialScenarioCatalog {
                 try modalObstructionBodyPlan()
             case .nestedScrollPass, .nestedScrollImpossibleFails:
                 try nestedScrollBodyPlan()
-            case .asyncRevealNotificationPass, .asyncRevealSilentPass,
-                 .asyncRevealWrongDestinationFails, .offscreenCheckoutPass,
-                 .offscreenCheckoutDisabledFails, .duplicateLabelIdentityPass,
-                 .dynamicCellsPass, .dynamicCellsStaleTargetFails:
-                preconditionFailure("Scenario is not in the remaining plan partition")
             }
         }
 
