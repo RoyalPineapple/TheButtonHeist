@@ -30,114 +30,32 @@ internal struct NestedScrollScenarioEvidence: Equatable, Sendable {
 /// at an observed real-world boundary.
 @MainActor
 internal enum NestedScrollScenarioInstrumentation {
-    internal enum Observation: Equatable, Sendable {
-        case observed(NestedScrollScenarioEvidence)
-        case fixtureEnded
-        case cancelled
-    }
-
-    private struct State {
-        var bothContainersMoved: NestedScrollScenarioEvidence?
-        var offsetsRestored: NestedScrollScenarioEvidence?
-        var isFinished = false
-        var movementWaiter: CheckedContinuation<Observation, Never>?
-        var restorationWaiter: CheckedContinuation<Observation, Never>?
-    }
-
-    private static var state = State()
+    private static var stream: AsyncStream<NestedScrollScenarioEvidence>?
+    private static var continuation: AsyncStream<NestedScrollScenarioEvidence>.Continuation?
 
     internal static func prepare() {
-        finishWaiters(with: .fixtureEnded)
-        state = State()
+        continuation?.finish()
+        let stream = AsyncStream<NestedScrollScenarioEvidence>.makeStream(
+            bufferingPolicy: .bufferingNewest(2)
+        )
+        self.stream = stream.stream
+        continuation = stream.continuation
     }
 
-    internal static func waitForBothContainersMoved() async -> Observation {
-        if let evidence = state.bothContainersMoved { return .observed(evidence) }
-        guard !state.isFinished else { return .fixtureEnded }
-        guard !Task.isCancelled else { return .cancelled }
-        return await waitForMovement()
+    internal static func evidence() -> AsyncStream<NestedScrollScenarioEvidence> {
+        guard let stream else {
+            preconditionFailure("Prepare nested-scroll instrumentation before observing evidence")
+        }
+        return stream
     }
 
-    internal static func waitForOffsetsRestored() async -> Observation {
-        if let evidence = state.offsetsRestored { return .observed(evidence) }
-        guard !state.isFinished else { return .fixtureEnded }
-        guard !Task.isCancelled else { return .cancelled }
-        return await waitForRestoration()
-    }
-
-    internal static func restoredEvidence() -> NestedScrollScenarioEvidence? {
-        state.offsetsRestored
-    }
-
-    internal static func recordBothContainersMoved(_ evidence: NestedScrollScenarioEvidence) {
-        guard state.bothContainersMoved == nil else { return }
-        state.bothContainersMoved = evidence
-        let waiter = state.movementWaiter
-        state.movementWaiter = nil
-        waiter?.resume(returning: .observed(evidence))
-    }
-
-    internal static func recordOffsetsRestored(_ evidence: NestedScrollScenarioEvidence) {
-        guard state.offsetsRestored == nil else { return }
-        state.offsetsRestored = evidence
-        let waiter = state.restorationWaiter
-        state.restorationWaiter = nil
-        waiter?.resume(returning: .observed(evidence))
+    internal static func record(_ evidence: NestedScrollScenarioEvidence) {
+        continuation?.yield(evidence)
     }
 
     internal static func finish() {
-        guard !state.isFinished else { return }
-        state.isFinished = true
-        finishWaiters(with: .fixtureEnded)
-    }
-
-    private static func waitForMovement() async -> Observation {
-        await withTaskCancellationHandler {
-            await withCheckedContinuation { continuation in
-                if let evidence = state.bothContainersMoved {
-                    continuation.resume(returning: .observed(evidence))
-                } else if state.isFinished {
-                    continuation.resume(returning: .fixtureEnded)
-                } else {
-                    state.movementWaiter = continuation
-                }
-            }
-        } onCancel: {
-            Task { @MainActor in
-                let waiter = state.movementWaiter
-                state.movementWaiter = nil
-                waiter?.resume(returning: .cancelled)
-            }
-        }
-    }
-
-    private static func waitForRestoration() async -> Observation {
-        await withTaskCancellationHandler {
-            await withCheckedContinuation { continuation in
-                if let evidence = state.offsetsRestored {
-                    continuation.resume(returning: .observed(evidence))
-                } else if state.isFinished {
-                    continuation.resume(returning: .fixtureEnded)
-                } else {
-                    state.restorationWaiter = continuation
-                }
-            }
-        } onCancel: {
-            Task { @MainActor in
-                let waiter = state.restorationWaiter
-                state.restorationWaiter = nil
-                waiter?.resume(returning: .cancelled)
-            }
-        }
-    }
-
-    private static func finishWaiters(with observation: Observation) {
-        let movementWaiter = state.movementWaiter
-        let restorationWaiter = state.restorationWaiter
-        state.movementWaiter = nil
-        state.restorationWaiter = nil
-        movementWaiter?.resume(returning: observation)
-        restorationWaiter?.resume(returning: observation)
+        continuation?.finish()
+        continuation = nil
     }
 }
 
@@ -418,7 +336,7 @@ private final class NestedScrollViewController: UIViewController {
         let bothContainersMoved = evidence.outerMovementCount > 0 && evidence.innerMovementCount > 0
         if bothContainersMoved, !emittedBothMoved {
             emittedBothMoved = true
-            NestedScrollScenarioInstrumentation.recordBothContainersMoved(evidence)
+            NestedScrollScenarioInstrumentation.record(evidence)
             if replacementArmed {
                 replaceScreen(after: evidence)
                 return
@@ -430,7 +348,7 @@ private final class NestedScrollViewController: UIViewController {
         if bothOffsetsRestored, !emittedRestoration {
             emittedRestoration = true
             restorationStateLabel.accessibilityValue = "Restored"
-            NestedScrollScenarioInstrumentation.recordOffsetsRestored(evidence)
+            NestedScrollScenarioInstrumentation.record(evidence)
         }
     }
 

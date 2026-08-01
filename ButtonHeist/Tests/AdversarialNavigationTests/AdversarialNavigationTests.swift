@@ -88,7 +88,6 @@ final class AdversarialNavigationTests: XCTestCase {
     }
 
     func testNestedScrollCancellationRestoresBothOriginalOffsetsBeforeReturningResult() async throws {
-        NestedScrollScenarioInstrumentation.prepare()
         try await AdversarialLabRoute.open(.nestedScroll)
 
         let job = TheInsideJob.shared
@@ -106,11 +105,11 @@ final class AdversarialNavigationTests: XCTestCase {
         }
         await brains.vault.resetInterfaceForLifecycle()
 
+        NestedScrollScenarioInstrumentation.prepare()
+        let evidence = NestedScrollScenarioInstrumentation.evidence()
         let movementBoundary = Task { @MainActor in
-            await NestedScrollScenarioInstrumentation.waitForBothContainersMoved()
-        }
-        let restorationBoundary = Task { @MainActor in
-            await NestedScrollScenarioInstrumentation.waitForOffsetsRestored()
+            var iterator = evidence.makeAsyncIterator()
+            return await iterator.next()
         }
         let discovery = Task { @MainActor in
             await brains.navigation.fullGraph()
@@ -132,37 +131,22 @@ final class AdversarialNavigationTests: XCTestCase {
             group.cancelAll()
             return outcome
         }
-        guard case .movement(.observed(let moved)) = movementOutcome else {
+        guard case .movement(let moved?) = movementOutcome else {
             _ = await discovery.value
+            NestedScrollScenarioInstrumentation.finish()
             return XCTFail("Nested discovery ended before both live scroll containers moved")
         }
         XCTAssertGreaterThan(moved.outerMovementCount, 0)
         XCTAssertGreaterThan(moved.innerMovementCount, 0)
         XCTAssertEqual(moved.activationCount, 0)
 
-        let restorationOutcome = await withTaskGroup(of: NestedScrollRestorationRace.self) { group in
-            group.addTask { .restoration(await restorationBoundary.value) }
-            group.addTask {
-                _ = await discovery.value
-                return .discoveryCompleted
-            }
-            let outcome = await group.next() ?? .discoveryCompleted
-            if case .discoveryCompleted = outcome {
-                restorationBoundary.cancel()
-            }
-            group.cancelAll()
-            return outcome
+        let restorationBoundary = Task { @MainActor in
+            var iterator = evidence.makeAsyncIterator()
+            return await iterator.next()
         }
-        let restored: NestedScrollScenarioEvidence
-        switch restorationOutcome {
-        case .restoration(.observed(let evidence)):
-            restored = evidence
-        case .discoveryCompleted:
-            guard let evidence = NestedScrollScenarioInstrumentation.restoredEvidence() else {
-                return XCTFail("Cancelled nested discovery completed without terminal restoration evidence")
-            }
-            restored = evidence
-        case .restoration(.fixtureEnded), .restoration(.cancelled):
+        let completedDiscovery = await discovery.value
+        NestedScrollScenarioInstrumentation.finish()
+        guard let restored = await restorationBoundary.value else {
             return XCTFail("Nested-scroll fixture ended before reporting cancellation restoration")
         }
         XCTAssertEqual(restored.outerOffset, "0.00, 0.00")
@@ -171,7 +155,6 @@ final class AdversarialNavigationTests: XCTestCase {
         XCTAssertEqual(restored.innerRestorationCount, 1)
         XCTAssertEqual(restored.activationCount, 0)
 
-        let completedDiscovery = await discovery.value
         let result = try XCTUnwrap(completedDiscovery)
         XCTAssertEqual(result.viewportExit, .restored)
         let terminalInterface = result.current.snapshot.interface
@@ -194,7 +177,6 @@ final class AdversarialNavigationTests: XCTestCase {
     }
 
     func testNestedScrollReplacementSupersedesRestorationWithoutMovingReplacementViewport() async throws {
-        NestedScrollScenarioInstrumentation.prepare()
         try await AdversarialLabRoute.open(.nestedScroll)
         _ = try await runHeist("AdversarialNestedScroll.armReplacement") {
             Activate(.label("Replace nested screen after scroll"))
@@ -219,12 +201,12 @@ final class AdversarialNavigationTests: XCTestCase {
         }
         await brains.vault.resetInterfaceForLifecycle()
 
+        NestedScrollScenarioInstrumentation.prepare()
         let completedExploration = await brains.navigation.fullGraph()
         let exploration = try XCTUnwrap(completedExploration)
         XCTAssertEqual(exploration.viewportExit, .superseded)
-        guard case .observed(let moved) = await NestedScrollScenarioInstrumentation
-            .waitForBothContainersMoved()
-        else {
+        var iterator = NestedScrollScenarioInstrumentation.evidence().makeAsyncIterator()
+        guard let moved = await iterator.next() else {
             return XCTFail("Expected replacement only after both original live scroll containers moved")
         }
         XCTAssertGreaterThan(moved.outerMovementCount, 0)
@@ -262,12 +244,7 @@ final class AdversarialNavigationTests: XCTestCase {
 }
 
 private enum NestedScrollDiscoveryRace: Sendable {
-    case movement(NestedScrollScenarioInstrumentation.Observation)
-    case discoveryCompleted
-}
-
-private enum NestedScrollRestorationRace: Sendable {
-    case restoration(NestedScrollScenarioInstrumentation.Observation)
+    case movement(NestedScrollScenarioEvidence?)
     case discoveryCompleted
 }
 #endif // canImport(UIKit)
