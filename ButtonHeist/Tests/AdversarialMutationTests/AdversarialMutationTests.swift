@@ -108,6 +108,15 @@ final class AdversarialMutationTests: XCTestCase {
         }
     }
 
+    func testDynamicCellGenerationRefreshReResolvesCurrentTarget() async throws {
+        let heist = try await runAdversarialScenario(
+            .dynamicCellsPass,
+            opening: AdversarialLabRoute.open
+        )
+
+        XCTAssertNil(heist.result.firstFailedStep)
+    }
+
     func testDynamicCellGenerationMismatchFailsClosedWithCurrentFailureEvidence() async throws {
         let failure = try await runFailingAdversarialScenario(
             .dynamicCellsStaleTargetFails,

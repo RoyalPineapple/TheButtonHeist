@@ -38,6 +38,8 @@ def run_heist_output(
     *,
     element_value: str = "1",
     announcement: str | None = "Saved",
+    measurements: list[dict[str, object]] | None = None,
+    ceilings: list[dict[str, object]] | None = None,
 ) -> str:
     result = {
         "delta": {
@@ -59,6 +61,16 @@ def run_heist_output(
     return json.dumps({
         "status": "ok",
         "report": {
+            "metrics": {
+                "measurements": measurements if measurements is not None else [{
+                    "name": "heistDurationMs",
+                    "valueMs": 40,
+                    "path": "$.body[0]",
+                    "kind": "action",
+                    "status": "passed",
+                }],
+                "ceilings": ceilings if ceilings is not None else [],
+            },
             "nodes": [{
                 "path": "$.body[0]",
                 "kind": "action",
@@ -85,6 +97,13 @@ expected_failure = scenario(
     "command-fails-with-diagnostic",
     [{"kind": "diagnostic", "label": "expected diagnostic"}],
 )
+try:
+    lab.select_nightly_scenarios([passing])
+except RuntimeError as error:
+    assert str(error) == "typed adversarial catalog must contain exactly 9 statistical scenarios"
+else:
+    raise AssertionError("nightly must retain exactly nine statistical scenarios")
+assert lab.select_nightly_scenarios([passing] * 9) == [passing] * 9
 success = lab.observe_primary(
     passing,
     subprocess.CompletedProcess(["buttonheist"], 0, run_heist_output(), ""),
@@ -127,6 +146,112 @@ assert mismatched_value["missingEvidence"] == [
     {"kind": "element", "label": "Activations", "value": "1"}
 ]
 
+malformed_measurement = lab.observe_primary(
+    passing,
+    subprocess.CompletedProcess(
+        ["buttonheist"],
+        0,
+        run_heist_output(measurements=[{"name": "heistDurationMs", "valueMs": -1}]),
+        "",
+    ),
+)
+malformed_ceiling = lab.observe_primary(
+    passing,
+    subprocess.CompletedProcess(
+        ["buttonheist"],
+        0,
+        run_heist_output(ceilings=[{
+            "source": "caseSelection.timeout",
+            "budgetMs": 10,
+            "elapsedMs": -1,
+            "path": "$.body[0]",
+            "kind": "conditional",
+            "status": "passed",
+        }]),
+        "",
+    ),
+)
+assert malformed_measurement["status"] == "failed"
+assert malformed_measurement["evidenceMatched"] is False
+assert malformed_measurement["evidenceError"] == "run_heist metric measurement requires non-negative valueMs"
+assert malformed_ceiling["status"] == "failed"
+assert malformed_ceiling["evidenceMatched"] is False
+assert malformed_ceiling["evidenceError"] == "run_heist metric ceiling requires non-negative budgetMs and elapsedMs"
+
+clamped_near_budget = lab.observe_primary(
+    passing,
+    subprocess.CompletedProcess(
+        ["buttonheist"],
+        0,
+        run_heist_output(ceilings=[{
+            "source": "caseSelection.timeout",
+            "budgetMs": 10,
+            "elapsedMs": 0,
+            "path": "$.body[0]",
+            "kind": "conditional",
+            "status": "passed",
+        }]),
+        "",
+    ),
+)
+assert clamped_near_budget["status"] == "passed"
+assert clamped_near_budget["ceilingHits"][0]["elapsedMs"] == 0
+
+timed = lab.observe_primary(
+    passing,
+    subprocess.CompletedProcess(
+        ["buttonheist"],
+        0,
+        run_heist_output(
+            measurements=[
+                {"name": "heistDurationMs", "valueMs": 1},
+                {"name": "actionPipeline.totalMs", "valueMs": 20, "path": "$.body[0]", "kind": "action", "status": "passed"},
+            ],
+            ceilings=[{
+                "source": "caseSelection.timeout",
+                "budgetMs": 100,
+                "elapsedMs": 76,
+                "path": "$.body[0]",
+                "kind": "conditional",
+                "status": "passed",
+            }],
+        ),
+        "",
+    ),
+)
+assert timed["receiptMeasurements"] == [
+    {"name": "heistDurationMs", "valueMs": 1},
+    {
+        "name": "actionPipeline.totalMs",
+        "valueMs": 20,
+        "path": "$.body[0]",
+        "kind": "action",
+        "status": "passed",
+    },
+]
+assert timed["ceilingHits"] == [{
+    "source": "caseSelection.timeout",
+    "budgetMs": 100,
+    "elapsedMs": 76,
+    "path": "$.body[0]",
+    "kind": "conditional",
+    "status": "passed",
+}]
+try:
+    lab.parse_run_heist_evidence(json.dumps({"status": "ok", "report": {"nodes": []}}))
+except ValueError as error:
+    assert str(error) == "successful run_heist report must contain metrics"
+else:
+    raise AssertionError("current receipt metrics are required")
+
+assert lab.timing_statistics([12, 1, 9, 5, 7]) == {
+    "count": 5,
+    "min": 1,
+    "p50": 7,
+    "p95": 12,
+    "max": 12,
+}
+
 samples = lab.execute_samples(
     5,
     lambda iteration: {
@@ -138,6 +263,46 @@ samples = lab.execute_samples(
 )
 assert lab.scenario_report(passing, 5, samples)["recorded"] == 5
 assert [sample["iteration"] for sample in samples] == [1, 2, 3, 4, 5]
+
+timing_report = lab.scenario_report(
+    passing,
+    2,
+    [
+        {
+            "iteration": 1,
+            "primary": {"status": "passed", "cliWallDurationMs": 12, **timed},
+            "infrastructure": {"status": "passed"},
+            "recovery": {"status": "passed"},
+        },
+        {
+            "iteration": 2,
+            "primary": {
+                "status": "passed",
+                "cliWallDurationMs": 8,
+                "receiptMeasurements": [{"name": "heistDurationMs", "valueMs": 3}],
+                "ceilingHits": [],
+            },
+            "infrastructure": {"status": "passed"},
+            "recovery": {"status": "passed"},
+        },
+    ],
+)
+assert timing_report["cliWallDurationMs"] == {
+    "count": 2,
+    "min": 8,
+    "p50": 8,
+    "p95": 12,
+    "max": 12,
+}
+assert timing_report["receiptTimingMs"]["heistDurationMs"] == {
+    "count": 2,
+    "min": 1,
+    "p50": 1,
+    "p95": 3,
+    "max": 3,
+}
+assert len(timing_report["ceilingHits"]) == 1
+assert not lab.gate_failed(lab.gate_summary([timing_report]))
 
 
 class FakeApp:
@@ -162,6 +327,14 @@ def fake_heist(*_args) -> subprocess.CompletedProcess[str]:
 routes = []
 
 
+class FakeMonotonicClock:
+    def __init__(self, values: list[int]):
+        self.values = iter(values)
+
+    def __call__(self) -> int:
+        return next(self.values)
+
+
 def flaky_route(*_args) -> None:
     routes.append(_args)
     if len(routes) == 1:
@@ -178,6 +351,7 @@ isolated = lab.execute_samples(
         app_factory=FakeApp,
         route_opener=flaky_route,
         heist_runner=fake_heist,
+        monotonic_ns=FakeMonotonicClock([0, 7_000_000]),
     ),
 )
 assert len({app.token for app in FakeApp.instances}) == 3
@@ -185,3 +359,4 @@ assert isolated[0]["recovery"]["status"] == "failed"
 assert isolated[0]["infrastructure"]["status"] == "failed"
 assert isolated[0]["primary"]["status"] == "not-run"
 assert all(sample["primary"]["status"] == "passed" for sample in isolated[1:])
+assert all(sample["primary"]["cliWallDurationMs"] == 7 for sample in isolated[1:])

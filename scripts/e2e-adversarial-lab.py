@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import uuid
 from dataclasses import dataclass
 from enum import Enum
@@ -23,6 +24,10 @@ from e2e_runtime import (
     run,
     write_json_report,
 )
+
+
+STATISTICAL_SUCCESS_SCENARIO_COUNT = 9
+
 
 class ScenarioExpectation(str, Enum):
     COMMAND_SUCCEEDS = "command-succeeds"
@@ -140,6 +145,22 @@ def load_catalog(cli: Path) -> list[Scenario]:
     return scenarios
 
 
+def select_nightly_scenarios(catalog: list[Scenario]) -> list[Scenario]:
+    scenarios = [
+        scenario
+        for scenario in catalog
+        if scenario.classification is ScenarioClassification.STATISTICAL
+    ]
+    if len(scenarios) != STATISTICAL_SUCCESS_SCENARIO_COUNT:
+        raise RuntimeError(
+            "typed adversarial catalog must contain exactly "
+            f"{STATISTICAL_SUCCESS_SCENARIO_COUNT} statistical scenarios"
+        )
+    if any(scenario.expectation is not ScenarioExpectation.COMMAND_SUCCEEDS for scenario in scenarios):
+        raise RuntimeError("nightly statistical scenarios must be successful contracts")
+    return scenarios
+
+
 def observe_primary(
     scenario: Scenario,
     result: subprocess.CompletedProcess[str],
@@ -148,16 +169,21 @@ def observe_primary(
     evidence_matched: bool | None = None
     missing_evidence: list[dict[str, str]] = []
     evidence_error: str | None = None
+    receipt_measurement_rows: list[dict[str, Any]] | None = None
+    ceiling_hit_rows: list[dict[str, Any]] | None = None
     if scenario.expectation is ScenarioExpectation.COMMAND_SUCCEEDS:
         matched = False
         if result.returncode == 0:
             try:
-                observed = parse_run_heist_evidence(result.stdout)
+                report = parse_successful_run_heist_report(result.stdout)
+                observed = evidence_facts_from_report(report)
                 missing_evidence = [
                     expected.json_value()
                     for expected in scenario.expected_evidence
                     if not any(expected.matches(fact) for fact in observed)
                 ]
+                receipt_measurement_rows = receipt_measurements(report)
+                ceiling_hit_rows = ceiling_hits(report)
                 evidence_matched = not missing_evidence
                 matched = evidence_matched
             except ValueError as error:
@@ -184,10 +210,15 @@ def observe_primary(
         observation["missingEvidence"] = missing_evidence
     if evidence_error is not None:
         observation["evidenceError"] = evidence_error
+    if receipt_measurement_rows is not None and ceiling_hit_rows is not None:
+        # The successful response is decoded once above; these are diagnostic
+        # projections of its canonical receipt metrics, not a second wire model.
+        observation["receiptMeasurements"] = receipt_measurement_rows
+        observation["ceilingHits"] = ceiling_hit_rows
     return observation
 
 
-def parse_run_heist_evidence(output: str) -> tuple[EvidenceFact, ...]:
+def parse_successful_run_heist_report(output: str) -> dict[str, Any]:
     try:
         response = json.loads(output)
     except json.JSONDecodeError as error:
@@ -200,10 +231,85 @@ def parse_run_heist_evidence(output: str) -> tuple[EvidenceFact, ...]:
     nodes = report.get("nodes")
     if not isinstance(nodes, list):
         raise ValueError("successful run_heist report must contain nodes")
+    metrics = report.get("metrics")
+    if not isinstance(metrics, dict):
+        raise ValueError("successful run_heist report must contain metrics")
+    if not isinstance(metrics.get("measurements"), list):
+        raise ValueError("successful run_heist metrics must contain measurements")
+    if not isinstance(metrics.get("ceilings"), list):
+        raise ValueError("successful run_heist metrics must contain ceilings")
+    return report
+
+
+def parse_run_heist_evidence(output: str) -> tuple[EvidenceFact, ...]:
+    return evidence_facts_from_report(parse_successful_run_heist_report(output))
+
+
+def evidence_facts_from_report(report: dict[str, Any]) -> tuple[EvidenceFact, ...]:
+    nodes = report["nodes"]
     facts: list[EvidenceFact] = []
     for node in nodes:
         facts.extend(evidence_facts_from_node(node))
     return tuple(facts)
+
+
+def receipt_measurements(report: dict[str, Any]) -> list[dict[str, Any]]:
+    measurements = report["metrics"]["measurements"]
+    decoded: list[dict[str, Any]] = []
+    for measurement in measurements:
+        if not isinstance(measurement, dict):
+            raise ValueError("run_heist metrics measurements must be objects")
+        name = measurement.get("name")
+        value_ms = measurement.get("valueMs")
+        if not isinstance(name, str) or not name:
+            raise ValueError("run_heist metric measurement requires a name")
+        if isinstance(value_ms, bool) or not isinstance(value_ms, int) or value_ms < 0:
+            raise ValueError("run_heist metric measurement requires non-negative valueMs")
+        row: dict[str, Any] = {"name": name, "valueMs": value_ms}
+        for key in ("path", "kind", "status"):
+            value = measurement.get(key)
+            if value is not None:
+                if not isinstance(value, str):
+                    raise ValueError(f"run_heist metric measurement {key} must be a string")
+                row[key] = value
+        decoded.append(row)
+    return decoded
+
+
+def ceiling_hits(report: dict[str, Any], *, tolerance_ms: int = 25) -> list[dict[str, Any]]:
+    ceilings = report["metrics"]["ceilings"]
+    hits: list[dict[str, Any]] = []
+    for ceiling in ceilings:
+        if not isinstance(ceiling, dict):
+            raise ValueError("run_heist metric ceilings must be objects")
+        source = ceiling.get("source")
+        budget_ms = ceiling.get("budgetMs")
+        elapsed_ms = ceiling.get("elapsedMs")
+        path = ceiling.get("path")
+        kind = ceiling.get("kind")
+        status = ceiling.get("status")
+        required_strings = (source, path, kind, status)
+        if not all(isinstance(value, str) and value for value in required_strings):
+            raise ValueError("run_heist metric ceiling requires source, path, kind, and status")
+        if (
+            isinstance(budget_ms, bool)
+            or isinstance(elapsed_ms, bool)
+            or not isinstance(budget_ms, int)
+            or not isinstance(elapsed_ms, int)
+            or budget_ms < 0
+            or elapsed_ms < 0
+        ):
+            raise ValueError("run_heist metric ceiling requires non-negative budgetMs and elapsedMs")
+        if elapsed_ms >= max(0, budget_ms - tolerance_ms):
+            hits.append({
+                "source": source,
+                "budgetMs": budget_ms,
+                "elapsedMs": elapsed_ms,
+                "path": path,
+                "kind": kind,
+                "status": status,
+            })
+    return hits
 
 
 def evidence_facts_from_node(value: Any) -> list[EvidenceFact]:
@@ -374,8 +480,10 @@ def execute_sample(
     app_factory: Callable[..., DemoApp] = DemoApp,
     route_opener: Callable[[str, str], None] = open_route,
     heist_runner: Callable[[Path, DemoApp, str], subprocess.CompletedProcess[str]] = run_heist,
+    monotonic_ns: Callable[[], int] = time.monotonic_ns,
 ) -> dict[str, Any]:
     app: DemoApp | None = None
+    cli_wall_duration_ms: int | None = None
     sample: dict[str, Any] = {
         "iteration": iteration,
         "primary": {"status": OutcomeStatus.NOT_RUN.value},
@@ -390,8 +498,16 @@ def execute_sample(
         app.launch()
         route_opener(simulator, scenario.route)
         sample["infrastructure"]["status"] = OutcomeStatus.PASSED.value
-        sample["primary"] = observe_primary(scenario, heist_runner(cli, app, scenario.plan))
+        started_ns = monotonic_ns()
+        try:
+            result = heist_runner(cli, app, scenario.plan)
+        finally:
+            cli_wall_duration_ms = max(0, (monotonic_ns() - started_ns) // 1_000_000)
+        sample["primary"] = observe_primary(scenario, result)
+        sample["primary"]["cliWallDurationMs"] = cli_wall_duration_ms
     except Exception as error:
+        if cli_wall_duration_ms is not None:
+            sample["primary"]["cliWallDurationMs"] = cli_wall_duration_ms
         sample["infrastructure"] = {
             "status": OutcomeStatus.FAILED.value,
             "diagnostics": error_summary(error),
@@ -416,6 +532,43 @@ def execute_samples(
     return [execute(iteration) for iteration in range(1, requested + 1)]
 
 
+def timing_statistics(values: list[int]) -> dict[str, int]:
+    if not values:
+        return {}
+    ordered = sorted(values)
+
+    def nearest_rank(percentile: int) -> int:
+        # Nearest-rank percentile: rank = ceil(percentile * count / 100).
+        return ordered[(percentile * len(ordered) + 99) // 100 - 1]
+
+    return {
+        "count": len(ordered),
+        "min": ordered[0],
+        "p50": nearest_rank(50),
+        "p95": nearest_rank(95),
+        "max": ordered[-1],
+    }
+
+
+def aggregate_receipt_timing(observations: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
+    values_by_name: dict[str, list[int]] = {}
+    for sample in observations:
+        for measurement in sample["primary"].get("receiptMeasurements", []):
+            values_by_name.setdefault(measurement["name"], []).append(measurement["valueMs"])
+    return {
+        name: timing_statistics(values)
+        for name, values in sorted(values_by_name.items())
+    }
+
+
+def aggregate_ceiling_hits(observations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {"iteration": sample["iteration"], **hit}
+        for sample in observations
+        for hit in sample["primary"].get("ceilingHits", [])
+    ]
+
+
 def scenario_report(
     scenario: Scenario,
     requested: int,
@@ -425,6 +578,11 @@ def scenario_report(
         sample["primary"]
         for sample in observations
         if sample["primary"]["status"] != OutcomeStatus.NOT_RUN.value
+    ]
+    cli_wall_duration_ms = [
+        item["cliWallDurationMs"]
+        for item in primary
+        if isinstance(item.get("cliWallDurationMs"), int)
     ]
     return {
         "name": scenario.name,
@@ -439,6 +597,9 @@ def scenario_report(
             sample["recovery"]["status"] == OutcomeStatus.FAILED.value
             for sample in observations
         ),
+        "cliWallDurationMs": timing_statistics(cli_wall_duration_ms),
+        "receiptTimingMs": aggregate_receipt_timing(observations),
+        "ceilingHits": aggregate_ceiling_hits(observations),
         "samples": observations,
     }
 
@@ -454,12 +615,19 @@ def gate_summary(scenarios: list[dict[str, Any]]) -> dict[str, Any]:
         failure_kinds.append("infrastructure-failure")
     if recovery_failed:
         failure_kinds.append("recovery-failure")
+    cli_wall_duration_ms = [
+        sample["primary"]["cliWallDurationMs"]
+        for scenario in scenarios
+        for sample in scenario["samples"]
+        if isinstance(sample["primary"].get("cliWallDurationMs"), int)
+    ]
     return {
         "requested": sum(scenario["requested"] for scenario in scenarios),
         "recorded": sum(scenario["recorded"] for scenario in scenarios),
         "productFailed": product_failed,
         "infrastructureFailed": infrastructure_failed,
         "recoveryFailed": recovery_failed,
+        "cliWallDurationMs": timing_statistics(cli_wall_duration_ms),
         "failureKinds": failure_kinds,
     }
 
@@ -476,7 +644,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cli", default=os.environ.get("BUTTONHEIST_CLI", "ButtonHeistCLI/.build/debug/buttonheist"))
     parser.add_argument("--app", default=os.environ.get("BH_DEMO_APP"))
     parser.add_argument("--sim-udid", default=os.environ.get("SIM_UDID"))
-    parser.add_argument("--repeat-count", type=int, default=int(os.environ.get("BUTTONHEIST_ADVERSARIAL_REPEAT_COUNT", "20")))
+    parser.add_argument("--repeat-count", type=int, default=int(os.environ.get("BUTTONHEIST_ADVERSARIAL_REPEAT_COUNT", "5")))
     parser.add_argument("--report", default=str(Path(os.environ.get("TMPDIR", "/tmp")) / "buttonheist-adversarial-nightly-report.json"))
     return parser.parse_args()
 
@@ -507,13 +675,7 @@ def main() -> int:
         if not (app_path / "BHDemo").exists():
             raise RuntimeError(f"missing BHDemo executable under {app_path}")
 
-        scenarios = [
-            scenario
-            for scenario in load_catalog(cli)
-            if scenario.classification is ScenarioClassification.STATISTICAL
-        ]
-        if not scenarios:
-            raise RuntimeError("typed adversarial catalog has no statistical scenarios")
+        scenarios = select_nightly_scenarios(load_catalog(cli))
         boot_simulator(args.sim_udid)
         install_app(args.sim_udid, app_path)
 

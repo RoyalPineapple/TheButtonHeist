@@ -106,20 +106,46 @@ jobs:
               ("Adversarial lab", Path(os.environ["RUNNER_TEMP"]) / "buttonheist-adversarial-nightly-report.json"),
               ("Lifecycle gate", Path(os.environ["RUNNER_TEMP"]) / "buttonheist-lifecycle-nightly-report.json"),
           )
-          lines = ["## Nightly test summary", "", "| Gate | Status | Classification |", "|---|---|---|"]
+          lines = [
+              "## Nightly test summary",
+              "",
+              "| Gate | Status | Requested / recorded | Classification | CLI timing (p50 / p95) |",
+              "|---|---|---|---|---|",
+          ]
           for label, path in reports:
               if not path.exists():
-                  lines.append(f"| {label} | missing | infrastructure/setup failure |")
+                  lines.append(f"| {label} | missing | — | infrastructure/setup failure | — |")
                   continue
               report = json.loads(path.read_text())
               status = report.get("status", "unknown")
               classification = report.get("failureKind", "none")
               if status in {"starting", "running"}:
                   classification = "infrastructure timeout/interruption"
-              lines.append(f"| {label} | {status} | {classification} |")
+              summary = report.get("summary", {})
+              requested = summary.get("requested", "—")
+              recorded = summary.get("recorded", "—")
+              timing = "—"
+              if label == "Adversarial lab":
+                  cli_timing = report.get("summary", {}).get("cliWallDurationMs", {})
+                  if cli_timing:
+                      timing = f"{cli_timing.get('p50', '—')} ms / {cli_timing.get('p95', '—')} ms"
+              lines.append(
+                  f"| {label} | {status} | {requested} / {recorded} | {classification} | {timing} |"
+              )
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
               summary.write("\n".join(lines) + "\n")
           PY
+
+      - name: Upload nightly reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: buttonheist-nightly-reports-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/buttonheist-adversarial-nightly-report.json
+            ${{ runner.temp }}/buttonheist-lifecycle-nightly-report.json
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Collect nightly failure diagnostics
         if: failure()

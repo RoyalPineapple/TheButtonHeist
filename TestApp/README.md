@@ -58,11 +58,9 @@ runtime behavior and the diagnostics:
 | `/modal-obstruction` | Modal action surfaces block background action search |
 | `/nested-scroll` | Deep targets inside nested scroll containers remain reachable |
 
-`.github/workflows/adversarial-nightly.yml` repeats the passing routes and
-samples the failing diagnostics on a schedule. The nightly report records both
-scenario wall-clock time and receipt-derived timing buckets, including
-unexpected hits against one-second reveal and geometry ceilings. PR CI keeps the
-normal one-pass dogfood coverage.
+`.github/workflows/adversarial-nightly.yml` repeats the nine statistical success
+scenarios through fresh external CLI/app sessions and records CLI and receipt timing.
+PR CI runs every catalog scenario once.
 
 ## Building and Running
 
