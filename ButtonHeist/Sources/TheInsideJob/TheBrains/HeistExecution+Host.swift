@@ -890,8 +890,14 @@ extension HeistExecution {
             let expectationSatisfied = runtime.machine.running.activeLeaf.map {
                 $0.id == observation.id && $0.expectationIsProven(by: result.evidence)
             } ?? false
+            let actionDispatchAdmitted = runtime.machine.running.activeLeaf.map { activeLeaf in
+                guard case .action(let action) = activeLeaf else { return true }
+                return action.phase.dispatch != nil
+            } ?? false
             let outcome: LeafOutcome
-            if case .available = result.viewportStatus, expectationSatisfied {
+            if case .available = result.viewportStatus,
+               expectationSatisfied,
+               actionDispatchAdmitted {
                 outcome = .completed
             } else {
                 outcome = observationOutcome(

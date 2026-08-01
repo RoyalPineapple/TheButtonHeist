@@ -37,12 +37,20 @@ struct AccessibilityNotificationFixture {
     }
 }
 
+enum DeterministicRuntimeActionDisposition {
+    case result(TheSafecracker.ActionDispatchResult)
+    case resultAfterAdvancingClock(
+        TheSafecracker.ActionDispatchResult,
+        by: Duration
+    )
+}
+
 enum DeterministicRuntimeInput {
     case notification(AccessibilityNotificationFixture)
     case pulse(after: Duration, observation: InterfaceObservation?)
     case action(
         expected: ResolvedHeistActionCommand,
-        result: TheSafecracker.ActionDispatchResult
+        disposition: DeterministicRuntimeActionDisposition
     )
     case cancel
 }
@@ -116,6 +124,11 @@ struct DeterministicRuntimeScenarioResult {
 final class DeterministicRuntimeScenarioDriver {
     @MainActor
     private final class VirtualElapsed {
+        fileprivate enum DeadlineDelivery {
+            case resume
+            case retain
+        }
+
         private struct DeadlineWaiter {
             let deadline: Duration
             let continuation: CheckedContinuation<Bool, Never>
@@ -128,6 +141,7 @@ final class DeterministicRuntimeScenarioDriver {
         private var elapsed = Duration.zero
         private var nextWaiterID: UInt64 = 0
         private var deadlineWaiters: [UInt64: DeadlineWaiter] = [:]
+        private var retainedDeadlineWaiterIDs: Set<UInt64> = []
 
         init(requestProbe: ScriptInputProbe) {
             self.requestProbe = requestProbe
@@ -149,16 +163,30 @@ final class DeterministicRuntimeScenarioDriver {
             }
         }
 
-        func advance(by duration: Duration) throws {
+        fileprivate func advance(
+            by duration: Duration,
+            deadlineDelivery: DeadlineDelivery = .resume
+        ) throws {
             guard duration >= .zero else {
                 throw DeterministicRuntimeDriverFailure.negativePulseElapsed(duration)
             }
             elapsed += duration
             let ready = deadlineWaiters.filter { $0.value.deadline <= elapsed }
-            for (id, waiter) in ready {
-                deadlineWaiters.removeValue(forKey: id)
-                waiter.continuation.resume(returning: true)
+            switch deadlineDelivery {
+            case .resume:
+                resumeReadyDeadlineWaiters(ready, excluding: retainedDeadlineWaiterIDs)
+            case .retain:
+                retainedDeadlineWaiterIDs.formUnion(ready.keys)
             }
+        }
+
+        fileprivate func releaseRetainedDeadlineWaiters() {
+            let retained = retainedDeadlineWaiterIDs
+            retainedDeadlineWaiterIDs.removeAll()
+            resumeReadyDeadlineWaiters(
+                deadlineWaiters.filter { retained.contains($0.key) },
+                excluding: []
+            )
         }
 
         func wait(for duration: Duration) async -> Bool {
@@ -187,6 +215,7 @@ final class DeterministicRuntimeScenarioDriver {
                     guard let waiter = clock.deadlineWaiters.removeValue(forKey: id) else {
                         return
                     }
+                    clock.retainedDeadlineWaiterIDs.remove(id)
                     waiter.continuation.resume(returning: false)
                 }
             }
@@ -199,8 +228,19 @@ final class DeterministicRuntimeScenarioDriver {
         private func closeWaiters() {
             let waiters = deadlineWaiters
             deadlineWaiters.removeAll()
+            retainedDeadlineWaiterIDs.removeAll()
             for waiter in waiters.values {
                 waiter.continuation.resume(returning: false)
+            }
+        }
+
+        private func resumeReadyDeadlineWaiters(
+            _ waiters: [UInt64: DeadlineWaiter],
+            excluding excludedIDs: Set<UInt64>
+        ) {
+            for (id, waiter) in waiters where !excludedIDs.contains(id) {
+                deadlineWaiters.removeValue(forKey: id)
+                waiter.continuation.resume(returning: true)
             }
         }
 
@@ -275,6 +315,7 @@ final class DeterministicRuntimeScenarioDriver {
         }
 
         private let inputProbe: ScriptInputProbe
+        private let advanceClockBeforeEffectReturn: @MainActor (Duration) throws -> Void
         private var pending: PendingAction?
         private var actionRequestWaiter: CheckedContinuation<PendingAction, Error>?
         private var acknowledgement: CheckedContinuation<Void, Never>?
@@ -287,11 +328,13 @@ final class DeterministicRuntimeScenarioDriver {
         init(
             inputProbe: ScriptInputProbe,
             explorationOutcomes: [Navigation.ViewportExit.Outcome],
-            failureCaptures: [HeistFailureCapture]
+            failureCaptures: [HeistFailureCapture],
+            advanceClockBeforeEffectReturn: @escaping @MainActor (Duration) throws -> Void
         ) {
             self.inputProbe = inputProbe
             self.explorationOutcomes = explorationOutcomes
             self.failureCaptures = failureCaptures
+            self.advanceClockBeforeEffectReturn = advanceClockBeforeEffectReturn
         }
 
         func dispatch(
@@ -321,7 +364,7 @@ final class DeterministicRuntimeScenarioDriver {
         func release(
             at index: Int,
             expected: ResolvedHeistActionCommand,
-            result: TheSafecracker.ActionDispatchResult
+            disposition: DeterministicRuntimeActionDisposition
         ) async throws {
             let pending = try await awaitPendingAction(at: index, expected: expected)
             guard pending.command == expected else {
@@ -336,6 +379,14 @@ final class DeterministicRuntimeScenarioDriver {
                     expected: expected,
                     received: pending.command
                 )
+            }
+            let result: TheSafecracker.ActionDispatchResult
+            switch disposition {
+            case .result(let dispositionResult):
+                result = dispositionResult
+            case .resultAfterAdvancingClock(let dispositionResult, let duration):
+                try advanceClockBeforeEffectReturn(duration)
+                result = dispositionResult
             }
             self.pending = nil
             pending.continuation.resume(returning: result)
@@ -542,7 +593,10 @@ final class DeterministicRuntimeScenarioDriver {
         let effects = ScriptedActionEffects(
             inputProbe: inputProbe,
             explorationOutcomes: explorationOutcomes,
-            failureCaptures: failureCaptures
+            failureCaptures: failureCaptures,
+            advanceClockBeforeEffectReturn: { duration in
+                try clock.advance(by: duration, deadlineDelivery: .retain)
+            }
         )
         let tripwire = TheTripwire()
         let brains = TheBrains(
@@ -631,6 +685,10 @@ final class DeterministicRuntimeScenarioDriver {
             if case .pulse(let duration, _) = input, duration > .zero {
                 requiresObservationRequest = true
             }
+            if case .action(_, .resultAfterAdvancingClock) = input {
+                requiresObservationRequest = true
+                observationRequestGeneration = session.inputProbe.currentGeneration
+            }
         }
         try session.effects.assertNoPendingAction(at: inputs.count)
         return lastInputCancelsExecution()
@@ -664,6 +722,7 @@ final class DeterministicRuntimeScenarioDriver {
                 throw CancellationError()
             }
             observationRequestGeneration = session.inputProbe.currentGeneration
+            session.clock.releaseRetainedDeadlineWaiters()
         }
         guard tick > 0, duration > .zero else { return }
         guard await session.clockProbe.waitForRequest(after: clockRequestGeneration) else {
@@ -692,8 +751,8 @@ final class DeterministicRuntimeScenarioDriver {
         case .pulse(let after, _):
             try session.effects.assertNoPendingAction(at: index)
             try await deliverPulse(after: after, tick: &tick, session: session, stream: stream)
-        case .action(let expected, let result):
-            try await session.effects.release(at: index, expected: expected, result: result)
+        case .action(let expected, let disposition):
+            try await session.effects.release(at: index, expected: expected, disposition: disposition)
         case .cancel:
             try session.effects.assertNoPendingAction(at: index)
             execution.cancel()

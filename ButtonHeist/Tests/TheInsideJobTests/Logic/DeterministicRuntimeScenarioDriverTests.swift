@@ -23,7 +23,7 @@ import UIKit
                 .pulse(after: .zero, observation: observation),
                 .action(
                     expected: command,
-                    result: .success(payload: .empty(for: command.type))
+                    disposition: .result(.success(payload: .empty(for: command.type)))
                 ),
                 .pulse(after: .zero, observation: observation),
             ]
@@ -59,7 +59,7 @@ import UIKit
                 .pulse(after: .zero, observation: home),
                 .action(
                     expected: command,
-                    result: .success(payload: .empty(for: command.type))
+                    disposition: .result(.success(payload: .empty(for: command.type)))
                 ),
                 .notification(.init(text: "Saved", timestamp: fixtureTimestamp)),
                 .pulse(after: .zero, observation: home),
@@ -89,7 +89,7 @@ import UIKit
                 .pulse(after: .zero, observation: home),
                 .action(
                     expected: command,
-                    result: .success(payload: .empty(for: command.type))
+                    disposition: .result(.success(payload: .empty(for: command.type)))
                 ),
                 .pulse(after: .zero, observation: home),
             ]
@@ -100,6 +100,35 @@ import UIKit
 
         #expect(completed.result?.outcome == .passed)
         #expect(replay?.met == true)
+        #expect(completed.effectTranscript == [.action(command)])
+    }
+
+    @Test func `expired terminal capture cannot complete a returned dispatch`() async throws {
+        let command = try HeistActionCommand.dismiss.resolve(in: .empty)
+        let home = observation(label: "Home")
+        let scenario = DeterministicRuntimeScenarioDriver(
+            plan: try HeistPlan(body: [.action(ActionStep(command: .dismiss))]),
+            timeout: try .seconds(5),
+            actionExpectationTimeoutPolicy: .init(standard: 1, screenTransition: 1),
+            inputs: [
+                .pulse(after: .zero, observation: home),
+                .action(
+                    expected: command,
+                    disposition: .resultAfterAdvancingClock(
+                        .success(payload: .empty(for: command.type)),
+                        by: .seconds(1)
+                    )
+                ),
+                .pulse(after: .zero, observation: home),
+            ]
+        )
+
+        let completed = try await scenario.run()
+        let action = try #require(completed.result?.steps.first)
+
+        #expect(isFailed(completed.result))
+        #expect(action.actionEvidence?.result?.outcome.failureKind == .timeout)
+        #expect(completed.report?.nodes.first?.failure?.actionKind == .timeout)
         #expect(completed.effectTranscript == [.action(command)])
     }
 
