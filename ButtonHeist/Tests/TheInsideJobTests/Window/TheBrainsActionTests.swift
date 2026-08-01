@@ -190,14 +190,51 @@ final class AdjustableGeometryView: UIView {
 }
 
 @MainActor
+final class HostedVisibleObservationSource {
+    private let scripted: VisibleObservationSourceFixture
+    private var capturesLive: Bool
+
+    init(observation: InterfaceObservation?, capturesLive: Bool) {
+        scripted = VisibleObservationSourceFixture(observation: observation)
+        self.capturesLive = capturesLive
+    }
+
+    var observation: InterfaceObservation? {
+        get { scripted.observation }
+        set {
+            capturesLive = false
+            scripted.observation = newValue
+        }
+    }
+
+    var captureCount: Int { scripted.captureCount }
+
+    func capture(from vault: TheVault) -> InterfaceObservation? {
+        capturesLive ? TheVault.captureVisibleObservation(from: vault) : scripted.capture(from: vault)
+    }
+
+    func useLiveCapture() {
+        capturesLive = true
+    }
+
+    func failNextCapture() {
+        capturesLive = false
+        scripted.failNextCapture()
+    }
+}
+
+@MainActor
 final class TheBrainsActionTests: XCTestCase {
 
     var brains: TheBrains!
-    var visibleObservationSource: VisibleObservationSourceFixture!
+    var visibleObservationSource: HostedVisibleObservationSource!
 
     override func setUp() async throws {
         try await super.setUp()
-        visibleObservationSource = VisibleObservationSourceFixture()
+        visibleObservationSource = HostedVisibleObservationSource(
+            observation: nil,
+            capturesLive: false
+        )
         brains = TheBrains(
             tripwire: TheTripwire(),
             visibleObservationSource: visibleObservationSource.capture

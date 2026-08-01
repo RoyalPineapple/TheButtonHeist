@@ -40,6 +40,7 @@ extension Observation.Stream {
         scope: SemanticObservationScope,
         boundary: SemanticObservationWaitBoundary
     ) async -> SemanticObservationWaitResult {
+        guard isActive else { return .cancelled }
         if Task.isCancelled,
            boundary != .observationCycle {
             return .cancelled
@@ -103,6 +104,7 @@ extension Observation.Stream {
             boundary: boundary,
             oneShot: oneShot
         ), id: id)
+        observationWaiterDidRegister?()
         Task { @MainActor in
             resolveObservationWaiterIfAvailable(id)
         }

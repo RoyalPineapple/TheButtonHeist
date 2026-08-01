@@ -308,6 +308,7 @@ extension Observation.Stream {
             captured,
             vault: vault,
             tripwireSignal: tripwireSignal,
+            postCaptureTripwireSignal: pulseIngress == .injected ? tripwireSignal : nil,
             lineage: captureLineage
         )
         let committableObservation: CommittableInterfaceObservation
@@ -369,10 +370,12 @@ extension Observation.Stream {
         _ observation: InterfaceObservation,
         vault: TheVault,
         tripwireSignal: TheTripwire.TripwireSignal,
+        postCaptureTripwireSignal: TheTripwire.TripwireSignal? = nil,
         discoveryCommitPolicy: Navigation.DiscoveryCommitPolicy = .mergeIntoInterface,
         lineage: ScreenLineage
     ) -> Result<CommittableInterfaceObservation, Observation.CaptureFailure> {
-        guard currentTripwireSignal().hierarchy == tripwireSignal.hierarchy else {
+        let currentSignal = postCaptureTripwireSignal ?? currentTripwireSignal()
+        guard currentSignal.hierarchy == tripwireSignal.hierarchy else {
             return .failure(.hierarchyChangedDuringCapture)
         }
         return .success(CommittableInterfaceObservation.admitCaptured(

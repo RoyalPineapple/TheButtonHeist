@@ -21,12 +21,14 @@ final class TheVault {
         tripwire: TheTripwire,
         visibleObservationSource: @escaping VisibleObservationSource = TheVault.captureVisibleObservation,
         keyboardVisibilitySource: @escaping KeyboardVisibilitySource = { nil },
-        notificationIngress: AccessibilityNotificationIngress = .process
+        notificationIngress: AccessibilityNotificationIngress = .process,
+        pulseIngress: Observation.Stream.PulseIngress = .displayLink
     ) {
         self.tripwire = tripwire
         self.visibleObservationSource = visibleObservationSource
         self.keyboardVisibilitySource = keyboardVisibilitySource
         self.notificationIngress = notificationIngress
+        self.pulseIngress = pulseIngress
     }
 
     /// TheTripwire handles window access and animation detection.
@@ -43,6 +45,7 @@ final class TheVault {
     private let visibleObservationSource: VisibleObservationSource
     private let keyboardVisibilitySource: KeyboardVisibilitySource
     private let notificationIngress: AccessibilityNotificationIngress
+    private let pulseIngress: Observation.Stream.PulseIngress
 
     var keyboardVisible: Bool? {
         keyboardVisibilitySource()
@@ -70,7 +73,8 @@ final class TheVault {
     lazy var semanticObservationStream = Observation.Stream(
         vault: self,
         tripwire: tripwire,
-        notificationIngress: notificationIngress
+        notificationIngress: notificationIngress,
+        pulseIngress: pulseIngress
     )
 
     // MARK: - Interaction Cursor State

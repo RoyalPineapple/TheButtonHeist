@@ -9,9 +9,10 @@ import XCTest
 @MainActor
 final class SemanticObservationStreamTests: XCTestCase {
     private var vault: TheVault!
+    private let signalWindow = NSObject()
 
     override func setUp() async throws {
-        vault = TheVault(tripwire: TheTripwire())
+        vault = TheVault(tripwire: TheTripwire(), pulseIngress: .injected)
     }
 
     override func tearDown() async throws {
@@ -20,59 +21,80 @@ final class SemanticObservationStreamTests: XCTestCase {
     }
 
     func testIdleStreamDoesNotReadAccessibility() {
-        let source = VisibleObservationSourceFixture()
-        source.observation = .empty
+        let source = VisibleObservationSourceFixture(observation: .empty)
         let tripwire = TheTripwire()
         let idleVault = TheVault(
             tripwire: tripwire,
-            visibleObservationSource: source.capture
+            visibleObservationSource: source.capture,
+            pulseIngress: .injected
         )
-        tripwire.startPulse()
         defer {
             idleVault.semanticObservationStream.stop()
-            tripwire.stopPulse()
         }
         idleVault.semanticObservationStream.start()
 
-        tripwire.onTick()
-        tripwire.onTick()
+        idleVault.semanticObservationStream.deliver(pulse(tick: 1))
+        idleVault.semanticObservationStream.deliver(pulse(tick: 2))
 
         XCTAssertEqual(source.captureCount, 0)
     }
 
-    func testDemandedPulseCommitsOneObservationCycle() async {
-        let source = VisibleObservationSourceFixture()
-        source.observation = .empty
+    func testExplicitPulseDeliveryCommitsOneObservationCycleWithoutReadingLiveSignal() async {
+        let source = VisibleObservationSourceFixture(observation: .empty)
         let tripwire = TheTripwire()
         let demandedVault = TheVault(
             tripwire: tripwire,
-            visibleObservationSource: source.capture
+            visibleObservationSource: source.capture,
+            pulseIngress: .injected
         )
-        tripwire.startPulse()
         defer {
             demandedVault.semanticObservationStream.stop()
-            tripwire.stopPulse()
         }
         let stream = demandedVault.semanticObservationStream
         stream.start()
-        let historyIndex = vault.state.history.endIndex
+        var liveSignalReadCount = 0
+        stream.readTripwireSignal = {
+            liveSignalReadCount += 1
+            return .empty
+        }
+        let historyIndex = demandedVault.state.history.endIndex
         let subscription = stream.subscribe(scope: .visible)
         defer { subscription.cancel() }
 
-        tripwire.onTick()
+        let reading = pulse(
+            tick: 7,
+            elapsed: .milliseconds(250),
+            signal: tripwireSignal(sequence: 0)
+        )
+        stream.deliver(reading)
         let result = await stream.waitForObservation(
             after: historyIndex,
             scope: .visible,
-            boundary: .externalDeadline(SemanticObservationDeadline(
-                start: RuntimeElapsed.now,
-                timeout: .seconds(1)
-            ))
+            boundary: .observationCycle
         )
 
-        guard case .observation = result else {
+        guard case .observation(let current) = result else {
             return XCTFail("Expected one committed observation, got \(result)")
         }
         XCTAssertEqual(source.captureCount, 1)
+        XCTAssertEqual(liveSignalReadCount, 0)
+        XCTAssertEqual(
+            current.snapshot.context.windowStack,
+            [Observation.WindowContext(index: 0, level: 3, isKeyWindow: true)]
+        )
+        XCTAssertEqual(reading, pulse(
+            tick: 7,
+            elapsed: .milliseconds(250),
+            signal: tripwireSignal(sequence: 0)
+        ))
+        XCTAssertNotEqual(
+            reading,
+            pulse(
+                tick: 8,
+                elapsed: .milliseconds(250),
+                signal: tripwireSignal(sequence: 0)
+            )
+        )
     }
 
     func testSubscriptionPublishesVaultHistoryInAuthoredOrder() async throws {
@@ -115,6 +137,33 @@ final class SemanticObservationStreamTests: XCTestCase {
         XCTAssertEqual(received, expected)
         XCTAssertEqual(currentAfterCancellation, afterCancellation.current)
         XCTAssertEqual(historyAfterCancellation, expected + afterCancellation.events)
+    }
+
+    private func pulse(
+        tick: UInt64,
+        elapsed: Duration = .zero,
+        signal: TheTripwire.TripwireSignal = .empty
+    ) -> TheTripwire.PulseReading {
+        TheTripwire.PulseReading(
+            tick: tick,
+            elapsed: elapsed,
+            tripwireSignal: signal
+        )
+    }
+
+    private func tripwireSignal(sequence: UInt64) -> TheTripwire.TripwireSignal {
+        TheTripwire.TripwireSignal(
+            topmostVC: nil,
+            navigation: .empty,
+            windowStack: TheTripwire.WindowStackSignal(windows: [
+                TheTripwire.WindowSignal(
+                    id: ObjectIdentifier(signalWindow),
+                    level: 3,
+                    isKeyWindow: true
+                ),
+            ]),
+            accessibilityNotificationSequence: sequence
+        )
     }
 }
 #endif // DEBUG

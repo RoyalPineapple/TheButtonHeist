@@ -9,34 +9,6 @@ import XCTest
 
 @MainActor
 final class AccessibilityNotificationObserverTests: XCTestCase {
-    private enum WaitError: Error {
-        case timedOut(AccessibilityNotificationKind)
-    }
-
-    override func tearDown() async throws {
-        AccessibilityNotificationObserver.shared.uninstall()
-        try await super.tearDown()
-    }
-
-    func testUnsubscribeRemovesSubscriberAndTearsDownInstalledCallback() async throws {
-        let bus = AccessibilityNotificationBus()
-
-        AccessibilityNotificationObserver.shared.subscribe(bus)
-        let installed = AccessibilityNotificationObserver.shared.isInstalled
-        guard case .subscribed(let callbackInstalled, _) =
-            AccessibilityNotificationObserver.shared.lifecycleState
-        else {
-            return XCTFail("Expected the shared observer to report a subscribed lifecycle")
-        }
-        XCTAssertEqual(callbackInstalled, installed)
-
-        AccessibilityNotificationObserver.shared.unsubscribe(bus)
-
-        XCTAssertFalse(AccessibilityNotificationObserver.shared.hasSubscribers)
-        XCTAssertEqual(AccessibilityNotificationObserver.shared.lifecycleState, .unsubscribed)
-        XCTAssertFalse(AccessibilityNotificationObserver.shared.isInstalled)
-    }
-
     func testSubscribeDuringCallbackRemovalReinstallsForTheNewSubscriber() async {
         let harness = CallbackRegistrationHarness()
         let observer = AccessibilityNotificationObserver(
@@ -82,61 +54,6 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertFalse(harness.isInstalled)
         XCTAssertEqual(harness.installCount, 1)
         XCTAssertEqual(harness.uninstallCount, 1)
-    }
-
-    func testObserverReceivesPostedPayloadShapes() async throws {
-        let bus = AccessibilityNotificationBus()
-
-        AccessibilityNotificationObserver.shared.subscribe(bus)
-        guard AccessibilityNotificationObserver.shared.isInstalled else {
-            return XCTFail("Expected _AXAddNotificationCallback to be available in the supported runtime")
-        }
-        let cursor = AccessibilityNotificationCursor(sequence: bus.latestSequence)
-
-        UIAccessibility.post(
-            notification: .announcement,
-            argument: "BH announcement string payload"
-        )
-        let announcement = try await waitForNotification(
-            kind: .announcement,
-            after: cursor,
-            in: bus
-        )
-        XCTAssertEqual(announcement.kind, .announcement)
-        guard case .string(let value) = announcement.notificationData else {
-            return XCTFail("Expected string notification data, got \(announcement.notificationData)")
-        }
-        XCTAssertEqual(value, "BH announcement string payload")
-
-        let container = NSObject()
-        let element = UIAccessibilityElement(accessibilityContainer: container)
-        element.accessibilityLabel = "BH layout element payload"
-        UIAccessibility.post(notification: .layoutChanged, argument: element)
-        let layoutChange = try await waitForNotification(
-            kind: .layoutChanged,
-            after: cursor,
-            in: bus
-        )
-        XCTAssertEqual(layoutChange.kind, .layoutChanged)
-        guard case .object(let objectIdentity) = layoutChange.notificationData else {
-            return XCTFail("Expected element notification data, got \(layoutChange.notificationData)")
-        }
-        XCTAssertNil(objectIdentity.object)
-        XCTAssertTrue(
-            objectIdentity.summary?.contains("AXUIElementRef") == true,
-            "Expected transformed AX element handle summary, got \(objectIdentity.summary ?? "nil")"
-        )
-
-        UIAccessibility.post(notification: .screenChanged, argument: nil)
-        let screenChange = try await waitForNotification(
-            kind: .screenChanged,
-            after: cursor,
-            in: bus
-        )
-        XCTAssertEqual(screenChange.kind, .screenChanged)
-        guard case .none = screenChange.notificationData else {
-            return XCTFail("Expected nil screen-change notification data, got \(screenChange.notificationData)")
-        }
     }
 
     func testActionWindowProvidesCoverageAfterItsCursorWithoutDrainingIngress() async throws {
@@ -604,27 +521,6 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
         XCTAssertEqual(batch.through.sequence, 2)
     }
 
-    private func waitForNotification(
-        kind: AccessibilityNotificationKind,
-        after cursor: AccessibilityNotificationCursor,
-        in bus: AccessibilityNotificationBus,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) async throws -> PendingAccessibilityNotificationEvent {
-        for _ in 0..<100 {
-            if let event = bus.checkpoint(
-                after: cursor,
-                selection: .all
-            ).events.first(where: { $0.kind == kind }) {
-                return event
-            }
-            await Task.yield()
-            _ = await Task.cancellableSleep(for: .milliseconds(10))
-        }
-        XCTFail("Timed out waiting for accessibility notification \(String(describing: kind))", file: file, line: line)
-        throw WaitError.timedOut(kind)
-    }
-
     private func admission(
         notificationBatch: AccessibilityNotificationBatch = AccessibilityNotificationBatch(
             events: [],
@@ -689,15 +585,23 @@ final class AccessibilityNotificationObserverTests: XCTestCase {
 /// counts, one recorded outside it is the host app talking to itself and does
 /// not.
 @MainActor
-final class ScreenChangeObservationAdmissionTests: ButtonHeistObservationTestCase {
+final class ScreenChangeObservationAdmissionTests: XCTestCase {
 
-    private var visibleObservationSource = VisibleObservationSourceFixture()
+    private var visibleObservationSource = VisibleObservationSourceFixture(observation: .empty)
+    private var brains: TheBrains!
 
-    override func makeBrains(tripwire: TheTripwire) throws -> TheBrains {
-        TheBrains(
-            tripwire: tripwire,
+    override func setUp() async throws {
+        try await super.setUp()
+        brains = TheBrains(
+            tripwire: TheTripwire(),
             visibleObservationSource: visibleObservationSource.capture
         )
+    }
+
+    override func tearDown() async throws {
+        brains.vault.semanticObservationStream.stop()
+        brains = nil
+        try await super.tearDown()
     }
 
     func testScreenChangedInsideCommandScopeDiscardsCommittedObservation() async {

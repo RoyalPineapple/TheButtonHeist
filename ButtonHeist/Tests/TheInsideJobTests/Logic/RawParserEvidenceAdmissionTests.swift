@@ -10,7 +10,7 @@ import XCTest
 @MainActor
 final class RawParserEvidenceAdmissionTests: XCTestCase {
     func testRawParserEvidenceCannotMutateCommittedInterfaceTree() async throws {
-        let visibleObservationSource = VisibleObservationSourceFixture()
+        let visibleObservationSource = VisibleObservationSourceFixture(observation: nil)
         let brains = TheBrains(
             tripwire: TheTripwire(),
             visibleObservationSource: visibleObservationSource.capture
@@ -40,7 +40,7 @@ final class RawParserEvidenceAdmissionTests: XCTestCase {
     }
 
     func testCommittedObservationAdmitsPreviouslyRawEvidenceToInterfaceTree() async throws {
-        let visibleObservationSource = VisibleObservationSourceFixture()
+        let visibleObservationSource = VisibleObservationSourceFixture(observation: nil)
         let brains = TheBrains(
             tripwire: TheTripwire(),
             visibleObservationSource: visibleObservationSource.capture

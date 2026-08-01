@@ -10,61 +10,49 @@ extension TheTripwire {
     /// Reference type so tick mutations don't require enum reconstruction.
     @MainActor
     final class RunningContext {
-        private enum Driver {
-            case displayLink(CADisplayLink, target: PulseTick)
-            case injected
-        }
-
-        private let driver: Driver
+        private let displayLink: CADisplayLink
+        private let target: PulseTick
+        private let pulseStartTime: CFTimeInterval
         var latestReading: PulseReading?
         var tickCount: UInt64 = 0
         var observationDemand: TickDemand?
         var receiveObservationPulse: (@MainActor (PulseReading) -> Void)?
 
-        var usesDisplayLink: Bool {
-            guard case .displayLink = driver else { return false }
-            return true
-        }
-
         var displayFrameRateRange: CAFrameRateRange? {
-            guard case .displayLink(let link, _) = driver else { return nil }
-            return link.preferredFrameRateRange
+            displayLink.preferredFrameRateRange
         }
 
-        init(source: PulseSource, tripwire: TheTripwire) {
-            switch source {
-            case .displayLink:
-                let target = PulseTick(tripwire: tripwire)
-                let link = CADisplayLink(
-                    target: target,
-                    selector: #selector(PulseTick.handleTick)
-                )
-                link.preferredFrameRateRange = TheTripwire.pulseFrameRateRange
-                link.add(to: .main, forMode: .common)
-                link.isPaused = true
-                driver = .displayLink(link, target: target)
-            case .injected:
-                driver = .injected
-            }
+        init(tripwire: TheTripwire) {
+            target = PulseTick(tripwire: tripwire)
+            displayLink = CADisplayLink(
+                target: target,
+                selector: #selector(PulseTick.handleTick)
+            )
+            pulseStartTime = CACurrentMediaTime()
+            displayLink.preferredFrameRateRange = TheTripwire.pulseFrameRateRange
+            displayLink.add(to: .main, forMode: .common)
+            displayLink.isPaused = true
         }
 
         func stop() {
-            guard case .displayLink(let link, _) = driver else { return }
-            link.invalidate()
+            displayLink.invalidate()
         }
 
         func updateDisplayLink(
             demand: TickDemand?,
             activeMaximumFramesPerSecond: Int
         ) {
-            guard case .displayLink(let link, _) = driver else { return }
             let hasImmediateDemand = demand == .immediate
-            link.preferredFrameRateRange = hasImmediateDemand
+            displayLink.preferredFrameRateRange = hasImmediateDemand
                 ? TheTripwire.activeDisplayFrameRateRange(
                     maximumFramesPerSecond: activeMaximumFramesPerSecond
                 )
                 : TheTripwire.pulseFrameRateRange
-            link.isPaused = demand == nil
+            displayLink.isPaused = demand == nil
+        }
+
+        func elapsed(at timestamp: CFTimeInterval) -> Duration {
+            .seconds(max(0, timestamp - pulseStartTime))
         }
     }
 
@@ -90,7 +78,7 @@ extension TheTripwire {
 
     func startPulse() {
         guard case .idle = pulsePhase else { return }
-        pulsePhase = .running(RunningContext(source: pulseSource, tripwire: self))
+        pulsePhase = .running(RunningContext(tripwire: self))
     }
 
     func stopPulse() {
@@ -134,7 +122,9 @@ extension TheTripwire {
 
     // MARK: - Tick Handler
 
-    func onTick() {
+    /// Samples live UIKit and display-link time before handing one complete
+    /// value to the semantic observation stream.
+    func captureDisplayLinkPulse(from displayLink: CADisplayLink) {
         guard let context = runningContext else { return }
         context.tickCount += 1
 
@@ -145,10 +135,8 @@ extension TheTripwire {
         let tripwireSignal = tripwireSignal()
         let reading = PulseReading(
             tick: context.tickCount,
-            timestamp: CFAbsoluteTimeGetCurrent(),
-            topmostVC: tripwireSignal.topmostVC,
-            tripwireSignal: tripwireSignal,
-            windowCount: tripwireSignal.windowStack.windows.count
+            elapsed: context.elapsed(at: displayLink.timestamp),
+            tripwireSignal: tripwireSignal
         )
         context.latestReading = reading
 
@@ -156,7 +144,6 @@ extension TheTripwire {
     }
 
     private func updateDisplayLinkRate(_ context: RunningContext) {
-        guard context.usesDisplayLink else { return }
         context.updateDisplayLink(
             demand: context.observationDemand,
             activeMaximumFramesPerSecond: activeScreenMaximumFramesPerSecond()

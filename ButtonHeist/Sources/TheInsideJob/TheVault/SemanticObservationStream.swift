@@ -24,6 +24,11 @@ enum AccessibilityNotificationIngress {
 extension Observation {
 @MainActor
 internal final class Stream {
+    enum PulseIngress {
+        case displayLink
+        case injected
+    }
+
     enum EventDelivery {
         case all
         case noChangesUntilActivated
@@ -74,8 +79,10 @@ internal final class Stream {
         activeViewportMovementCount == 0 ? .resting : .viewportMovement
     }
     var observationWaiters = WaiterStore<UInt64, SemanticObservationWaiter>()
+    var observationWaiterDidRegister: (@MainActor () -> Void)?
     private var eventReceiver: EventReceiver?
     private let notificationIngress: AccessibilityNotificationIngress
+    let pulseIngress: PulseIngress
 
     // MARK: - Subscriber-Facing Observation History
 
@@ -102,11 +109,13 @@ internal final class Stream {
     internal init(
         vault: TheVault,
         tripwire: TheTripwire,
-        notificationIngress: AccessibilityNotificationIngress
+        notificationIngress: AccessibilityNotificationIngress,
+        pulseIngress: PulseIngress
     ) {
         self.vault = vault
         self.tripwire = tripwire
         self.notificationIngress = notificationIngress
+        self.pulseIngress = pulseIngress
         self.readTripwireSignal = { tripwire.tripwireSignal() }
     }
 
@@ -114,15 +123,19 @@ internal final class Stream {
         guard cycle.start() else { return }
         vault.state.discardCurrentObservation()
         notificationIngress.start(deliveringTo: vault.accessibilityNotifications)
-        tripwire.observePulses { [weak self] pulse in
-            self?.receive(pulse)
+        if pulseIngress == .displayLink {
+            tripwire.observePulses { [weak self] pulse in
+                self?.deliver(pulse)
+            }
         }
         updateCycleDemand()
     }
 
     internal func stop() {
         guard let stop = cycle.stop() else { return }
-        tripwire.stopObservingPulses()
+        if pulseIngress == .displayLink {
+            tripwire.stopObservingPulses()
+        }
         stop.activeTask?.cancel()
         cancelObservationWaiters()
         notificationIngress.stop(deliveringTo: vault.accessibilityNotifications)
@@ -259,7 +272,12 @@ internal final class Stream {
         )
     }
 
-    private func receive(_ pulse: TheTripwire.PulseReading) {
+    /// Delivers one already-sampled pulse into the semantic observation cycle.
+    ///
+    /// This boundary owns no UIKit traversal or clock sampling; production
+    /// receives display-link readings and deterministic callers author the same
+    /// value directly.
+    internal func deliver(_ pulse: TheTripwire.PulseReading) {
         cycle.receive(pulse) { [weak self] request in
             Task { @MainActor [weak self] in
                 guard let self else { return }

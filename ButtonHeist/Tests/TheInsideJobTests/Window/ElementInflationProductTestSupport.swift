@@ -9,7 +9,7 @@ import ThePlans
 @MainActor
 final class ElementInflationProductTests: ButtonHeistRuntimeTestCase {
 
-    var visibleObservationSource: VisibleObservationSourceFixture!
+    var visibleObservationSource: HostedVisibleObservationSource!
 
     /// The keyboard the runtime types through.
     ///
@@ -18,7 +18,10 @@ final class ElementInflationProductTests: ButtonHeistRuntimeTestCase {
     var keyboardInput = SafecrackerKeyboardInput()
 
     override func beforeEach() async throws {
-        visibleObservationSource = VisibleObservationSourceFixture()
+        visibleObservationSource = HostedVisibleObservationSource(
+            observation: nil,
+            capturesLive: true
+        )
     }
 
     override func makeBrains(tripwire: TheTripwire) throws -> TheBrains {

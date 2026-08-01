@@ -17,7 +17,7 @@ final class PulseTick: NSObject {
             link.invalidate()
             return
         }
-        tripwire.onTick()
+        tripwire.captureDisplayLinkPulse(from: link)
     }
 }
 

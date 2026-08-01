@@ -105,7 +105,7 @@ final class HeistResultTests: XCTestCase {
     }
 
     func testTopLevelHeistBootstrapsFromFreshVisibleScreen() async throws {
-        let visibleObservationSource = VisibleObservationSourceFixture()
+        let visibleObservationSource = VisibleObservationSourceFixture(observation: nil)
         let job = try TheInsideJob(
             token: "in-app-heist-bootstrap-test",
             visibleObservationSource: visibleObservationSource.capture

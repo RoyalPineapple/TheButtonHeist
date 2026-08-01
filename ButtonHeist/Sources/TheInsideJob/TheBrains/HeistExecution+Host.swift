@@ -8,6 +8,69 @@ import ThePlans
 extension HeistExecution {
     @MainActor
     internal final class Host {
+        /// The live operations that the execution state machine asks the
+        /// platform to perform. Keeping them together makes scheduling and
+        /// platform effects explicit without changing the Machine, Vault, or
+        /// observation stream into test doubles.
+        internal struct RuntimeBoundary {
+            let now: @MainActor () -> RuntimeElapsed.Instant
+            /// Returns `true` only when the requested deadline elapsed.
+            let wait: @MainActor (Duration) async -> Bool
+            let dispatch: @MainActor (
+                ResolvedHeistActionCommand,
+                SemanticObservationDeadline
+            ) async -> TheSafecracker.ActionDispatchResult
+            let explore: @MainActor (
+                ResolvedAccessibilityTarget?,
+                SemanticObservationDeadline
+            ) async -> Navigation.ViewportExit.Outcome
+            let captureFailure: @MainActor (
+                HeistExecutionPath,
+                ScreenCaptureMode
+            ) async -> HeistFailureCapture
+
+            static func live(brains: TheBrains) -> Self {
+                .init(
+                    now: { RuntimeElapsed.now },
+                    wait: { delay in await Task.cancellableSleep(for: delay) },
+                    dispatch: { command, deadline in
+                        await brains.dispatchRuntimeAction(command, deadline: deadline)
+                    },
+                    explore: { target, deadline in
+                        await brains.navigation.exploreForWait(
+                            target: target,
+                            deadline: deadline,
+                            stopWhen: { false }
+                        )
+                    },
+                    captureFailure: { path, mode in
+                        await Self.liveFailureCapture(
+                            brains: brains,
+                            failedPath: path,
+                            mode: mode
+                        )
+                    }
+                )
+            }
+
+            private static func liveFailureCapture(
+                brains: TheBrains,
+                failedPath _: HeistExecutionPath,
+                mode: ScreenCaptureMode
+            ) async -> HeistFailureCapture {
+                switch await brains.captureScreenPayload(
+                    mode: mode,
+                    observationBoundary: .observationCycle
+                ) {
+                case .success(let payload): .captured(payload)
+                case .failure(let failure): .unavailable(
+                    kind: failure.actionFailureKind,
+                    message: failure.message
+                )
+                }
+            }
+        }
+
         private struct Lifetime {
             let eventSubscription: SemanticObservationSubscription
             let observationDemand: SemanticObservationDemand
@@ -138,9 +201,14 @@ extension HeistExecution {
         }
 
         private let brains: TheBrains
+        private let runtimeBoundary: RuntimeBoundary
 
-        internal init(brains: TheBrains) {
+        internal init(
+            brains: TheBrains,
+            runtimeBoundary: RuntimeBoundary? = nil
+        ) {
             self.brains = brains
+            self.runtimeBoundary = runtimeBoundary ?? .live(brains: brains)
         }
 
         internal func execute(
@@ -176,7 +244,7 @@ extension HeistExecution {
                 throw HeistExecution.Failure.runtimeUnavailable
             }
             let wholeDeadline = SemanticObservationDeadline(
-                start: RuntimeElapsed.now,
+                start: runtimeBoundary.now(),
                 timeout: .seconds(timeout.seconds)
             )
             var runtime = Runtime(
@@ -223,7 +291,7 @@ extension HeistExecution {
                             decision = advance(event, runtime: &runtime)
                             continue
                         }
-                        if let expiration = runtime.deadlines.expiration(at: RuntimeElapsed.now) {
+                        if let expiration = runtime.deadlines.expiration(at: runtimeBoundary.now()) {
                             decision = await terminalDeadlineDecision(
                                 expiration,
                                 inbox: installation.inbox,
@@ -234,7 +302,7 @@ extension HeistExecution {
                         }
                         switch await waitForEvent(
                             from: installation.inbox,
-                            before: runtime.deadlines.remainingDuration(at: RuntimeElapsed.now)
+                            before: runtime.deadlines.remainingDuration(at: runtimeBoundary.now())
                         ) {
                         case .event(let event):
                             decision = advance(event, runtime: &runtime)
@@ -242,7 +310,7 @@ extension HeistExecution {
                             throw CancellationError()
                         case .deadline:
                             decision = await terminalDeadlineDecision(
-                                runtime.deadlines.expiration(at: RuntimeElapsed.now) ?? .whole,
+                                runtime.deadlines.expiration(at: runtimeBoundary.now()) ?? .whole,
                                 inbox: installation.inbox,
                                 currentDecision: decision,
                                 runtime: &runtime
@@ -313,7 +381,7 @@ extension HeistExecution {
                    let terminalClose {
                     return runtime.machine.advance(admit(
                         terminalClose,
-                        expiration: runtime.deadlines.expiration(at: RuntimeElapsed.now),
+                        expiration: runtime.deadlines.expiration(at: runtimeBoundary.now()),
                         runtime: &runtime
                     ))
                 }
@@ -326,7 +394,7 @@ extension HeistExecution {
                     )
                 }
                 return await terminalDeadlineDecision(
-                    runtime.deadlines.expiration(at: RuntimeElapsed.now) ?? .whole,
+                    runtime.deadlines.expiration(at: runtimeBoundary.now()) ?? .whole,
                     inbox: inbox,
                     currentDecision: currentDecision,
                     reducesStaleEffectRequest: true,
@@ -345,7 +413,7 @@ extension HeistExecution {
                 return runtime.machine.advance(admit(effect, runtime: &runtime))
 
             case .observationClosed:
-                let expiration = runtime.deadlines.expiration(at: RuntimeElapsed.now)
+                let expiration = runtime.deadlines.expiration(at: runtimeBoundary.now())
                 let decision = runtime.machine.advance(admit(
                     effect,
                     expiration: expiration,
@@ -355,7 +423,7 @@ extension HeistExecution {
 
             case .viewportExited:
                 let decision = runtime.machine.advance(admit(effect, runtime: &runtime))
-                guard let expiration = runtime.deadlines.expiration(at: RuntimeElapsed.now) else {
+                guard let expiration = runtime.deadlines.expiration(at: runtimeBoundary.now()) else {
                     return decision
                 }
                 return await terminalDeadlineDecision(
@@ -367,7 +435,7 @@ extension HeistExecution {
 
             case .observationBegan(let observation):
                 let decision = admitObservationBegan(effect, observation: observation, runtime: &runtime)
-                guard let expiration = runtime.deadlines.expiration(at: RuntimeElapsed.now) else {
+                guard let expiration = runtime.deadlines.expiration(at: runtimeBoundary.now()) else {
                     return decision
                 }
                 return await terminalDeadlineDecision(
@@ -378,7 +446,7 @@ extension HeistExecution {
                 )
 
             case .input:
-                guard let expiration = runtime.deadlines.expiration(at: RuntimeElapsed.now) else {
+                guard let expiration = runtime.deadlines.expiration(at: runtimeBoundary.now()) else {
                     return runtime.machine.advance(admit(effect, runtime: &runtime))
                 }
                 discard(effect)
@@ -429,7 +497,7 @@ extension HeistExecution {
             ))
             let decision = runtime.machine.advance(admit(effect, runtime: &runtime))
             return await terminalDeadlineDecision(
-                runtime.deadlines.expiration(at: RuntimeElapsed.now) ?? .whole,
+                runtime.deadlines.expiration(at: runtimeBoundary.now()) ?? .whole,
                 inbox: inbox,
                 currentDecision: decision,
                 runtime: &runtime
@@ -471,16 +539,15 @@ extension HeistExecution {
                 }
                 return .input(.dispatchCompleted(
                     id,
-                    await brains.dispatchRuntimeAction(command, deadline: deadline)
+                    await runtimeBoundary.dispatch(command, deadline)
                 ))
 
             case .explore(let id, let predicate):
                 let outcome: Navigation.ViewportExit.Outcome
                 if let deadline = activeLeafDeadline(id: id, runtime: runtime) {
-                    outcome = await brains.navigation.exploreForWait(
-                        target: predicate.resolved.watchTarget,
-                        deadline: deadline,
-                        stopWhen: { false }
+                    outcome = await runtimeBoundary.explore(
+                        predicate.resolved.watchTarget,
+                        deadline
                     )
                 } else {
                     outcome = .failed(.originUnavailable)
@@ -498,7 +565,7 @@ extension HeistExecution {
             case .captureFailureScreenshot(let id, let failedPath, let mode):
                 return .input(.failureScreenshotCaptured(
                     id,
-                    await failureScreenshot(failedPath: failedPath, mode: mode)
+                    await runtimeBoundary.captureFailure(failedPath, mode)
                 ))
             }
         }
@@ -529,7 +596,7 @@ extension HeistExecution {
                 }
                 return winner
             }
-            let delay = runtime.deadlines.remainingDuration(at: RuntimeElapsed.now)
+            let delay = runtime.deadlines.remainingDuration(at: runtimeBoundary.now())
             let winner = await SemanticObservationCycleContext.$receipt.withValue(receipt) {
                 await withTaskGroup(of: EffectRace.self) { group in
                     group.addTask { [self] in
@@ -547,7 +614,7 @@ extension HeistExecution {
                         }
                     }
                     group.addTask {
-                        await Task.cancellableSleep(for: delay)
+                        await self.runtimeBoundary.wait(delay)
                             ? .deadline(observationClosed: nil, completedObservationCycle: false)
                             : .cancelled(completedObservationCycle: false)
                     }
@@ -588,7 +655,10 @@ extension HeistExecution {
             precondition(runtime.observation == nil, "Only one observation boundary may be active")
             let stream = brains.vault.semanticObservationStream
             let scope = stream.subscribe(scope: request.scope)
-            let leafDeadline = SemanticObservationDeadline(start: RuntimeElapsed.now, timeout: request.timeout)
+            let leafDeadline = SemanticObservationDeadline(
+                start: runtimeBoundary.now(),
+                timeout: request.timeout
+            )
             let beginsAction: Bool
             if case .action(let leaf)? = runtime.machine.running.activeLeaf,
                leaf.id == id,
@@ -750,7 +820,7 @@ extension HeistExecution {
             runtime: inout Runtime
         ) -> Decision {
             if event.changesInterface, var observation = runtime.observation {
-                observation.lastTreeChangeAt = RuntimeElapsed.now
+                observation.lastTreeChangeAt = runtimeBoundary.now()
                 runtime.observation = observation
             }
             return runtime.machine.advance(.event(event))
@@ -961,19 +1031,16 @@ extension HeistExecution {
         private func expectationTiming(for observation: ActiveObservation) -> HeistExpectationTiming {
             .init(
                 budgetMs: RuntimeElapsed.admit(milliseconds: observation.deadline.budgetMilliseconds),
-                elapsedMs: RuntimeElapsed.milliseconds(since: observation.deadline.start, endedAt: RuntimeElapsed.now),
+                elapsedMs: RuntimeElapsed.milliseconds(
+                    since: observation.deadline.start,
+                    endedAt: runtimeBoundary.now()
+                ),
                 lastTreeChangeElapsedMs: observation.lastTreeChangeAt.map {
                     RuntimeElapsed.milliseconds(since: observation.deadline.start, endedAt: $0)
                 }
             )
         }
 
-        private func failureScreenshot(failedPath _: HeistExecutionPath, mode: ScreenCaptureMode) async -> HeistFailureCapture {
-            switch await brains.captureScreenPayload(mode: mode, observationBoundary: .observationCycle) {
-            case .success(let payload): .captured(payload)
-            case .failure(let failure): .unavailable(kind: failure.actionFailureKind, message: failure.message)
-            }
-        }
         private func waitForEvent(from inbox: ObservationInbox, before delay: Duration) async -> Waiting {
             await withTaskGroup(of: Waiting.self) { group in
                 group.addTask {
@@ -981,9 +1048,17 @@ extension HeistExecution {
                     return .event(event)
                 }
                 group.addTask {
-                    await Task.cancellableSleep(for: delay) ? .deadline : .cancelled
+                    await self.runtimeBoundary.wait(delay) ? .deadline : .cancelled
                 }
                 let first = await group.next() ?? .deadline
+                if case .event = first {
+                    group.cancelAll()
+                    return first
+                }
+                if let queuedEvent = await inbox.pop() {
+                    group.cancelAll()
+                    return .event(queuedEvent)
+                }
                 group.cancelAll()
                 var queuedEvent: Observation.Event?
                 while let result = await group.next() {
@@ -991,7 +1066,6 @@ extension HeistExecution {
                         queuedEvent = event
                     }
                 }
-                if case .event = first { return first }
                 return queuedEvent.map(Waiting.event) ?? first
             }
         }

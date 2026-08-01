@@ -53,17 +53,17 @@ final class TripwireIntegrationTests: XCTestCase {
         XCTAssertGreaterThan(reading.tick, 0)
     }
 
-    func testPulseReadingHasValidWindowCount() async throws {
+    func testPulseReadingHasVisibleWindowSignal() async throws {
         await observeTick()
         let reading = try XCTUnwrap(tripwire.latestReading, "No reading produced")
-        XCTAssertGreaterThan(reading.windowCount, 0)
+        XCTAssertFalse(reading.tripwireSignal.windowStack.windows.isEmpty)
     }
 
     func testPulseReadingTracksVCIdentity() async throws {
         await observeTick()
         let reading = try XCTUnwrap(tripwire.latestReading, "No reading produced")
         // Test host should have a VC
-        XCTAssertNotNil(reading.topmostVC)
+        XCTAssertNotNil(reading.tripwireSignal.topmostVC)
     }
 
     private func observeTick(
@@ -96,8 +96,8 @@ final class TripwireIntegrationTests: XCTestCase {
         return [
             "pulseRunning=\(tripwire.isPulseRunning)",
             "tick=\(reading.tick)",
-            "windowCount=\(reading.windowCount)",
-            "topmostVC=\(String(describing: reading.topmostVC))",
+            "windowCount=\(reading.tripwireSignal.windowStack.windows.count)",
+            "topmostVC=\(String(describing: reading.tripwireSignal.topmostVC))",
         ].joined(separator: " ")
     }
 

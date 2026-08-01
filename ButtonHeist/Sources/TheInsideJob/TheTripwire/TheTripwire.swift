@@ -18,17 +18,6 @@ import UIKit
 @MainActor
 final class TheTripwire {
 
-    enum PulseSource {
-        case displayLink
-        case injected
-    }
-
-    let pulseSource: PulseSource
-
-    init(pulseSource: PulseSource = .displayLink) {
-        self.pulseSource = pulseSource
-    }
-
     var pulsePhase: PulsePhase = .idle
 
     var runningContext: RunningContext? {

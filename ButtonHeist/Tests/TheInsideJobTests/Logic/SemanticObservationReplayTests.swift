@@ -86,6 +86,7 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
 
     func testCommitCompletesEveryObservationWaiterWithCurrentState() async {
         let stream = vault.semanticObservationStream
+        stream.start()
         let start = vault.state.history.endIndex
         let tasks = (0..<2).map { _ in
             Task { @MainActor in
@@ -111,6 +112,7 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
 
     func testCancellingObservationWaitRemovesWaiter() async {
         let stream = vault.semanticObservationStream
+        stream.start()
         let start = vault.state.history.endIndex
         let task = Task { @MainActor in
             await stream.waitForObservation(
@@ -130,6 +132,7 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
 
     func testDiscoveryCycleCompletesWaiterWithoutInventingObservation() async {
         let stream = vault.semanticObservationStream
+        stream.start()
         let start = vault.state.history.endIndex
         let task = Task { @MainActor in
             await stream.waitForObservation(

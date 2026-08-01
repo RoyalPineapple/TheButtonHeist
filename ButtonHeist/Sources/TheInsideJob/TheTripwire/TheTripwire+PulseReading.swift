@@ -3,14 +3,15 @@
 import UIKit
 
 extension TheTripwire {
-    /// Snapshot of all monitored UI signals at a single tick.
-    struct PulseReading {
+    /// Snapshot of the display-link facts consumed by one observation cycle.
+    ///
+    /// `elapsed` is monotonic time since the pulse began. It is sampled by the
+    /// display-link adapter in production and authored directly by deterministic
+    /// callers, so no delivery recipient needs to read a clock.
+    struct PulseReading: Sendable, Equatable {
         let tick: UInt64
-        let timestamp: CFAbsoluteTime
-
-        let topmostVC: ObjectIdentifier?
+        let elapsed: Duration
         let tripwireSignal: TripwireSignal
-        let windowCount: Int
     }
 }
 

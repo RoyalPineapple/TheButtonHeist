@@ -6,6 +6,7 @@ import UIKit
 @testable import TheInsideJob
 @testable import TheScore
 
+/// Deterministic semantic observation-reduction coverage.
 @MainActor
 extension TheBrainsPipelineTests {
 

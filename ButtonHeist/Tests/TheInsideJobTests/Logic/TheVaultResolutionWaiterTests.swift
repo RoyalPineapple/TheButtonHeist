@@ -23,6 +23,7 @@ extension TheVaultResolutionTests {
     }
 
     func testInvalidatedCurrentTruthRequiresLaterPublication() async {
+        vault.semanticObservationStream.start()
         let firstReceipt = await capturePublication(in: vault) {
             await vault.semanticObservationStream.commitVisibleObservationForTesting(
                 InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
@@ -55,6 +56,7 @@ extension TheVaultResolutionTests {
     }
 
     func testDiscoveryWaiterIgnoresVisiblePublication() async {
+        vault.semanticObservationStream.start()
         let firstReceipt = await capturePublication(in: vault) {
             await vault.semanticObservationStream.commitVisibleObservationForTesting(
                 InterfaceObservation.makeForTests(elements: [(element(label: "First"), "first")])
@@ -84,6 +86,7 @@ extension TheVaultResolutionTests {
     }
 
     func testVisibleWaiterReceivesCanonicalGraphFromDiscoveryPublication() async {
+        vault.semanticObservationStream.start()
         let sharedHeader = element(label: "Catalog", traits: .header)
         let firstReceipt = await capturePublication(in: vault) {
             await vault.semanticObservationStream.commitVisibleObservationForTesting(

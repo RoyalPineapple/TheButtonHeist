@@ -11,9 +11,9 @@ import UIKit
 extension TheBrainsScrollTests {
 
     func testInflationRecordsDiscoveredOriginWhenExplorationFindsTarget() async throws {
-        brains.vault.semanticObservationStream.stop()
+        brains.tripwire.stopPulse()
         let baselineObject = retainedLiveObject()
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(.makeForTests([
+        await installSyntheticObservation(.makeForTests([
             .init(makeElement(label: "Home"), heistId: "home", object: baselineObject),
         ]))
         let discoveredFrame = CGRect(x: 40, y: 120, width: 240, height: 44)
@@ -55,8 +55,7 @@ extension TheBrainsScrollTests {
             )
         }
         await waitForSettledSemanticWaiter()
-        await brains.vault.semanticObservationStream
-            .commitVisibleObservationForTesting(discoveredScreen)
+        await installSyntheticObservation(discoveredScreen)
         await inflation.value
 
         guard case .inflated(let inflatedTarget)? = resultBox.value else {
@@ -72,7 +71,7 @@ extension TheBrainsScrollTests {
     }
 
     func testInflationUsesNextSettledVisibleEvidenceForCommittedTarget() async throws {
-        brains.vault.semanticObservationStream.stop()
+        brains.tripwire.stopPulse()
         let targetId: HeistId = "coke_button"
         let staleKnownTarget = makeElement(label: "Coke", traits: .button)
         await installScreenWithOffViewportEntry(
@@ -115,9 +114,9 @@ extension TheBrainsScrollTests {
             )
         }
         await waitForSettledSemanticWaiter()
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(visibleScreen)
+        await installSyntheticObservation(visibleScreen)
         await waitForSettledSemanticWaiter()
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(visibleScreen)
+        await installSyntheticObservation(visibleScreen)
         await inflation.value
 
         guard case .inflated(let inflatedTarget)? = resultBox.value else {
@@ -130,7 +129,7 @@ extension TheBrainsScrollTests {
     }
 
     func testRevealRetryResolvesTargetFromNextSettledObservation() async throws {
-        brains.vault.semanticObservationStream.stop()
+        brains.tripwire.stopPulse()
         let targetId: HeistId = "coke_button"
         let overviewVisible = makeElement(label: "Combo Overview", traits: .header)
         let staleCoke = makeElement(label: "Coke", traits: .button)
@@ -175,9 +174,9 @@ extension TheBrainsScrollTests {
             )
         }
         await waitForSettledSemanticWaiter()
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(arrivedScreen)
+        await installSyntheticObservation(arrivedScreen)
         await waitForSettledSemanticWaiter()
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(arrivedScreen)
+        await installSyntheticObservation(arrivedScreen)
 
         await inflation.value
 
@@ -193,7 +192,7 @@ extension TheBrainsScrollTests {
     }
 
     func testRevealRetryAttemptsFreshKnownTargetOnlyOnce() async throws {
-        brains.vault.semanticObservationStream.stop()
+        brains.tripwire.stopPulse()
         let overviewVisible = makeElement(label: "Combo Overview", traits: .header)
         let staleCoke = makeElement(label: "Coke", traits: .button)
         await installScreenWithOffViewportEntry(
@@ -232,10 +231,10 @@ extension TheBrainsScrollTests {
             )
         }
         await waitForSettledSemanticWaiter()
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(freshKnownScreen)
+        await installSyntheticObservation(freshKnownScreen)
         await waitForSettledSemanticWaiter()
         XCTAssertEqual(revealAttempts, 0)
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(freshKnownScreen)
+        await installSyntheticObservation(freshKnownScreen)
         await waitForSettledSemanticWaiter()
         XCTAssertEqual(revealAttempts, 0)
         inflation.cancel()
