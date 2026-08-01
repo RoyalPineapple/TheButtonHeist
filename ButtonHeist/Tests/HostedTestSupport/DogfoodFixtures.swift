@@ -149,19 +149,19 @@ package enum TodoScreen {
 package enum CalculatorScreen {
     package static let addSevenAndFive = HeistDef<Void>("CalculatorScreen.addSevenAndFive") {
         Activate(.element(.label("all clear"), .traits([.button])))
-            .expect(.exists(.label("0")), timeout: 1)
+            .expect(.exists(.label("0")))
 
         Activate(.element(.label("7"), .traits([.button])))
-            .expect(.exists(.label("7")), timeout: 1)
+            .expect(.exists(.label("7")))
 
         Activate(.element(.label("+"), .traits([.button])))
-            .expect(.elementsChanged, timeout: 1)
+            .expect(.elementsChanged)
 
         Activate(.element(.label("5"), .traits([.button])))
-            .expect(.exists(.label("5")), timeout: 1)
+            .expect(.exists(.label("5")))
 
         Activate(.element(.label("equals"), .traits([.button])))
-            .expect(.exists(.label("12")), timeout: 1)
+            .expect(.exists(.label("12")))
     }
 }
 
