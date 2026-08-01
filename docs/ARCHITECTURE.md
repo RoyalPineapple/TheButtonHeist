@@ -104,9 +104,12 @@ capture, classifies continuity, constructs the corresponding
 publishes it. There is no parser-to-history path, subscriber-driven graph
 mutation, compatibility reducer, or second runtime state projection.
 
-The stream is also the one observation producer. TheTripwire's persistent
-`CADisplayLink` supplies serialized pulses only while stream demand is nonzero.
-One pulse starts one claim/capture/parse/commit/publish/evaluate cycle;
+The stream is also the one observation producer. In production, TheTripwire's
+persistent `CADisplayLink` samples UIKit and supplies complete serialized pulse
+readings only while stream demand is nonzero. Deterministic execution selects
+injected pulse ingress and delivers the same typed reading without starting a
+display link or sampling a clock or UIKit. One pulse starts one
+claim/capture/parse/commit/publish/evaluate cycle;
 concurrent consumers join it. Once a Vault commit installs admitted-read state,
 waits and action before-state acquisition reuse the committed event until the
 next pulse, explicit invalidation, or screen replacement. After-action and
@@ -179,6 +182,11 @@ started executors.
 
 The MainActor host owns the active leaf's absolute deadline, the whole heist's
 absolute deadline, and one asynchronous task scheduled for the earlier value.
+Its `RuntimeBoundary` is the single owner of elapsed-time reads, cancellable
+waiting, action dispatch, viewport exploration, and failure capture. Production
+binds those operations to live implementations; deterministic scenarios bind
+virtual elapsed time and typed scripted platform effects while retaining the
+real host and machine.
 The leaf deadline starts before baseline acquisition and covers reveal,
 dispatch, expectation evaluation, and the trailing `noChange` required to close
 the observation. There is no separate readiness allowance. Deadlines are
@@ -214,6 +222,7 @@ incomplete ingress as `noChange`.
 sequenceDiagram
     participant Demand
     participant DisplayLink as CADisplayLink
+    participant Script as Deterministic input
     participant Stream as Observation.Stream
     participant Bus as Notification bus
     participant Vault
@@ -222,6 +231,7 @@ sequenceDiagram
     Demand->>Stream: visible or discovery demand
     Stream->>DisplayLink: resume with canonical demand
     DisplayLink->>Stream: pulse
+    Script-->>Stream: injected pulse (tests only)
     Stream->>Bus: freeze cycle claim
     Bus-->>Stream: exact notification batch
     Stream->>Vault: admitted snapshot + normalized notification payloads
@@ -247,8 +257,9 @@ normalized `ScreenFacts`. Notification delivery is best effort, and absence is
 not evidence of replacement or stability.
 
 The runtime classifies accessibility state, not animations. One persistent
-`CADisplayLink` in TheTripwire is the sole observation clock. Scope pressure is
-reduced to one pulse demand; zero demand pauses the link. A pulse starts at most
+`CADisplayLink` in TheTripwire is the sole live observation clock. Scope pressure
+is reduced to one pulse demand; zero demand pauses the link. Injected ingress is
+used only by deterministic execution and never starts that live clock. A pulse starts at most
 one capture cycle, and pulses received while that synchronous cycle is active
 are dropped. A later display pulse starts the next demanded cycle. The cycle
 claims notifications, captures and parses live UIKit state, commits snapshot and

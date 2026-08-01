@@ -87,6 +87,7 @@ path is drawn in the
 | `Observation.Evidence` | A result's baseline, current snapshot, ordered events, and completeness | Live runtime ownership or a second trace |
 | `HeistExecution.Machine` | One complete plan's deterministic progress and result accumulation | UIKit, clocks, subscriptions, or async tasks |
 | `HeistExecution.Host` | MainActor effects, subscriptions, cancellation, and both deadline policies | Predicate truth or parallel execution state |
+| `HeistExecution.Host.RuntimeBoundary` | Live elapsed time, cancellable waiting, action dispatch, exploration, and failure capture requested by the host | Machine state, observation truth, or another result model |
 | `HeistResult` | One admitted durable execution tree | Presentation-specific models |
 | `HeistReport` | One interpretation of execution truth | Runtime decisions or formatter-specific traversal |
 
@@ -107,6 +108,14 @@ They do not decide what an action means or whether a predicate is true.
    leaf completes.
 8. The result retains immutable observation evidence; report and rendering
    layers only project it.
+
+The deterministic execution suite supplies already sampled pulse readings,
+explicit notification records, virtual elapsed time, and typed platform-effect
+results to these same boundaries. Injected pulse ingress never starts a display
+link or samples UIKit. It still runs the real stream, Vault, host, machine,
+result, report, and human renderer. Live window and BH Demo suites retain the
+platform contracts: capture, gestures, focus, scrolling, presentation,
+lifecycle, and disposable UIKit evidence.
 
 Screen replacement is normalized as old-tree departures, one screen marker,
 then new-tree arrivals. Appeared and disappeared may cross that boundary.

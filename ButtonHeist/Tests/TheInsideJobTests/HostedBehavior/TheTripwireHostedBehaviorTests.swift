@@ -1,9 +1,7 @@
 #if canImport(UIKit)
 import XCTest
+import UIKit
 
-import ButtonHeistHostedTestSupport
-import ButtonHeistTesting
-import TheScore
 @testable import TheInsideJob
 
 @MainActor
@@ -18,16 +16,6 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
     override func tearDown() async throws {
         tripwire.stopPulse()
         tripwire = nil
-    }
-
-    func testPulseLifecycleIsIdempotentAndReturnsToIdle() {
-        tripwire.startPulse()
-        tripwire.startPulse()
-        XCTAssertTrue(tripwire.isPulseRunning)
-
-        tripwire.stopPulse()
-        XCTAssertFalse(tripwire.isPulseRunning)
-        XCTAssertNil(tripwire.latestReading)
     }
 
     func testTraversableWindowsAreVisibleSizedAndFrontToBack() {
@@ -56,105 +44,10 @@ final class TheTripwireHostedBehaviorTests: XCTestCase {
         XCTAssertTrue(TheTripwire.orderedVisibleWindows(includeFingerprints: true).contains(fingerprintWindow))
     }
 
-    func testFingerprintsTrackEveryActivePoint() {
-        let fingerprints = TheFingerprints(isEnabled: true)
-        let phases = [
-            [CGPoint(x: 20, y: 40), CGPoint(x: 80, y: 120)],
-            [CGPoint(x: 25, y: 45), CGPoint(x: 85, y: 125), CGPoint(x: 145, y: 185)],
-            [CGPoint(x: 40, y: 60)],
-        ]
-
-        fingerprints.beginTracking(at: phases[0])
-        XCTAssertEqual(fingerprints.activeFingerprintCenters, phases[0])
-        for points in phases.dropFirst() {
-            fingerprints.updateTracking(to: points)
-            XCTAssertEqual(fingerprints.activeFingerprintCenters, points)
-        }
-
-        fingerprints.endTracking()
-        XCTAssertTrue(fingerprints.activeFingerprintCenters.isEmpty)
-    }
-
     func testHostedControllerIsResolvableWhenIdle() {
         XCTAssertNotNil(tripwire.topmostViewController())
     }
 
-    func testTransientExpectationLatchesUntilReadyHandoff() async throws {
-        let heist = try await runHeist("HostedTransientExpectationReadyHandoff") {
-            try DemoNavigation.backToRoot()
-            try DogfoodHome.openScreen("Transient Flow")
-            Activate(.label("Submit"))
-                .expect(TransientFlowScreen.lifecycle, timeout: 8)
-        }
-        let evidence = try actionEvidence(
-            matching: TransientFlowScreen.lifecycle,
-            in: heist.result
-        )
-        let result = try XCTUnwrap(evidence.result)
-        let observation = try XCTUnwrap(result.observationEvidence)
-
-        XCTAssertEqual(try evidence.replayExpectation()?.met, true)
-        XCTAssertTrue(
-            observation.hostedElementEdits.added.contains {
-                $0.semantics.assertable.label == "Processing"
-            }
-        )
-        XCTAssertTrue(
-            observation.hostedElementEdits.removed.contains {
-                $0.semantics.assertable.label == "Submit"
-            }
-        )
-        XCTAssertEqual(observation.coverage, .complete)
-    }
-
-    func testAnnouncementExpectationLatchesUntilReadyHandoff() async throws {
-        let heist = try await runHeist("HostedAnnouncementExpectationReadyHandoff") {
-            try DemoNavigation.backToRoot()
-            try DogfoodHome.openScreen("Transient Flow")
-            Activate(.label("Submit"))
-                .expect(TransientFlowScreen.announcement, timeout: 8)
-        }
-        let evidence = try actionEvidence(
-            matching: TransientFlowScreen.announcement,
-            in: heist.result
-        )
-        let result = try XCTUnwrap(evidence.result)
-        let observation = try XCTUnwrap(result.observationEvidence)
-
-        XCTAssertEqual(try evidence.replayExpectation()?.met, true)
-        XCTAssertEqual(try evidence.announcement, "Ticket saved.")
-        XCTAssertEqual(observation.coverage, .complete)
-    }
-
-    private func actionEvidence(
-        matching predicate: AccessibilityPredicate,
-        in result: HeistResult,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) throws -> HeistActionEvidence {
-        try XCTUnwrap(
-            result.outputNodes.lazy.compactMap(\.actionEvidence)
-                .first { try $0.replayExpectation()?.predicate == predicate },
-            "Missing action evidence for \(predicate)",
-            file: file,
-            line: line
-        )
-    }
-}
-
-private extension Observation.Evidence {
-    var hostedElementEdits: ElementEdits {
-        let snapshots = (baseline.map { [$0] } ?? []) + events.compactMap(\.snapshot)
-        return zip(snapshots, snapshots.dropFirst())
-            .reduce(into: ElementEdits()) { combined, pair in
-                let edits = ElementEdits.between(pair.0.interface, pair.1.interface)
-                combined = ElementEdits(
-                    added: combined.added + edits.added,
-                    removed: combined.removed + edits.removed,
-                    updated: combined.updated + edits.updated
-                )
-            }
-    }
 }
 
 #endif // canImport(UIKit)

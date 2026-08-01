@@ -100,6 +100,32 @@ The canonical runner exposes four iOS suites:
 | `TheInsideJobIntegrationTests` | `BH Demo`-hosted real loopback, TLS, and server-transport integration coverage |
 | `HostedBehaviorTests` | `BH Demo`-hosted behavior, dogfood, and adversarial aggregate |
 
+The logic suite owns Button Heist's finite semantic algebra and complete
+execution scheduling over explicit inputs. Its deterministic runtime scenarios
+author notification records, pulse readings, virtual elapsed time, semantic
+observations, and typed action outcomes; they do not start `CADisplayLink`,
+read process notifications, capture a window, or wait on wall time. The window
+and behavior suites keep assertions whose value comes from UIKit identity,
+capture, gestures, focus, scrolling, presentation, app lifecycle, or the real
+BH Demo process. Moving a semantic assertion into logic does not replace its
+distinct platform canary.
+
+### Test fixture ownership
+
+| Layer | Canonical fixture owner | Contract |
+|-------|-------------------------|----------|
+| Portable plans, values, wire, and report projection | Target-local `TestSupport` values | No UIKit, networking, process state, or alternate semantic model |
+| Admitted accessibility truth | `TheInsideJobTests/Shared/LogicWindow` element and observation values | Explicit value input with no live-capture fallback |
+| Execution reducer | `HeistExecutionMachineTestSupport.swift` | Real machine reduced over typed snapshots, events, and outcomes |
+| Complete semantic runtime | `DeterministicRuntimeScenarioDriver.swift` | Real stream, Vault, host, machine, result, and render projection over explicit inputs |
+| Foreground UIKit boundary | `TheInsideJobWindowTests` specialist fixtures | Windows, live objects, capture, gestures, focus, scrolling, and restoration |
+| Real application behavior | `ButtonHeistHostedTestSupport` and `AdversarialScenarioCatalog` | Authored heists against the actual BH Demo accessibility surface |
+
+A higher-layer fixture composes the already tested lower implementation; it
+does not recreate that implementation as a mock. Only platform action effects,
+viewport exploration, and failure capture are scripted by the complete
+deterministic runtime driver.
+
 `TheInsideJobWindowTests` and `HostedBehaviorTests` share the
 `HostedBehaviorTests` Xcode scheme and build products. The runner selects only
 the window target for the former and excludes it from the latter, which runs
