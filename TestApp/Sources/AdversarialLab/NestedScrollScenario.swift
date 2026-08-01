@@ -11,9 +11,8 @@ internal struct NestedScrollScenarioView: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
 }
 
-/// Value evidence emitted by the live nested-scroll fixture. App-hosted tests
-/// subscribe before presenting the route, then cancel from a real movement
-/// boundary rather than guessing how long discovery will take.
+/// Value evidence emitted by the live nested-scroll fixture so app-hosted tests
+/// can cancel at a real movement boundary instead of guessing discovery timing.
 internal struct NestedScrollScenarioEvidence: Equatable, Sendable {
     internal let outerOffset: String
     internal let innerOffset: String
@@ -30,23 +29,15 @@ internal struct NestedScrollScenarioEvidence: Equatable, Sendable {
 /// at an observed real-world boundary.
 @MainActor
 internal enum NestedScrollScenarioInstrumentation {
-    private static var stream: AsyncStream<NestedScrollScenarioEvidence>?
     private static var continuation: AsyncStream<NestedScrollScenarioEvidence>.Continuation?
 
-    internal static func prepare() {
+    internal static func prepare() -> AsyncStream<NestedScrollScenarioEvidence> {
         continuation?.finish()
         let stream = AsyncStream<NestedScrollScenarioEvidence>.makeStream(
             bufferingPolicy: .bufferingNewest(2)
         )
-        self.stream = stream.stream
         continuation = stream.continuation
-    }
-
-    internal static func evidence() -> AsyncStream<NestedScrollScenarioEvidence> {
-        guard let stream else {
-            preconditionFailure("Prepare nested-scroll instrumentation before observing evidence")
-        }
-        return stream
+        return stream.stream
     }
 
     internal static func record(_ evidence: NestedScrollScenarioEvidence) {

@@ -105,8 +105,7 @@ final class AdversarialNavigationTests: XCTestCase {
         }
         await brains.vault.resetInterfaceForLifecycle()
 
-        NestedScrollScenarioInstrumentation.prepare()
-        let evidence = NestedScrollScenarioInstrumentation.evidence()
+        let evidence = NestedScrollScenarioInstrumentation.prepare()
         let movementBoundary = Task { @MainActor in
             var iterator = evidence.makeAsyncIterator()
             return await iterator.next()
@@ -201,11 +200,11 @@ final class AdversarialNavigationTests: XCTestCase {
         }
         await brains.vault.resetInterfaceForLifecycle()
 
-        NestedScrollScenarioInstrumentation.prepare()
+        let evidence = NestedScrollScenarioInstrumentation.prepare()
         let completedExploration = await brains.navigation.fullGraph()
         let exploration = try XCTUnwrap(completedExploration)
         XCTAssertEqual(exploration.viewportExit, .superseded)
-        var iterator = NestedScrollScenarioInstrumentation.evidence().makeAsyncIterator()
+        var iterator = evidence.makeAsyncIterator()
         guard let moved = await iterator.next() else {
             return XCTFail("Expected replacement only after both original live scroll containers moved")
         }
