@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import importlib.util
+import io
 import subprocess
 import unittest
 from pathlib import Path
@@ -145,6 +146,41 @@ class SimulatorSelectionTests(unittest.TestCase):
             [call.args[0][2] for call in run.call_args_list],
             ["iphonesimulator", "boot", "bootstatus", "shutdown", "delete"],
         )
+
+    def test_failed_boot_reports_simctl_diagnostic(self) -> None:
+        selected = {
+            "source": "existing",
+            "udid": "selected-udid",
+            "name": "accra-created",
+            "device_type": "iPhone 16 Pro",
+            "runtime_version": "26.3",
+        }
+        sdk = mock.Mock(stdout="26.5")
+        boot = mock.Mock(returncode=149, stdout="", stderr="Unable to boot device")
+        stderr = io.StringIO()
+        with mock.patch.object(
+            SELECTOR,
+            "parse_args",
+            return_value=mock.Mock(
+                sim_name="accra-created",
+                preferred_device="iPhone 16 Pro",
+                runtime=None,
+                wait=False,
+                github_env=None,
+                github_output=None,
+            ),
+        ), mock.patch.object(
+            SELECTOR,
+            "select_or_create_simulator",
+            return_value=selected,
+        ), mock.patch.object(
+            SELECTOR,
+            "run",
+            side_effect=[sdk, boot],
+        ), mock.patch("sys.stderr", stderr):
+            SELECTOR.main()
+
+        self.assertEqual(stderr.getvalue(), "simctl boot returned 149: Unable to boot device\n")
 
 
 if __name__ == "__main__":

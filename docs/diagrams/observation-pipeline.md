@@ -10,6 +10,7 @@ authored order and retains all progress for the complete heist.
 flowchart LR
     Demand["visible or discovery demand"] --> Stream["Observation.Stream<br/>one serialized cycle"]
     Link["TheTripwire CADisplayLink"] -->|"pulse while demanded"| Stream
+    Script["Deterministic input<br/>typed pulse + virtual elapsed"] -->|"injected pulse in logic tests"| Stream
     Notice["AccessibilityNotificationBus<br/>ordered ingress"] -->|"freeze exact claim"| Stream
     UIKit["UIKit hierarchy"] -->|"capture + parse once"| Stream
     Stream -->|"commit Snapshot + Event"| Vault["TheVault<br/>current phase + Observation.History"]
@@ -26,10 +27,12 @@ flowchart LR
     Stream -->|"acknowledge after commit"| Notice
 ```
 
-One display pulse starts at most one claim, capture, parse, commit, publication,
-and evaluation cycle. Pulses arriving during an active synchronous cycle are
-dropped; a later display pulse starts the next demanded cycle. Zero demand
-pauses the display link, so the runtime is otherwise inert. The Vault constructs
+One typed pulse starts at most one claim, capture, parse, commit, publication,
+and evaluation cycle. Production obtains it from the display-link adapter;
+deterministic execution authors it directly and never starts a display link.
+Pulses arriving during an active synchronous cycle are dropped; a later pulse
+starts the next demanded cycle. Zero live demand pauses the display link, so the
+runtime is otherwise inert. The Vault constructs
 each event and records it before delivery. A snapshot is current truth, an event
 is one ordered fact, history is the Vault-owned retained event array, and
 evidence is immutable result data. UIKit objects remain at the boundary.

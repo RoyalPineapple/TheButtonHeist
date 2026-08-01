@@ -44,33 +44,6 @@ final class TheBrainsPipelineTests: XCTestCase {
 
     // MARK: - Semantic Discovery Observation
 
-    func testExploreScreenStopsEarlyWhenTargetAlreadyResolved() async throws {
-        brains.tripwire.startPulse()
-        defer { brains.tripwire.stopPulse() }
-        let screen = try XCTUnwrap(
-            brains.vault.captureVisibleObservation(),
-            "Expected a live hierarchy in the hosted test app"
-        )
-        await brains.vault.semanticObservationStream
-            .commitVisibleObservationForTesting(screen)
-        let label = try XCTUnwrap(
-            screen.tree.viewportElementIDs
-                .compactMap { screen.tree.findElement(heistId: $0)?.element.label }
-                .first(where: { !$0.isEmpty }),
-            "Expected a labeled viewport element in the hosted test app"
-        )
-
-        guard let exploration = await brains.navigation.exploreScreen(
-            target: try AccessibilityTarget.label(label).resolve(in: .empty)
-        ) else {
-            return XCTFail("Expected target exploration to settle")
-        }
-
-        XCTAssertEqual(exploration.progress.scrollCount, 0)
-        XCTAssertTrue(exploration.progress.pendingScrollPaths.isEmpty)
-        XCTAssertTrue(exploration.progress.exploredScrollPaths.isEmpty)
-    }
-
     func testExplorationTerminalResolutionSupportsContainerTargets() async throws {
         let observation = makeDiscoveryObservationProjectionFixture()
         let visibleRoot = try AccessibilityTarget.container(.identifier("RootViewController")).resolve(in: .empty)
@@ -306,34 +279,6 @@ final class TheBrainsPipelineTests: XCTestCase {
             liveCapture: LiveCapture.makeForTests(tree: tree)
         )
         return viewportObservation
-    }
-
-    func successOutcome(
-        payload: ActionResult.Payload = .activate,
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        activationTrace: ActivationTrace? = nil
-    ) -> TheSafecracker.ActionDispatchResult {
-        .success(
-            payload: payload,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace
-        )
-    }
-
-    func failureOutcome(
-        payload: ActionResult.Payload = .activate,
-        message: String = "action failed",
-        subjectEvidence: ActionSubjectEvidence? = nil,
-        failureKind: TheSafecracker.FailureKind = .actionFailed,
-        activationTrace: ActivationTrace? = nil
-    ) -> TheSafecracker.ActionDispatchResult {
-        .failure(
-            payload,
-            message: message,
-            subjectEvidence: subjectEvidence,
-            activationTrace: activationTrace,
-            failureKind: failureKind
-        )
     }
 
     func notificationBatch(

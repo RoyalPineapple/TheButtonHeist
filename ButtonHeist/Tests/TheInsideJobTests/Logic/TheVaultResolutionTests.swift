@@ -11,7 +11,11 @@ final class TheVaultResolutionTests: XCTestCase {
     var vault: TheVault!
 
     override func setUp() async throws {
-        vault = TheVault(tripwire: TheTripwire())
+        vault = TheVault(
+            tripwire: TheTripwire(),
+            notificationIngress: .injected,
+            pulseIngress: .injected
+        )
     }
 
     override func tearDown() async throws {

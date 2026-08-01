@@ -122,11 +122,12 @@ private final class StaleLiveObjectViewController: UIViewController, UIScrollVie
 
     private func recordAction(generation: Int) {
         actionCounts[generation, default: 0] += 1
-        resultLabel.text = "Result: submitted generation \(generation)"
         refreshAccessibilityValues()
     }
 
     private func refreshAccessibilityValues() {
+        resultLabel.text = "Candidate actions: primary \(actionCounts[generation, default: 0]), "
+            + "duplicate \(actionCounts[3, default: 0])"
         if let targetButton {
             targetButton.accessibilityValue = targetValue(generation: generation)
         }

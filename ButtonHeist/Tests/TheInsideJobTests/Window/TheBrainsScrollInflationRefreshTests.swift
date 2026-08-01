@@ -11,14 +11,14 @@ import UIKit
 extension TheBrainsScrollTests {
 
     func testUnpublishedRefreshSourceDoesNotChangeSemanticOrLiveTruth() async throws {
-        brains.vault.semanticObservationStream.stop()
+        brains.tripwire.stopPulse()
         let targetId = HeistId(rawValue: "gone_target")
         let staleTarget = AccessibilityElement.make(
             label: "Gone Target",
             traits: .button,
             frame: CGRect(x: 40, y: 120, width: 240, height: 44)
         )
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        await installSyntheticObservation(
             InterfaceObservation.makeForTests(
                 elements: [(staleTarget, targetId)],
                 objects: [targetId: nil]
@@ -79,7 +79,7 @@ extension TheBrainsScrollTests {
     }
 
     func testStaleLiveObjectRefreshResolvesNextSettledObservation() async throws {
-        brains.vault.semanticObservationStream.stop()
+        brains.tripwire.stopPulse()
         let targetId = HeistId(rawValue: "recycled_target")
         let staleFrame = CGRect(x: 40, y: 120, width: 240, height: 44)
         let staleTarget = AccessibilityElement.make(
@@ -87,7 +87,7 @@ extension TheBrainsScrollTests {
             traits: .button,
             frame: staleFrame
         )
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        await installSyntheticObservation(
             InterfaceObservation.makeForTests(
                 elements: [(staleTarget, targetId)],
                 objects: [targetId: nil]
@@ -118,9 +118,9 @@ extension TheBrainsScrollTests {
             )
         }
         await waitForSettledSemanticWaiter()
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
+        await installSyntheticObservation(recoveredScreen)
         await waitForSettledSemanticWaiter()
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
+        await installSyntheticObservation(recoveredScreen)
 
         await inflation.value
 
@@ -143,7 +143,7 @@ extension TheBrainsScrollTests {
     }
 
     func testStaleSemanticTargetRefreshPreservesTypedWitness() async throws {
-        brains.vault.semanticObservationStream.stop()
+        brains.tripwire.stopPulse()
         let targetId: HeistId = "restored_target"
         let target = try resolvedTarget(AccessibilityTarget.label("Restored Target").and(.traits([.button])))
         let originalScreen = InterfaceObservation.makeForTests([
@@ -153,13 +153,11 @@ extension TheBrainsScrollTests {
                 object: retainedLiveObject()
             ),
         ])
-        await brains.vault.semanticObservationStream
-            .commitVisibleObservationForTesting(originalScreen)
+        await installSyntheticObservation(originalScreen)
         let selected = try XCTUnwrap(brains.vault.interfaceElement(heistId: targetId))
 
         let emptyScreen = InterfaceObservation.makeForTests()
-        await brains.vault.semanticObservationStream
-            .commitVisibleObservationForTesting(emptyScreen)
+        await installSyntheticObservation(emptyScreen)
 
         let recoveredFrame = CGRect(x: 40, y: 120, width: 240, height: 44)
         let recoveredElement = makeElement(
@@ -195,9 +193,9 @@ extension TheBrainsScrollTests {
             return inflatedTarget.resolution
         }
         await waitForSettledSemanticWaiter()
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
+        await installSyntheticObservation(recoveredScreen)
         await waitForSettledSemanticWaiter()
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
+        await installSyntheticObservation(recoveredScreen)
 
         let resolution = await resolutionTask.value
         XCTAssertEqual(

@@ -62,7 +62,7 @@ extension TheBrainsScrollTests {
             (currentHeader, "current_controls_header"),
             (currentBackButton, "current_back_button"),
         ])
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(currentScreen)
+        await installSyntheticObservation(currentScreen)
         var discoveryAttempts = 0
         brains.navigation.elementInflation.exploration.discoverTarget = { _, _ in
             discoveryAttempts += 1
@@ -108,9 +108,7 @@ extension TheBrainsScrollTests {
             (currentHeader, "current_controls_header"),
             (currentBackButton, "current_back_button"),
         ])
-        visibleObservationSource.observation = currentScreen
-        await brains.vault.semanticObservationStream
-            .commitVisibleObservationForTesting(currentScreen)
+        await installSyntheticObservation(currentScreen)
 
         let discovered = await brains.navigation.elementInflation.exploration.discoverTarget(
             try resolvedTarget(.label("Controls Demo").and(.traits([.button]))),
@@ -163,7 +161,6 @@ extension TheBrainsScrollTests {
             }.first,
             "Expected the parser to expose the fixture scroll view as a scroll container"
         )
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(visibleScreen)
 
         let staleRootRow = makeElement(label: "Auto-Settle Fixtures", traits: .button)
         let staleEntry = InterfaceTree.Element(
@@ -657,7 +654,7 @@ extension TheBrainsScrollTests {
         let staleScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(.makeForTests(
+        await installSyntheticObservation(.makeForTests(
             elements: [(visible, HeistId(rawValue: "visible_element"))]
         ))
 
@@ -678,7 +675,7 @@ extension TheBrainsScrollTests {
     }
 
     func testStaleKnownRevealWaitsForSettledRecoveryWithoutRediscovery() async throws {
-        brains.vault.semanticObservationStream.stop()
+        brains.tripwire.stopPulse()
         let staleScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let visible = makeElement(label: "Visible")
@@ -740,7 +737,7 @@ extension TheBrainsScrollTests {
                 recoveredScreen
             )
         await waitForSettledSemanticWaiter()
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
+        await installSyntheticObservation(recoveredScreen)
 
         await inflation.value
         guard case .inflated(let inflatedTarget)? = resultBox.value else {
@@ -755,7 +752,7 @@ extension TheBrainsScrollTests {
     }
 
     func testKnownTargetWithMissingLiveScrollAncestorRecapturesVisibleActionableTarget() async throws {
-        brains.vault.semanticObservationStream.stop()
+        brains.tripwire.stopPulse()
         let targetId: HeistId = "known_coke_button"
         let staleScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         staleScrollView.contentSize = CGSize(width: 320, height: 1_600)
@@ -836,9 +833,9 @@ extension TheBrainsScrollTests {
             )
         }
         await waitForSettledSemanticWaiter()
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
+        await installSyntheticObservation(recoveredScreen)
         await waitForSettledSemanticWaiter()
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(recoveredScreen)
+        await installSyntheticObservation(recoveredScreen)
         await inflation.value
 
         guard case .inflated(let inflatedTarget)? = resultBox.value else {

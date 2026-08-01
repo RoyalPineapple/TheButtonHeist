@@ -13,6 +13,57 @@ typealias AccessibilityNotificationCallback = @MainActor (
     AnyObject?
 ) -> Void
 
+/// Retains one private callback payload until it can cross onto the main
+/// dispatch queue. The values are immutable references and are normalized by
+/// the main-actor handler before entering Button Heist's retained evidence.
+private final class PendingAccessibilityNotificationCallback: @unchecked Sendable {
+    let code: UInt32
+    let notificationData: AnyObject?
+    let associatedElement: AnyObject?
+
+    init(
+        code: UInt32,
+        notificationData: AnyObject?,
+        associatedElement: AnyObject?
+    ) {
+        self.code = code
+        self.notificationData = notificationData
+        self.associatedElement = associatedElement
+    }
+
+    @MainActor
+    func deliver(to handler: AccessibilityNotificationCallback) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        autoreleasepool {
+            handler(code, notificationData, associatedElement)
+        }
+    }
+}
+
+/// The private UIAccessibility callback is not actor-isolated. Normalize its
+/// delivery onto the main dispatch queue before giving UIKit-owned objects to
+/// the main-actor observer. Dispatch's serial FIFO ordering is the observer's
+/// callback order.
+enum AccessibilityNotificationCallbackIngress {
+    static func enqueue(
+        code: UInt32,
+        notificationData: AnyObject?,
+        associatedElement: AnyObject?,
+        handler: @escaping AccessibilityNotificationCallback
+    ) {
+        let pending = PendingAccessibilityNotificationCallback(
+            code: code,
+            notificationData: notificationData,
+            associatedElement: associatedElement
+        )
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                pending.deliver(to: handler)
+            }
+        }
+    }
+}
+
 enum AccessibilityNotificationObserverLifecycleState: Equatable {
     case unsubscribed
     case subscribed(callbackInstalled: Bool, unitTestModeArmed: Bool)
@@ -129,6 +180,26 @@ final class AccessibilityNotificationObserver {
     ) {
         self.init { callback in
             installCallbackForTesting(callback)
+            return CallbackInstallation(uninstall: uninstallCallbackForTesting)
+        }
+    }
+
+    convenience init(
+        installPrivateCallbackForTesting: @escaping @MainActor (
+            _ callback: @escaping ButtonHeistPrivateSPI.AccessibilityNotificationCallbackBlock
+        ) -> Void,
+        uninstallCallbackForTesting: @escaping @MainActor () -> Void
+    ) {
+        self.init { handler in
+            let callback: ButtonHeistPrivateSPI.AccessibilityNotificationCallbackBlock = { code, notificationData, associatedElement in
+                AccessibilityNotificationCallbackIngress.enqueue(
+                    code: code,
+                    notificationData: notificationData,
+                    associatedElement: associatedElement,
+                    handler: handler
+                )
+            }
+            installPrivateCallbackForTesting(callback)
             return CallbackInstallation(uninstall: uninstallCallbackForTesting)
         }
     }
@@ -279,6 +350,8 @@ final class AccessibilityNotificationObserver {
 /// Guarantees:
 /// - Exact symbol names only; no fuzzy search and no executable-memory writes.
 /// - Main-thread registration/removal, matching the apparent framework usage.
+/// - Callback delivery is moved onto the main dispatch queue before payload
+///   normalization; UIAccessibility does not promise its invocation queue.
 /// - The Swift block is retained both by UIAccessibility and by our installed
 ///   registration token for the lifetime of the observer.
 /// - Private payload objects leave this wrapper only as normalized, weakly-held
@@ -360,12 +433,12 @@ private enum AccessibilityNotificationPrivateSPI {
         let symbols = try resolveSymbols()
         let observerKey = "com.buttonheist.accessibility-notification-observer" as NSString
         let callback: ButtonHeistPrivateSPI.AccessibilityNotificationCallbackBlock = { code, notificationData, associatedElement in
-            autoreleasepool {
-                // UIAccessibility invokes registered callbacks on main; assert that contract before normalization.
-                MainActor.assumeIsolated {
-                    handler(code, notificationData, associatedElement)
-                }
-            }
+            AccessibilityNotificationCallbackIngress.enqueue(
+                code: code,
+                notificationData: notificationData,
+                associatedElement: associatedElement,
+                handler: handler
+            )
         }
 
         symbols.addCallback(callback, observerKey)

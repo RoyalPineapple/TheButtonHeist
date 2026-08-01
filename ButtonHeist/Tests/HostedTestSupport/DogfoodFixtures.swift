@@ -1,7 +1,7 @@
 #if canImport(UIKit)
 import ButtonHeistTesting
 import TheInsideJob
-import ThePlans
+@_spi(AdversarialLab) import ThePlans
 import TheScore
 
 package enum ExpectedHeistFailureError: Error, Equatable {
@@ -17,6 +17,59 @@ package func expectHeistFailure(
         _ = try await runHeist(name, content)
         throw ExpectedHeistFailureError.heistPassed(name)
     } catch let failure as Heist.Failure {
+        return failure
+    }
+}
+
+package enum AdversarialScenarioExecutionError: Error, Equatable {
+    case expectedSuccess(AdversarialScenarioCatalog.Scenario)
+    case expectedFailure(AdversarialScenarioCatalog.Scenario)
+    case missingDiagnosticContract(AdversarialScenarioCatalog.Scenario)
+    case diagnosticMismatch(AdversarialScenarioCatalog.Scenario, String)
+}
+
+extension Interface {
+    package func containsElement(label: String, value: String? = nil) -> Bool {
+        projectedElements.contains {
+            $0.semantics.assertable.label == label
+                && (value == nil || $0.semantics.assertable.value == value)
+        }
+    }
+}
+
+@MainActor
+package func runAdversarialScenario(
+    _ scenario: AdversarialScenarioCatalog.Scenario,
+    opening route: @MainActor (AdversarialScenarioCatalog.Route) async throws -> Void
+) async throws -> Heist {
+    guard scenario.expectedOutcome == .commandSucceeds else {
+        throw AdversarialScenarioExecutionError.expectedSuccess(scenario)
+    }
+    try await route(scenario.route)
+    return try await runHeist(scenario.plan())
+}
+
+@MainActor
+package func runFailingAdversarialScenario(
+    _ scenario: AdversarialScenarioCatalog.Scenario,
+    opening route: @MainActor (AdversarialScenarioCatalog.Route) async throws -> Void
+) async throws -> Heist.Failure {
+    guard scenario.expectedOutcome == .commandFailsWithDiagnostic else {
+        throw AdversarialScenarioExecutionError.expectedFailure(scenario)
+    }
+    try await route(scenario.route)
+    do {
+        _ = try await runHeist(scenario.plan())
+        throw AdversarialScenarioExecutionError.expectedFailure(scenario)
+    } catch let failure as Heist.Failure {
+        guard let diagnostic = scenario.expectedEvidence.first(where: {
+            $0.kind == .diagnostic
+        })?.label else {
+            throw AdversarialScenarioExecutionError.missingDiagnosticContract(scenario)
+        }
+        guard failure.description.localizedCaseInsensitiveContains(diagnostic) else {
+            throw AdversarialScenarioExecutionError.diagnosticMismatch(scenario, diagnostic)
+        }
         return failure
     }
 }
@@ -96,19 +149,19 @@ package enum TodoScreen {
 package enum CalculatorScreen {
     package static let addSevenAndFive = HeistDef<Void>("CalculatorScreen.addSevenAndFive") {
         Activate(.element(.label("all clear"), .traits([.button])))
-            .expect(.exists(.label("0")), timeout: 1)
+            .expect(.exists(.label("0")))
 
         Activate(.element(.label("7"), .traits([.button])))
-            .expect(.exists(.label("7")), timeout: 1)
+            .expect(.exists(.label("7")))
 
         Activate(.element(.label("+"), .traits([.button])))
-            .expect(.elementsChanged, timeout: 1)
+            .expect(.elementsChanged)
 
         Activate(.element(.label("5"), .traits([.button])))
-            .expect(.exists(.label("5")), timeout: 1)
+            .expect(.exists(.label("5")))
 
         Activate(.element(.label("equals"), .traits([.button])))
-            .expect(.exists(.label("12")), timeout: 1)
+            .expect(.exists(.label("12")))
     }
 }
 

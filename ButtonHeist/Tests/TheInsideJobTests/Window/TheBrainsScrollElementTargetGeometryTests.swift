@@ -114,7 +114,7 @@ extension TheBrainsScrollTests {
             frame: AccessibilityRect(captureFrame)
         )
         let path = TreePath([0])
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        await installSyntheticObservation(
             InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
@@ -141,7 +141,7 @@ extension TheBrainsScrollTests {
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: scrollView.contentSize, frame: scrollView.frame)
         let path = TreePath([0])
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        await installSyntheticObservation(
             InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
@@ -169,7 +169,7 @@ extension TheBrainsScrollTests {
         let oldScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         oldScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: oldScrollView.contentSize, frame: oldScrollView.frame)
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        await installSyntheticObservation(
             InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
@@ -185,15 +185,14 @@ extension TheBrainsScrollTests {
 
         let replacementScrollView = UIScrollView(frame: oldScrollView.frame)
         replacementScrollView.contentSize = oldScrollView.contentSize
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
-            InterfaceObservation.makeForTests(
+        let replacementObservation = InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerRefsByPath: [path: .init(object: replacementScrollView)],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [path: .init(view: replacementScrollView)]
-            )
         )
+        await installSyntheticObservation(replacementObservation)
 
         let transition = await brains.navigation.performViewportTransition(
             .page(staleTarget, direction: .down, animated: false),
@@ -210,7 +209,7 @@ extension TheBrainsScrollTests {
         let oldScrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         oldScrollView.contentSize = CGSize(width: 320, height: 1_600)
         let container = makeScrollableContainer(contentSize: oldScrollView.contentSize, frame: oldScrollView.frame)
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        await installSyntheticObservation(
             InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
@@ -226,15 +225,14 @@ extension TheBrainsScrollTests {
 
         let replacementScrollView = UIScrollView(frame: oldScrollView.frame)
         replacementScrollView.contentSize = oldScrollView.contentSize
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
-            InterfaceObservation.makeForTests(
+        let replacementObservation = InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [.container(container, children: [])],
             containerRefsByPath: [path: .init(object: replacementScrollView)],
             firstResponderHeistId: nil,
             scrollableContainerViewsByPath: [path: .init(view: replacementScrollView)]
-            )
         )
+        await installSyntheticObservation(replacementObservation)
 
         let transition = await brains.navigation.performViewportTransition(
             .edge(staleTarget, edge: .bottom),
@@ -244,61 +242,6 @@ extension TheBrainsScrollTests {
         XCTAssertEqual(transition.outcome, .moved)
         XCTAssertEqual(oldScrollView.contentOffset, .zero)
         XCTAssertEqual(replacementScrollView.contentOffset.y, 1_200)
-    }
-
-    func testSafeSwipeFrameFullyInSafeBoundsIsUnchanged() async throws {
-        // A frame sitting comfortably inside the safe area passes through
-        // intersected with itself, which is the frame.
-        let screen = UIScreen.main.bounds
-        let inner = screen.insetBy(dx: 80, dy: 120)
-        let result = try XCTUnwrap(brains.navigation.safeSwipeFrame(from: inner))
-        XCTAssertEqual(result, inner)
-    }
-
-    func testSafeSwipeFrameZeroWidthReturnsNil() async {
-        // Degenerate input has no targetable on-screen geometry, so command
-        // execution must fail instead of swiping the stale original frame.
-        let input = CGRect(x: 0, y: 0, width: 0, height: 100)
-        XCTAssertNil(brains.navigation.safeSwipeFrame(from: input))
-    }
-
-    func testSafeSwipeFrameFullyOffscreenReturnsNil() async {
-        let input = CGRect(x: -500, y: -500, width: 100, height: 100)
-        XCTAssertNil(brains.navigation.safeSwipeFrame(from: input))
-    }
-
-    func testSafeSwipeFrameOversizedFrameClampsWithinScreen() async throws {
-        // A frame larger than any iPhone screen must clamp to the safe
-        // region and stay within the current screen bounds.
-        let huge = CGRect(x: -1000, y: -1000, width: 10000, height: 10000)
-        let result = try XCTUnwrap(brains.navigation.safeSwipeFrame(from: huge))
-        let screenBounds = UIScreen.main.bounds
-        XCTAssertTrue(
-            screenBounds.contains(result),
-            "Result \(result) must fit within the screen \(screenBounds)"
-        )
-    }
-
-    func testSafeSwipeFrameClampsAboveTabBarContainer() async throws {
-        // A .tabBar container in the accessibility hierarchy defines the
-        // bottom clear line. A swipe rectangle that overlaps the tab bar
-        // must be clipped to end at its top edge.
-        let tabBarFrame = CGRect(x: 0, y: 700, width: 400, height: 80)
-        let tabBarContainer = AccessibilityContainer(type: .tabBar, frame: AccessibilityRect(tabBarFrame))
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
-            InterfaceObservation.makeForTests(
-            elements: [:],
-            hierarchy: [.container(tabBarContainer, children: [])],
-            firstResponderHeistId: nil,
-            )
-        )
-        let result = try XCTUnwrap(
-            brains.navigation.safeSwipeFrame(from: CGRect(x: 100, y: 400, width: 200, height: 500))
-        )
-        XCTAssertEqual(
-            result.maxY, tabBarFrame.minY,
-            "Swipe area must end at the tab bar's top edge"
-        )
     }
 
 }

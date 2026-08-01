@@ -4,7 +4,7 @@ import Testing
 
 @Test func `adversarial catalog projects one admitted contract per scenario`() throws {
     let scenarios = AdversarialScenarioCatalog.Scenario.allCases
-    #expect(scenarios.count == 16)
+    #expect(scenarios.count == 19)
     #expect(Set(scenarios.map(\.rawValue)).count == scenarios.count)
     #expect(Set(scenarios.map(\.route)) == Set(AdversarialScenarioCatalog.Route.allCases))
 
@@ -33,9 +33,9 @@ import Testing
     let statistical = scenarios.filter { $0.classification == .statistical }
     let deterministic = scenarios.filter { $0.classification == .deterministic }
 
-    #expect(statistical.count == 8)
+    #expect(statistical.count == 9)
     #expect(statistical.allSatisfy { $0.expectedOutcome == .commandSucceeds })
-    #expect(deterministic.count == 8)
+    #expect(deterministic.count == 10)
     #expect(deterministic.contains(.duplicateLabelIdentityPass))
     #expect(scenarios.filter { $0.route == .duplicateLabels } == [.duplicateLabelIdentityPass])
 }

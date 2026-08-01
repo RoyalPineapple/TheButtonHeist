@@ -108,41 +108,37 @@ extension TheVault {
 
 @MainActor
 final class VisibleObservationSourceFixture {
-    private enum Source {
-        case liveCapture
-        case observation(InterfaceObservation?)
-    }
-
-    private var source: Source = .liveCapture
+    private var observationSequence: [InterfaceObservation?]?
     private var unavailableCapturesRemaining = 0
+
+    var observation: InterfaceObservation?
     private(set) var captureCount = 0
 
-    var observation: InterfaceObservation? {
-        get {
-            guard case .observation(let observation) = source else { return nil }
-            return observation
-        }
-        set {
-            source = .observation(newValue)
-        }
+    init(observation: InterfaceObservation?) {
+        self.observation = observation
     }
 
-    func capture(from vault: TheVault) -> InterfaceObservation? {
+    init(sequence: [InterfaceObservation?]) {
+        precondition(!sequence.isEmpty, "A scripted observation sequence must contain one capture")
+        observation = nil
+        observationSequence = sequence
+    }
+
+    func capture(from _: TheVault) -> InterfaceObservation? {
         captureCount += 1
         if unavailableCapturesRemaining > 0 {
             unavailableCapturesRemaining -= 1
             return nil
         }
-        switch source {
-        case .liveCapture:
-            return TheVault.captureVisibleObservation(from: vault)
-        case .observation(let observation):
+        guard var sequence = observationSequence else {
             return observation
         }
-    }
-
-    func useLiveCapture() {
-        source = .liveCapture
+        guard !sequence.isEmpty else {
+            preconditionFailure("Unexpected visible observation capture at index \(captureCount)")
+        }
+        let captured = sequence.removeFirst()
+        observationSequence = sequence
+        return captured
     }
 
     func failNextCapture() {

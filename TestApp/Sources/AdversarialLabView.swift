@@ -27,6 +27,8 @@ struct AdversarialScenarioView: View {
             DynamicCellsScenarioView()
         case .textFieldFallback:
             TextFieldFallbackScenarioView()
+        case .keyboardViewport:
+            KeyboardViewportScenarioView()
         case .staleLiveObject:
             StaleLiveObjectScenarioView()
         case .modalObstruction:

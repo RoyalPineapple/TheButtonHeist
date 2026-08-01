@@ -609,7 +609,7 @@ extension TheBrainsScrollTests {
 
     func testScrollToVisibleUnknownTargetUsesCurrentSemanticDiagnostics() async throws {
         let visible = makeElement(label: "Visible")
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        await installSyntheticObservation(
             .makeForTests(elements: [(visible, HeistId(rawValue: "visible_element"))])
         )
 
@@ -908,7 +908,7 @@ extension TheBrainsScrollTests {
     private func inflateSemanticDuplicate(
         postRevealObservation: InterfaceObservation
     ) async throws -> ElementInflation.ElementInflationResult {
-        brains.vault.semanticObservationStream.stop()
+        brains.tripwire.stopPulse()
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
         await installScreenWithOffViewport(
@@ -982,8 +982,7 @@ extension TheBrainsScrollTests {
             )
         }
         await waitForSettledSemanticWaiter()
-        await brains.vault.semanticObservationStream
-            .commitVisibleObservationForTesting(postRevealObservation)
+        await installSyntheticObservation(postRevealObservation)
         await inflation.value
         return try XCTUnwrap(resultBox.value)
     }

@@ -40,8 +40,7 @@ extension TheBrainsScrollTests {
             object: object,
             scrollView: scrollView
         )
-        await brains.vault.semanticObservationStream
-            .commitVisibleObservationForTesting(initialScreen)
+        await installSyntheticObservation(initialScreen)
         guard assertPlacementTargetIsLiveAndScrollable(
             heistId: targetId,
             in: scrollView
@@ -192,7 +191,7 @@ extension TheBrainsScrollTests {
             ),
             element: element
         )
-        await brains.vault.semanticObservationStream.commitVisibleObservationForTesting(
+        await installSyntheticObservation(
             InterfaceObservation.makeForTests(
             elements: [entry.heistId: entry],
             hierarchy: [.element(element, traversalIndex: 0)],
@@ -298,9 +297,7 @@ extension TheBrainsScrollTests {
         let screen = InterfaceObservation.makeForTests([
             .init(element, heistId: "refreshable_button", object: object),
         ])
-        await brains.vault.semanticObservationStream
-            .commitVisibleObservationForTesting(screen)
-        visibleObservationSource.observation = screen
+        await installSyntheticObservation(screen)
         let target = try resolvedTarget(AccessibilityTarget.label("Refreshable").and(.traits([.button])))
         let finalResolution = ActionSubjectResolution(
             origin: .known,

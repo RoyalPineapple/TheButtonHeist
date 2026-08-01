@@ -17,19 +17,24 @@ extension ElementInflationProductTests {
             label: "Committed Refresh Target",
             identifier: heistId.rawValue
         )
-        let refreshObservationSource = VisibleObservationSourceFixture()
-        let tripwire = TheTripwire(pulseSource: .injected)
+        let refreshObservationSource = VisibleObservationSourceFixture(observation: nil)
+        let tripwire = TheTripwire()
         let refreshBrains = TheBrains(
             tripwire: tripwire,
-            visibleObservationSource: refreshObservationSource.capture
+            visibleObservationSource: refreshObservationSource.capture,
+            notificationIngress: .injected,
+            pulseIngress: .injected
         )
-        tripwire.startPulse()
         refreshBrains.vault.semanticObservationStream.start()
         let stream = refreshBrains.vault.semanticObservationStream
         let ticker = Task { @MainActor in
             while !Task.isCancelled {
                 if stream.observationWaiterCount > 0 {
-                    tripwire.onTick()
+                    stream.deliver(TheTripwire.PulseReading(
+                        tick: 1,
+                        elapsed: .zero,
+                        tripwireSignal: .empty
+                    ))
                 }
                 await Task.yield()
             }
@@ -37,7 +42,6 @@ extension ElementInflationProductTests {
         defer {
             ticker.cancel()
             refreshBrains.vault.semanticObservationStream.stop()
-            tripwire.stopPulse()
         }
         let staleObject = UIButton(frame: CGRect(x: 20, y: 20, width: 160, height: 44))
         await refreshBrains.vault.installObservationForTesting(.makeForTests([

@@ -118,10 +118,8 @@ final class SemanticObservationCycleTests: XCTestCase {
     private func pulse(tick: UInt64) -> TheTripwire.PulseReading {
         TheTripwire.PulseReading(
             tick: tick,
-            timestamp: 0,
-            topmostVC: nil,
-            tripwireSignal: .empty,
-            windowCount: 0
+            elapsed: .milliseconds(Int64(tick)),
+            tripwireSignal: .empty
         )
     }
 }

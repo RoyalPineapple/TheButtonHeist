@@ -22,6 +22,7 @@ internal struct DynamicCellsScenarioView: View {
             Section {
                 Button("Churn menu") { churnMenu() }
                 Text(didChurn ? "Menu churned" : "Menu stable")
+                Text("Current target activations: \(actionCounts["dish-72-generation-2", default: 0])")
             }
 
             Section("Menu") {

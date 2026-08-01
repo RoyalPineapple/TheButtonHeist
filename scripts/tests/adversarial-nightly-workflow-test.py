@@ -26,6 +26,21 @@ class AdversarialNightlyWorkflowTests(unittest.TestCase):
         self.assertEqual(WORKFLOW.count("if: failure()"), 2)
         self.assertNotIn("git submodule update", WORKFLOW)
 
+    def test_reports_are_retained_for_green_and_red_runs(self) -> None:
+        upload_step = WORKFLOW[WORKFLOW.index("- name: Upload nightly reports"):]
+        self.assertIn("if: always()", upload_step)
+        self.assertIn("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02", upload_step)
+        self.assertIn("buttonheist-adversarial-nightly-report.json", upload_step)
+        self.assertIn("buttonheist-lifecycle-nightly-report.json", upload_step)
+        self.assertIn("retention-days: 30", upload_step)
+
+    def test_summary_exposes_sampling_classification_and_cli_timing(self) -> None:
+        summary_step = WORKFLOW[WORKFLOW.index("- name: Summarize nightly reports"):]
+        self.assertIn("Requested / recorded", summary_step)
+        self.assertIn("Classification", summary_step)
+        self.assertIn("CLI timing (p50 / p95)", summary_step)
+        self.assertIn("cliWallDurationMs", summary_step)
+
     def test_runner_owns_named_simulator_preparation_and_cleanup(self) -> None:
         simulator_name = (
             "buttonheist-ci-adversarial-${{ github.run_id }}-"
