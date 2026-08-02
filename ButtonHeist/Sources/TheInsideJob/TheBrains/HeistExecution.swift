@@ -4,52 +4,103 @@ import Foundation
 import ThePlans
 @_spi(ButtonHeistInternals) import TheScore
 
-/// Pure execution state for one complete heist.
-internal enum HeistExecution {}
-
 extension HeistExecution {
     internal enum Decision {
-        case perform(MainActorRequest)
-        case wait
+        case perform(Effect)
+        case wait(WaitRequest)
         case complete(Completion)
     }
 
-    internal enum MainActorRequest {
-        case currentSnapshot(RequestID, scope: SemanticObservationScope)
-        case beginObservation(RequestID, ObservationRequest)
-        case dispatch(RequestID, ResolvedHeistActionCommand)
-        case explore(RequestID, Predicate)
-        case finishObservation(
+    /// A boundary operation requested by the pure reducer.
+    internal enum Effect {
+        case currentSnapshot(
+            RequestID,
+            scope: SemanticObservationScope,
+            deadline: SemanticObservationDeadline
+        )
+        case beginObservation(RequestID, ObservationRequest, deadline: SemanticObservationDeadline)
+        case dispatch(RequestID, ResolvedHeistActionCommand, deadline: SemanticObservationDeadline)
+        case explore(RequestID, Predicate, deadline: SemanticObservationDeadline)
+        case sampleObservationClose(
             requestID: RequestID,
             observationID: RequestID,
-            exitPosition: Navigation.ViewportExitPosition
+            exitPosition: Navigation.ViewportExitPosition,
+            capture: ObservationCloseCapture,
+            source: ObservationCloseSource
         )
+        case commitObservationClose(RequestID, observationID: RequestID)
         case captureFailureScreenshot(
             RequestID,
             failedPath: HeistExecutionPath,
             mode: ScreenCaptureMode
         )
+        case cancelObservation(RequestID, observationID: RequestID?)
     }
 
-    internal enum Input {
-        case currentSnapshot(RequestID, Observation.Snapshot?)
-        case observationBegan(RequestID, baseline: Observation.Snapshot?)
-        case event(Observation.Event)
-        case dispatchCompleted(RequestID, TheSafecracker.ActionDispatchResult)
-        case viewportExited(RequestID, Navigation.ViewportExit.Outcome)
-        case observationFinished(
-            source: ObservationFinishSource,
+    /// A fact received by the pure reducer.
+    internal enum Event {
+        case currentSnapshot(RequestID, Observation.Snapshot?, at: RuntimeElapsed.Instant)
+        case observationBegan(RequestID, baseline: Observation.Snapshot?, at: RuntimeElapsed.Instant)
+        case observation(WaitRequest.ID, Observation.Event, at: RuntimeElapsed.Instant)
+        case dispatchCompleted(RequestID, TheSafecracker.ActionDispatchResult, at: RuntimeElapsed.Instant)
+        case viewportExited(RequestID, Navigation.ViewportExit.Outcome, at: RuntimeElapsed.Instant)
+        case observationCloseSampled(
+            RequestID,
+            source: ObservationCloseSource,
             observationID: RequestID,
             evidence: Observation.Evidence,
-            outcome: LeafOutcome,
-            timing: HeistExpectationTiming
+            close: ObservationClose,
+            at: RuntimeElapsed.Instant
         )
-        case failureScreenshotCaptured(RequestID, HeistFailureCapture)
+        case failureScreenshotCaptured(RequestID, HeistFailureCapture, at: RuntimeElapsed.Instant)
+        case deadlineElapsed(WaitRequest.ID, at: RuntimeElapsed.Instant)
+        case cancellationRequested(at: RuntimeElapsed.Instant)
+        case cancellationCompleted(RequestID, at: RuntimeElapsed.Instant)
+        case observationCloseCommitted(RequestID, at: RuntimeElapsed.Instant)
+    }
+
+    /// Raw boundary facts from one observation-close attempt.
+    internal struct ObservationClose: Sendable, Equatable {
+        internal let captureAvailable: Bool
+        internal let viewportExit: Navigation.ViewportExit.Outcome?
+        internal let lastTreeChangeAt: RuntimeElapsed.Instant?
+
+        internal init(
+            captureAvailable: Bool,
+            viewportExit: Navigation.ViewportExit.Outcome?,
+            lastTreeChangeAt: RuntimeElapsed.Instant?
+        ) {
+            self.captureAvailable = captureAvailable
+            self.viewportExit = viewportExit
+            self.lastTreeChangeAt = lastTreeChangeAt
+        }
+    }
+
+    internal enum ObservationCloseCapture: Sendable, Equatable {
+        case coverage
+        case refresh
+        case nextCycle
+    }
+
+    /// The next external fact the reducer may admit.
+    internal struct WaitRequest: Sendable, Equatable {
+        internal struct ID: RawRepresentable, Sendable, Equatable, Hashable {
+            internal let rawValue: UInt64
+        }
+
+        internal let id: ID
+        internal let deadline: SemanticObservationDeadline
     }
 
     internal struct Completion {
+        internal enum Outcome: Sendable, Equatable {
+            case completed
+            case cancelled
+        }
+
         internal let steps: [HeistExecutionStepResult]
         internal let failureCapture: HeistFailureCapture?
+        internal let outcome: Outcome
     }
 
 }
@@ -135,8 +186,8 @@ extension HeistExecution {
         case viewportExitFailed(Navigation.ViewportExit.Failure)
     }
 
-    internal enum ObservationFinishSource: Sendable, Equatable {
-        case request(RequestID)
+    internal enum ObservationCloseSource: Sendable, Equatable {
+        case request
         case deadline
     }
 }
@@ -292,19 +343,23 @@ extension HeistExecution {
             }
         }
 
-        internal func admits(_ source: ObservationFinishSource) -> Bool {
-            guard case .request(let requestID) = source else { return true }
+        internal func admits(
+            sampleRequestID: RequestID,
+            observationID: RequestID,
+            source: ObservationCloseSource
+        ) -> Bool {
+            guard id == observationID else { return false }
             switch self {
             case .action(let leaf):
-                guard case .finishingObservation(let activeRequestID, _, _) = leaf.phase else {
+                guard case .finishingObservation(let activeRequestID, _, _, let expectedSource, _) = leaf.phase else {
                     return false
                 }
-                return activeRequestID == requestID
+                return activeRequestID == sampleRequestID && source == expectedSource
             case .wait(let leaf):
-                guard case .finishingObservation(let activeRequestID, _) = leaf.phase else {
+                guard case .finishingObservation(let activeRequestID, _, let expectedSource, _) = leaf.phase else {
                     return false
                 }
-                return activeRequestID == requestID
+                return activeRequestID == sampleRequestID && source == expectedSource
             }
         }
     }
@@ -338,7 +393,18 @@ extension HeistExecution {
         case observing(Expectation, dispatch: TheSafecracker.ActionDispatchResult)
         case exploring(Expectation, dispatch: TheSafecracker.ActionDispatchResult)
         case finishingObservation(
-            RequestID, expectation: Expectation, dispatch: TheSafecracker.ActionDispatchResult
+            RequestID,
+            expectation: Expectation,
+            dispatch: TheSafecracker.ActionDispatchResult,
+            source: ObservationCloseSource,
+            didCaptureDeadlineStability: Bool
+        )
+        case committingObservation(
+            RequestID,
+            evidence: Observation.Evidence,
+            timing: HeistExpectationTiming,
+            close: ObservationClose,
+            dispatch: TheSafecracker.ActionDispatchResult
         )
 
         internal var expectation: Expectation? {
@@ -348,8 +414,10 @@ extension HeistExecution {
             case .dispatching(let expectation),
                  .observing(let expectation, _),
                  .exploring(let expectation, _),
-                 .finishingObservation(_, let expectation, _):
+                 .finishingObservation(_, let expectation, _, _, _):
                 expectation
+            case .committingObservation:
+                nil
             }
         }
 
@@ -359,7 +427,9 @@ extension HeistExecution {
                 nil
             case .observing(_, let dispatch),
                  .exploring(_, let dispatch),
-                 .finishingObservation(_, _, let dispatch):
+                 .finishingObservation(_, _, let dispatch, _, _):
+                dispatch
+            case .committingObservation(_, _, _, _, let dispatch):
                 dispatch
             }
         }
@@ -370,7 +440,18 @@ extension HeistExecution {
         case beginningObservation
         case observing(Expectation)
         case exploring(Expectation)
-        case finishingObservation(RequestID, expectation: Expectation)
+        case finishingObservation(
+            RequestID,
+            expectation: Expectation,
+            source: ObservationCloseSource,
+            didCaptureDeadlineStability: Bool
+        )
+        case committingObservation(
+            RequestID,
+            evidence: Observation.Evidence,
+            timing: HeistExpectationTiming,
+            close: ObservationClose
+        )
 
         internal var expectation: Expectation? {
             switch self {
@@ -378,8 +459,10 @@ extension HeistExecution {
                 nil
             case .observing(let expectation),
                  .exploring(let expectation),
-                 .finishingObservation(_, let expectation):
+                 .finishingObservation(_, let expectation, _, _):
                 expectation
+            case .committingObservation:
+                nil
             }
         }
 

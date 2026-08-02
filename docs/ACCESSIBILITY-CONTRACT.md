@@ -42,33 +42,33 @@ never waives that structural settled-state expectation.
 flowchart LR
     Input["Snapshot or notification payload"]
     Vault["TheVault<br/>current Snapshot + Observation.History"]
-    Machine["HeistExecution.Machine"]
-    Effect["MainActor host effect"]
+    Execution["HeistExecution reducer"]
+    Effect["HeistExecution.Host effect"]
     Result["HeistResult<br/>step-local Observation.Evidence"]
     Report["HeistReport"]
     Render["JSON / compact / human / JUnit"]
 
     Input --> Vault
-    Vault --> Machine
-    Machine -->|"perform"| Effect
+    Vault --> Execution
+    Execution -->|"perform"| Effect
     Effect --> Input
-    Machine -->|"wait"| Vault
-    Machine -->|"complete"| Result
+    Execution -->|"wait"| Vault
+    Execution -->|"complete"| Result
     Result --> Report
     Report --> Render
 ```
 
 The Vault owns current accessibility truth and one ordered event history. It
-records every event before delivery. One pure `HeistExecution.Machine` owns the
+records every event before delivery. One pure `HeistExecution` reducer owns the
 entire plan's control flow, active leaf, expectation progress, and accumulated
 step results. The MainActor host performs only the typed effects requested by
-that machine.
+that reducer.
 
-The host owns the active leaf deadline, the whole-heist deadline, and one task
-scheduled for the earlier absolute value. Expiry cancels the interaction in
-flight and admits its terminal outcome. A leaf timeout may enter an authored
-wait `else`; a whole-heist timeout permits no further authored interaction.
-Deadlines never become accessibility events.
+The reducer owns the active leaf and whole-heist deadlines and projects the
+earlier absolute boundary target. The host reads the clock, waits, and returns
+raw facts. The reducer classifies expiry and requests terminal evidence. A leaf
+timeout may enter an authored wait `else`; a whole-heist timeout permits no
+further authored interaction. Deadlines never become accessibility events.
 
 The complete execution state machine is drawn in the
 [heist execution diagram](diagrams/heist-execution.md). The accessibility input
@@ -85,9 +85,9 @@ path is drawn in the
 | `Observation.Event` | One ordered admitted fact: elements changed, screen changed, notification, or no change | Generation fields, cursors, or report interpretation |
 | `Observation.History` | The Vault-owned retained event array and its bounded read operations | Predicate-specific logs or destructive consumption |
 | `Observation.Evidence` | A result's baseline, current snapshot, ordered events, and completeness | Live runtime ownership or a second trace |
-| `HeistExecution.Machine` | One complete plan's deterministic progress and result accumulation | UIKit, clocks, subscriptions, or async tasks |
-| `HeistExecution.Host` | MainActor effects, subscriptions, cancellation, and both deadline policies | Predicate truth or parallel execution state |
-| `HeistExecution.Host.RuntimeBoundary` | Live elapsed time, cancellable waiting, action dispatch, exploration, and failure capture requested by the host | Machine state, observation truth, or another result model |
+| `HeistExecution` | One complete plan's deterministic progress, deadlines, cancellation meaning, and result accumulation | UIKit, tasks, sockets, closures, subscriptions, or notification leases |
+| `HeistExecution.Host` | MainActor effects, live resources, clock reads, waits, and cleanup | Predicate truth, deadline classification, `LeafOutcome`, or parallel execution state |
+| `HeistExecution.Host.RuntimeBoundary` | Live elapsed time, cancellable waiting, action dispatch, exploration, and failure capture requested by the host | Reducer state, observation truth, or another result model |
 | `HeistResult` | One admitted durable execution tree | Presentation-specific models |
 | `HeistReport` | One interpretation of execution truth | Runtime decisions or formatter-specific traversal |
 
@@ -97,12 +97,12 @@ They do not decide what an action means or whether a predicate is true.
 ## Canonical Pipeline
 
 1. Boundary syntax is parsed into one typed `HeistPlan`.
-2. The app creates one machine and one host for the complete plan.
-3. The machine resolves the next authored step and requests any MainActor
+2. The app creates one reducer and one host for the complete plan.
+3. The reducer resolves the next authored step and requests any MainActor
    effects it needs.
 4. Capture and notification inputs enter the Vault's canonical admission path.
 5. The Vault updates current truth, records ordered events, then delivers them.
-6. The machine evaluates all graph predicates with one graph evaluator and all
+6. The reducer evaluates all graph predicates with one graph evaluator and all
    temporal predicates with one ordered event fold.
 7. A matching predicate still waits for a fresh `noChange` event before the
    leaf completes.
@@ -112,7 +112,7 @@ They do not decide what an action means or whether a predicate is true.
 The deterministic execution suite supplies already sampled pulse readings,
 explicit notification records, virtual elapsed time, and typed platform-effect
 results to these same boundaries. Injected pulse ingress never starts a display
-link or samples UIKit. It still runs the real stream, Vault, host, machine,
+link or samples UIKit. It still runs the real stream, Vault, host, reducer,
 result, report, and human renderer. Live window and BH Demo suites retain the
 platform contracts: capture, gestures, focus, scrolling, presentation,
 lifecycle, and disposable UIKit evidence.

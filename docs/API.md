@@ -269,18 +269,19 @@ own private baseline and history position when observation begins.
 result. Events and snapshots carry no cursors, operation identity, or replay
 state, and callers cannot supply a temporal boundary.
 
-One internal `HeistExecution.Machine` advances the complete heist. Its returned
-decision is either `.perform(request)`, `.wait`, or `.complete(completion)`.
-The MainActor host performs the typed capture,
-dispatch, exploration, or screenshot request and feeds its typed outcome back
-to the machine. Actions, waits, invocation expectations, loops, and conditional
-selection are private machine progress rather than separate executors.
+One internal `HeistExecution` reducer advances the complete heist. Its returned
+decision is `.perform(effect)`, `.wait(request)`, or `.complete(completion)`.
+The MainActor host performs the typed capture, dispatch, exploration, or
+screenshot effect and returns a typed event to the reducer. Actions, waits,
+invocation expectations, loops, and conditional selection are private reducer
+progress rather than separate executors.
 
 The Vault deterministically reduces admitted snapshots and normalized
 notification payloads into `Observation.Event` values before recording and
-publishing them. The MainActor host owns one absolute deadline per active leaf.
-It starts before baseline acquisition and covers reveal, dispatch, ordered
-predicate evaluation, and the trailing `noChange`; there is no separate
+publishing them. The reducer owns one absolute deadline per active leaf and the
+whole-heist deadline. It projects the earlier target to the MainActor host. The
+leaf deadline starts before baseline acquisition and covers reveal, dispatch,
+ordered predicate evaluation, and the trailing `noChange`; there is no separate
 readiness allowance.
 
 Current predicates such as `exists` and `missing` may match the baseline
@@ -542,9 +543,9 @@ message, and outcome-bound evidence. Each payload case determines its action
 method and carries only the command-specific value legal for that method;
 custom `Codable` projects that value directly to the public `method` plus
 an optional `payload` value. There is no separate semantic or wire payload
-wrapper. The pure heist machine records one `ActionDispatchResult` and the
+wrapper. The pure heist reducer records one `ActionDispatchResult` and the
 ordered observation evidence for its active leaf. The result projector derives
-the public action result from that machine-owned truth without a post-action
+the public action result from that reducer-owned truth without a post-action
 wait or parallel result shape. Failures carry
 their typed action failure inside `outcome.failureKind`. Fence result projections
 add an expectation result when requested and derive a public delta from the

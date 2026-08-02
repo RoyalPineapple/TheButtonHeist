@@ -7,7 +7,7 @@ import XCTest
 @testable import TheInsideJob
 @_spi(ButtonHeistInternals) @testable import TheScore
 
-final class HeistMachineInvocationTests: XCTestCase {
+final class HeistExecutionInvocationTests: XCTestCase {
     func testInvocationExecutesDefinitionBodyAndRetainsStructure() throws {
         let definition = try HeistPlan(
             name: "OpenCart",
@@ -17,7 +17,7 @@ final class HeistMachineInvocationTests: XCTestCase {
             definitions: [definition],
             body: [.invoke(HeistInvocationStep(path: "OpenCart"))]
         )
-        var driver = try HeistMachineTestDriver(plan: plan)
+        var driver = try HeistExecutionTestDriver(plan: plan)
 
         let completion = try driver.run()
         let invocation = try XCTUnwrap(completion.steps.first)
@@ -46,7 +46,7 @@ final class HeistMachineInvocationTests: XCTestCase {
             definitions: [outer],
             body: [.invoke(HeistInvocationStep(path: "Outer"))]
         )
-        var driver = try HeistMachineTestDriver(plan: plan)
+        var driver = try HeistExecutionTestDriver(plan: plan)
 
         let completion = try driver.run()
         let outerInvocation = try XCTUnwrap(completion.steps.first)
@@ -83,10 +83,10 @@ final class HeistMachineInvocationTests: XCTestCase {
                 )),
             ]
         )
-        var driver = try HeistMachineTestDriver(
+        var driver = try HeistExecutionTestDriver(
             plan: plan,
             actionExpectationTimeoutPolicy: policy,
-            script: MachineRunScript(
+            script: ExecutionRunScript(
                 snapshots: [makeTestObservationSnapshot(labels: ["Done"])],
                 events: [.screenChanged(ScreenFacts(idAfter: nil)), .noChange]
             )
@@ -125,7 +125,7 @@ final class HeistMachineInvocationTests: XCTestCase {
                 .warn(WarnStep(message: "caller later")),
             ]
         )
-        var driver = try HeistMachineTestDriver(plan: plan)
+        var driver = try HeistExecutionTestDriver(plan: plan)
 
         let completion = try driver.run()
         let invocation = try XCTUnwrap(completion.steps.first)
@@ -136,21 +136,21 @@ final class HeistMachineInvocationTests: XCTestCase {
         XCTAssertEqual(completion.steps.firstFailedStepInResultOrder?.path, invocation.children.first?.path)
     }
 
-    func testInvocationReferenceMustResolveBeforeMachineConstruction() throws {
+    func testInvocationReferenceMustResolveBeforeExecutionConstruction() throws {
         XCTAssertThrowsError(try HeistPlan(body: [
             .invoke(HeistInvocationStep(path: "Missing")),
         ]))
     }
 }
 
-private extension HeistExecution.MainActorRequest {
+private extension HeistExecution.Effect {
     var observationScope: SemanticObservationScope? {
-        guard case .beginObservation(_, let request) = self else { return nil }
+        guard case .beginObservation(_, let request, _) = self else { return nil }
         return request.scope
     }
 
     var observationTimeout: Duration? {
-        guard case .beginObservation(_, let request) = self else { return nil }
+        guard case .beginObservation(_, let request, _) = self else { return nil }
         return request.timeout
     }
 }

@@ -29,7 +29,7 @@ flowchart TD
     ADMIT -- "unique match is selected element" --> IDENTITY["AdmittedSemanticTarget<br/>ordinal-free target + semantic scroll path"]
     ADMIT -- "missing, ambiguous,<br/>or different element" --> MISS["inflation failure with diagnostics<br/>no live handoff"]
 
-    IDENTITY --> BUDGET["receive the active leaf deadline<br/>from HeistExecution.Host"]
+    IDENTITY --> BUDGET["receive the reducer-projected<br/>boundary deadline through the host"]
     BUDGET --> GRAPH["walk semantic ancestor graph<br/>outermost-first"]
     GRAPH --> SEED["captured content point +<br/>semantic owner path"]
     SEED --> OWNER{"candidate path exactly<br/>matches owner path?"}
@@ -64,9 +64,9 @@ Notes:
   inflation re-resolves it and adopts only the matching element's current
   `HeistId` and live reference for geometry and dispatch. Missing or ambiguous
   resolution fails; a stale id or newly visible sibling cannot take over.
-- `HeistExecution.Host` owns the active leaf deadline and passes it through
-  dispatch, inflation, nested reveal, refresh, navigation, and geometry
-  stabilization. Nested reveal follows the semantic ancestor graph
+- `HeistExecution` owns the leaf and whole-heist deadlines. The host passes the
+  earlier boundary target through dispatch, inflation, nested reveal, refresh,
+  navigation, and geometry stabilization. Nested reveal follows the semantic ancestor graph
   outermost-first and never derives a second budget from that graph.
 - A known semantic target that later gains scroll membership earns at most one
   direct reveal attempt. Its captured content point and producing scroll

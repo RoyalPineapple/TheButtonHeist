@@ -38,11 +38,11 @@ sequenceDiagram
         Sync->>RL: RunLoop.current.run(mode .default, 0.05 s slices)
         Note over RL: run loop keeps turning —<br/>timers and callbacks still fire
     end
-    alt Host completes before the semantic deadline
+    alt reducer completes before the semantic deadline
         Host-->>Task: HeistResult
         Task-->>Sync: completed(result), task released
-    else Host reaches the semantic deadline
-        Host->>Host: cancel interaction and collect terminal evidence
+    else reducer classifies the semantic deadline
+        Host->>Host: perform requested terminal evidence effects
         Host-->>Task: timed-out HeistResult
         Task-->>Sync: completed(result), task released
     else result delivery exceeds deadline plus headroom
@@ -93,8 +93,9 @@ Notes:
 
 - `runHeist` and `runHeistSync` run the plan in-process; `joinHeist` and `withJoinedHeistSession` start a `TheInsideJob` server inside the test host so an **external** agent can connect (observation and control come from outside, over the same wire as any other client).
 - `runHeistSync` exists so the test method itself can stay synchronous. The
-  Host owns the typed semantic deadline; the synchronous facade pumps the run
-  loop until the Host returns, with delivery headroom so terminal evidence can
+  reducer owns the typed semantic deadline; the host waits for its projected
+  target. The synchronous facade pumps the run loop until the host returns,
+  with delivery headroom so terminal evidence can
   finish after timeout. Completion and delivery timeout are terminal sync
   states, and either transition releases the owned task.
 - Every XCTest-facing synchronous failure preserves the public caller location and routes through `recordHeistXCTestIssue`, the single `XCTFail` emission path.

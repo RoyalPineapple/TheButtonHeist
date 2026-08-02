@@ -43,15 +43,26 @@ enum DeterministicRuntimeActionDisposition {
         TheSafecracker.ActionDispatchResult,
         by: Duration
     )
+    case resultAfterQueuingNotificationAndAdvancingClock(
+        TheSafecracker.ActionDispatchResult,
+        notification: AccessibilityNotificationFixture,
+        by: Duration
+    )
 }
 
 enum DeterministicRuntimeInput {
     case notification(AccessibilityNotificationFixture)
+    /// Records a late notification, then waits for the close sampler's refresh request.
+    case notificationAwaitingObservationRequest(AccessibilityNotificationFixture)
     case pulse(after: Duration, observation: InterfaceObservation?)
     case action(
         expected: ResolvedHeistActionCommand,
         disposition: DeterministicRuntimeActionDisposition
     )
+    /// Cancels only after the expected action effect is pending.
+    case cancelDuringAction(expected: ResolvedHeistActionCommand)
+    /// Cancels only after the Host has registered its first observation wait.
+    case cancelAfterObservationWaiter
     case cancel
 }
 
@@ -68,6 +79,9 @@ enum DeterministicRuntimeDriverFailure: Error, CustomStringConvertible {
     case scriptExhausted(inputIndex: Int)
     case unexpectedPlatformEffect(String)
     case unconsumedPlatformEffect(String)
+    case activeDeadlineWaiters(Int)
+    case activeObservationWaiters(Int)
+    case activeActionEffect(ResolvedHeistActionCommand)
     case runtime(Error)
 
     var description: String {
@@ -88,6 +102,12 @@ enum DeterministicRuntimeDriverFailure: Error, CustomStringConvertible {
             "runtime requested an unexpected platform effect: \(effect)"
         case .unconsumedPlatformEffect(let effect):
             "platform effect script did not consume \(effect)"
+        case .activeDeadlineWaiters(let count):
+            "execution returned with \(count) active virtual deadline waiters"
+        case .activeObservationWaiters(let count):
+            "execution returned with \(count) active semantic observation waiters"
+        case .activeActionEffect(let command):
+            "execution returned with an active action effect \(command)"
         case .runtime(let error):
             "runtime execution failed: \(error)"
         }
@@ -106,6 +126,12 @@ private enum DeterministicRuntimeTerminal: Sendable {
     case probeCancelled
 }
 
+private enum DeterministicRuntimeStructuralSettlement: Sendable {
+    case observationRequested
+    case executionCompleted
+    case cancelled
+}
+
 @MainActor
 struct DeterministicRuntimeScenarioResult {
     enum Outcome {
@@ -118,17 +144,13 @@ struct DeterministicRuntimeScenarioResult {
     let report: HeistReport?
     let humanFailureDescription: String?
     let effectTranscript: [DeterministicRuntimeEffect]
+    let observationCaptureCount: Int
 }
 
 @MainActor
 final class DeterministicRuntimeScenarioDriver {
     @MainActor
     private final class VirtualElapsed {
-        fileprivate enum DeadlineDelivery {
-            case resume
-            case retain
-        }
-
         private struct DeadlineWaiter {
             let deadline: Duration
             let continuation: CheckedContinuation<Bool, Never>
@@ -141,13 +163,13 @@ final class DeterministicRuntimeScenarioDriver {
         private var elapsed = Duration.zero
         private var nextWaiterID: UInt64 = 0
         private var deadlineWaiters: [UInt64: DeadlineWaiter] = [:]
-        private var retainedDeadlineWaiterIDs: Set<UInt64> = []
 
         init(requestProbe: ScriptInputProbe) {
             self.requestProbe = requestProbe
         }
 
         var currentElapsed: Duration { elapsed }
+        var activeWaiterCount: Int { deadlineWaiters.count }
 
         func now() -> RuntimeElapsed.Instant {
             didReadNow = true
@@ -163,33 +185,18 @@ final class DeterministicRuntimeScenarioDriver {
             }
         }
 
-        fileprivate func advance(
-            by duration: Duration,
-            deadlineDelivery: DeadlineDelivery = .resume
-        ) throws {
+        fileprivate func advance(by duration: Duration) throws {
             guard duration >= .zero else {
                 throw DeterministicRuntimeDriverFailure.negativePulseElapsed(duration)
             }
             elapsed += duration
-            let ready = deadlineWaiters.filter { $0.value.deadline <= elapsed }
-            switch deadlineDelivery {
-            case .resume:
-                resumeReadyDeadlineWaiters(ready, excluding: retainedDeadlineWaiterIDs)
-            case .retain:
-                retainedDeadlineWaiterIDs.formUnion(ready.keys)
-            }
-        }
-
-        fileprivate func releaseRetainedDeadlineWaiters() {
-            let retained = retainedDeadlineWaiterIDs
-            retainedDeadlineWaiterIDs.removeAll()
             resumeReadyDeadlineWaiters(
-                deadlineWaiters.filter { retained.contains($0.key) },
-                excluding: []
+                deadlineWaiters.filter { $0.value.deadline <= elapsed }
             )
         }
 
         func wait(for duration: Duration) async -> Bool {
+            requestProbe.recordRequest()
             guard !Task.isCancelled else { return false }
             let deadline = elapsed + duration
             guard deadline > elapsed else { return true }
@@ -207,7 +214,6 @@ final class DeterministicRuntimeScenarioDriver {
                             deadline: deadline,
                             continuation: continuation
                         )
-                        requestProbe.recordRequest()
                     }
                 }
             } onCancel: {
@@ -215,7 +221,6 @@ final class DeterministicRuntimeScenarioDriver {
                     guard let waiter = clock.deadlineWaiters.removeValue(forKey: id) else {
                         return
                     }
-                    clock.retainedDeadlineWaiterIDs.remove(id)
                     waiter.continuation.resume(returning: false)
                 }
             }
@@ -228,17 +233,13 @@ final class DeterministicRuntimeScenarioDriver {
         private func closeWaiters() {
             let waiters = deadlineWaiters
             deadlineWaiters.removeAll()
-            retainedDeadlineWaiterIDs.removeAll()
             for waiter in waiters.values {
                 waiter.continuation.resume(returning: false)
             }
         }
 
-        private func resumeReadyDeadlineWaiters(
-            _ waiters: [UInt64: DeadlineWaiter],
-            excluding excludedIDs: Set<UInt64>
-        ) {
-            for (id, waiter) in waiters where !excludedIDs.contains(id) {
+        private func resumeReadyDeadlineWaiters(_ waiters: [UInt64: DeadlineWaiter]) {
+            for (id, waiter) in waiters {
                 deadlineWaiters.removeValue(forKey: id)
                 waiter.continuation.resume(returning: true)
             }
@@ -316,6 +317,7 @@ final class DeterministicRuntimeScenarioDriver {
 
         private let inputProbe: ScriptInputProbe
         private let advanceClockBeforeEffectReturn: @MainActor (Duration) throws -> Void
+        private let recordNotification: @MainActor (AccessibilityNotificationFixture) -> Void
         private var pending: PendingAction?
         private var actionRequestWaiter: CheckedContinuation<PendingAction, Error>?
         private var acknowledgement: CheckedContinuation<Void, Never>?
@@ -329,12 +331,14 @@ final class DeterministicRuntimeScenarioDriver {
             inputProbe: ScriptInputProbe,
             explorationOutcomes: [Navigation.ViewportExit.Outcome],
             failureCaptures: [HeistFailureCapture],
-            advanceClockBeforeEffectReturn: @escaping @MainActor (Duration) throws -> Void
+            advanceClockBeforeEffectReturn: @escaping @MainActor (Duration) throws -> Void,
+            recordNotification: @escaping @MainActor (AccessibilityNotificationFixture) -> Void
         ) {
             self.inputProbe = inputProbe
             self.explorationOutcomes = explorationOutcomes
             self.failureCaptures = failureCaptures
             self.advanceClockBeforeEffectReturn = advanceClockBeforeEffectReturn
+            self.recordNotification = recordNotification
         }
 
         func dispatch(
@@ -387,10 +391,32 @@ final class DeterministicRuntimeScenarioDriver {
             case .resultAfterAdvancingClock(let dispositionResult, let duration):
                 try advanceClockBeforeEffectReturn(duration)
                 result = dispositionResult
+            case .resultAfterQueuingNotificationAndAdvancingClock(
+                let dispositionResult,
+                let notification,
+                let duration
+            ):
+                recordNotification(notification)
+                try advanceClockBeforeEffectReturn(duration)
+                result = dispositionResult
             }
             self.pending = nil
             pending.continuation.resume(returning: result)
             await awaitEffectReturn()
+        }
+
+        func confirmPendingAction(
+            at index: Int,
+            expected: ResolvedHeistActionCommand
+        ) async throws {
+            let pending = try await awaitPendingAction(at: index, expected: expected)
+            guard pending.command == expected else {
+                throw DeterministicRuntimeDriverFailure.mismatchedAction(
+                    index: index,
+                    expected: expected,
+                    received: pending.command
+                )
+            }
         }
 
         func assertNoPendingAction(at index: Int) throws {
@@ -430,6 +456,9 @@ final class DeterministicRuntimeScenarioDriver {
 
         func validate() throws {
             if let failure { throw failure }
+            if let pending {
+                throw DeterministicRuntimeDriverFailure.activeActionEffect(pending.command)
+            }
             if !explorationOutcomes.isEmpty {
                 throw DeterministicRuntimeDriverFailure.unconsumedPlatformEffect("exploration")
             }
@@ -524,6 +553,7 @@ final class DeterministicRuntimeScenarioDriver {
         let clock: VirtualElapsed
         let clockProbe: ScriptInputProbe
         let inputProbe: ScriptInputProbe
+        let completionProbe: ScriptInputProbe
         let effects: ScriptedActionEffects
         let brains: TheBrains
         let boundary: HeistExecution.Host.RuntimeBoundary
@@ -566,6 +596,7 @@ final class DeterministicRuntimeScenarioDriver {
             session.clock.close()
             session.clockProbe.close()
             session.inputProbe.close()
+            session.completionProbe.close()
         }
         await session.clock.awaitFirstRead()
         let authorCancelled = try await executeInputs(
@@ -588,16 +619,9 @@ final class DeterministicRuntimeScenarioDriver {
             ? VisibleObservationSourceFixture(observation: nil)
             : VisibleObservationSourceFixture(sequence: pulses.map(\.observation))
         let inputProbe = ScriptInputProbe()
+        let completionProbe = ScriptInputProbe()
         let clockProbe = ScriptInputProbe()
         let clock = VirtualElapsed(requestProbe: clockProbe)
-        let effects = ScriptedActionEffects(
-            inputProbe: inputProbe,
-            explorationOutcomes: explorationOutcomes,
-            failureCaptures: failureCaptures,
-            advanceClockBeforeEffectReturn: { duration in
-                try clock.advance(by: duration, deadlineDelivery: .retain)
-            }
-        )
         let tripwire = TheTripwire()
         let brains = TheBrains(
             tripwire: tripwire,
@@ -606,12 +630,24 @@ final class DeterministicRuntimeScenarioDriver {
             notificationIngress: .injected,
             pulseIngress: .injected
         )
+        let effects = ScriptedActionEffects(
+            inputProbe: inputProbe,
+            explorationOutcomes: explorationOutcomes,
+            failureCaptures: failureCaptures,
+            advanceClockBeforeEffectReturn: { duration in
+                try clock.advance(by: duration)
+            },
+            recordNotification: { fixture in
+                Self.record(fixture, in: brains.vault)
+            }
+        )
         return Session(
             pulses: pulses,
             source: source,
             clock: clock,
             clockProbe: clockProbe,
             inputProbe: inputProbe,
+            completionProbe: completionProbe,
             effects: effects,
             brains: brains,
             boundary: runtimeBoundary(clock: clock, effects: effects)
@@ -620,8 +656,13 @@ final class DeterministicRuntimeScenarioDriver {
 
     private func pulseFixtures() -> [PulseFixture] {
         inputs.enumerated().compactMap { inputIndex, input in
-            guard case .pulse(_, let observation) = input else { return nil }
-            return PulseFixture(inputIndex: inputIndex, observation: observation)
+            switch input {
+            case .pulse(_, let observation):
+                PulseFixture(inputIndex: inputIndex, observation: observation)
+            case .notification, .notificationAwaitingObservationRequest,
+                 .action, .cancelDuringAction, .cancelAfterObservationWaiter, .cancel:
+                nil
+            }
         }
     }
 
@@ -642,7 +683,8 @@ final class DeterministicRuntimeScenarioDriver {
         using session: Session
     ) -> Task<HeistExecution.Completion, Error> {
         Task { @MainActor in
-            try await HeistExecution.Host(
+            defer { session.completionProbe.recordRequest() }
+            return try await HeistExecution.Host(
                 brains: session.brains,
                 runtimeBoundary: session.boundary
             ).execute(
@@ -664,6 +706,7 @@ final class DeterministicRuntimeScenarioDriver {
         var clockRequestGeneration: UInt64 = 0
         var observationRequestGeneration: UInt64 = 0
         var requiresObservationRequest = false
+        var requiresActionDeadlineWait = false
         for (index, input) in inputs.enumerated() {
             try await synchronizePulse(
                 input,
@@ -672,8 +715,12 @@ final class DeterministicRuntimeScenarioDriver {
                 clockRequestGeneration: &clockRequestGeneration,
                 observationRequestGeneration: &observationRequestGeneration,
                 requiresObservationRequest: requiresObservationRequest,
+                requiresActionDeadlineWait: &requiresActionDeadlineWait,
                 session: session
             )
+            let deadlineGenerationBeforeAction = actionRequiresDeadlineWait(input)
+                ? session.clockProbe.currentGeneration
+                : nil
             try await executeInput(
                 input,
                 at: index,
@@ -682,16 +729,19 @@ final class DeterministicRuntimeScenarioDriver {
                 stream: stream,
                 execution: execution
             )
-            if case .pulse(let duration, _) = input, duration > .zero {
+            if let duration = pulseDuration(input), duration > .zero {
                 requiresObservationRequest = true
             }
-            if case .action(_, .resultAfterAdvancingClock) = input {
-                requiresObservationRequest = true
-                observationRequestGeneration = session.inputProbe.currentGeneration
+            if let deadlineGenerationBeforeAction {
+                clockRequestGeneration = deadlineGenerationBeforeAction
+                requiresActionDeadlineWait = true
             }
         }
-        try session.effects.assertNoPendingAction(at: inputs.count)
-        return lastInputCancelsExecution()
+        let authorCancelled = lastInputCancelsExecution()
+        if !authorCancelled {
+            try session.effects.assertNoPendingAction(at: inputs.count)
+        }
+        return authorCancelled
     }
 
     private func synchronizePulse(
@@ -701,14 +751,12 @@ final class DeterministicRuntimeScenarioDriver {
         clockRequestGeneration: inout UInt64,
         observationRequestGeneration: inout UInt64,
         requiresObservationRequest: Bool,
+        requiresActionDeadlineWait: inout Bool,
         session: Session
     ) async throws {
-        guard case .pulse(let duration, _) = input else { return }
+        guard let duration = pulseDuration(input) else { return }
         if !didSynchronize {
             guard await session.inputProbe.waitForRequest(after: 0) else {
-                throw CancellationError()
-            }
-            guard await session.clockProbe.waitForRequest(after: 0) else {
                 throw CancellationError()
             }
             didSynchronize = true
@@ -716,13 +764,24 @@ final class DeterministicRuntimeScenarioDriver {
             observationRequestGeneration = session.inputProbe.currentGeneration
         }
         if requiresObservationRequest {
-            guard await session.inputProbe.waitForRequest(
-                after: observationRequestGeneration
-            ) else {
+            let settlement = await awaitStructuralSettlement(
+                after: observationRequestGeneration,
+                inputProbe: session.inputProbe,
+                completionProbe: session.completionProbe
+            )
+            if case .cancelled = settlement {
                 throw CancellationError()
             }
-            observationRequestGeneration = session.inputProbe.currentGeneration
-            session.clock.releaseRetainedDeadlineWaiters()
+            if case .observationRequested = settlement {
+                observationRequestGeneration = session.inputProbe.currentGeneration
+            }
+        }
+        if requiresActionDeadlineWait {
+            guard await session.clockProbe.waitForRequest(after: clockRequestGeneration) else {
+                throw CancellationError()
+            }
+            clockRequestGeneration = session.clockProbe.currentGeneration
+            requiresActionDeadlineWait = false
         }
         guard tick > 0, duration > .zero else { return }
         guard await session.clockProbe.waitForRequest(after: clockRequestGeneration) else {
@@ -732,8 +791,36 @@ final class DeterministicRuntimeScenarioDriver {
     }
 
     private func lastInputCancelsExecution() -> Bool {
-        guard let input = inputs.last, case .cancel = input else { return false }
-        return true
+        guard let input = inputs.last else { return false }
+        return switch input {
+        case .cancelDuringAction, .cancelAfterObservationWaiter, .cancel:
+            true
+        case .notification, .notificationAwaitingObservationRequest,
+             .pulse, .action:
+            false
+        }
+    }
+
+    private func pulseDuration(_ input: DeterministicRuntimeInput) -> Duration? {
+        switch input {
+        case .pulse(let duration, _):
+            duration
+        case .notification, .notificationAwaitingObservationRequest,
+             .action, .cancelDuringAction, .cancelAfterObservationWaiter, .cancel:
+            nil
+        }
+    }
+
+    private func actionRequiresDeadlineWait(_ input: DeterministicRuntimeInput) -> Bool {
+        switch input {
+        case .action(_, .resultAfterAdvancingClock):
+            true
+        case .notification, .notificationAwaitingObservationRequest,
+             .pulse,
+             .action(_, .resultAfterQueuingNotificationAndAdvancingClock),
+             .action, .cancelDuringAction, .cancelAfterObservationWaiter, .cancel:
+            false
+        }
     }
 
     private func executeInput(
@@ -747,19 +834,54 @@ final class DeterministicRuntimeScenarioDriver {
         switch input {
         case .notification(let fixture):
             try session.effects.assertNoPendingAction(at: index)
-            record(fixture, in: session.brains.vault)
+            Self.record(fixture, in: session.brains.vault)
+        case .notificationAwaitingObservationRequest(let fixture):
+            let requestGeneration = session.inputProbe.currentGeneration
+            Self.record(fixture, in: session.brains.vault)
+            guard await session.inputProbe.waitForRequest(after: requestGeneration) else {
+                throw CancellationError()
+            }
         case .pulse(let after, _):
-            try session.effects.assertNoPendingAction(at: index)
             try await deliverPulse(after: after, tick: &tick, session: session, stream: stream)
         case .action(let expected, let disposition):
             try await session.effects.release(at: index, expected: expected, disposition: disposition)
+        case .cancelDuringAction(let expected):
+            try await session.effects.confirmPendingAction(at: index, expected: expected)
+            execution.cancel()
+        case .cancelAfterObservationWaiter:
+            guard await session.inputProbe.waitForRequest(after: 0) else {
+                throw CancellationError()
+            }
+            execution.cancel()
         case .cancel:
-            try session.effects.assertNoPendingAction(at: index)
             execution.cancel()
         }
     }
 
-    private func record(
+    private func awaitStructuralSettlement(
+        after generation: UInt64,
+        inputProbe: ScriptInputProbe,
+        completionProbe: ScriptInputProbe
+    ) async -> DeterministicRuntimeStructuralSettlement {
+        await withTaskGroup(of: DeterministicRuntimeStructuralSettlement.self) { group in
+            group.addTask {
+                await inputProbe.waitForRequest(after: generation)
+                    ? .observationRequested
+                    : .cancelled
+            }
+            group.addTask {
+                // Completion is one-shot, so its first generation is a sticky fact.
+                await completionProbe.waitForRequest(after: 0)
+                    ? .executionCompleted
+                    : .cancelled
+            }
+            let settlement = await group.next() ?? .cancelled
+            group.cancelAll()
+            return settlement
+        }
+    }
+
+    private static func record(
         _ fixture: AccessibilityNotificationFixture,
         in vault: TheVault
     ) {
@@ -844,6 +966,18 @@ final class DeterministicRuntimeScenarioDriver {
 
     private func validate(session: Session) throws {
         try session.effects.validate()
+        guard session.clock.activeWaiterCount == 0 else {
+            throw DeterministicRuntimeDriverFailure.activeDeadlineWaiters(
+                session.clock.activeWaiterCount
+            )
+        }
+        let activeObservationWaiters = session.brains.vault.semanticObservationStream
+            .observationWaiterCount
+        guard activeObservationWaiters == 0 else {
+            throw DeterministicRuntimeDriverFailure.activeObservationWaiters(
+                activeObservationWaiters
+            )
+        }
         guard session.source.captureCount == session.pulses.count else {
             throw DeterministicRuntimeDriverFailure.unconsumedPulse(
                 index: session.pulses[session.source.captureCount].inputIndex
@@ -862,7 +996,8 @@ final class DeterministicRuntimeScenarioDriver {
                 result: nil,
                 report: nil,
                 humanFailureDescription: nil,
-                effectTranscript: session.effects.transcript
+                effectTranscript: session.effects.transcript,
+                observationCaptureCount: session.source.captureCount
             )
         case .completed(let completion):
             let result = try HeistResult(
@@ -881,7 +1016,8 @@ final class DeterministicRuntimeScenarioDriver {
                 result: result,
                 report: report,
                 humanFailureDescription: failureDescription,
-                effectTranscript: session.effects.transcript
+                effectTranscript: session.effects.transcript,
+                observationCaptureCount: session.source.captureCount
             )
         }
     }

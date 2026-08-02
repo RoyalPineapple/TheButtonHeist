@@ -116,8 +116,8 @@ distinct platform canary.
 |-------|-------------------------|----------|
 | Portable plans, values, wire, and report projection | Target-local `TestSupport` values | No UIKit, networking, process state, or alternate semantic model |
 | Admitted accessibility truth | `TheInsideJobTests/Shared/LogicWindow` element and observation values | Explicit value input with no live-capture fallback |
-| Execution reducer | `HeistExecutionMachineTestSupport.swift` | Real machine reduced over typed snapshots, events, and outcomes |
-| Complete semantic runtime | `DeterministicRuntimeScenarioDriver.swift` | Real stream, Vault, host, machine, result, and render projection over explicit inputs |
+| Execution reducer | `HeistExecutionTestSupport.swift` | Reducer driven over typed snapshots, events, effects, and outcomes |
+| Complete semantic runtime | `DeterministicRuntimeScenarioDriver.swift` | Real stream, Vault, host, reducer, result, and render projection over explicit inputs |
 | Foreground UIKit boundary | `TheInsideJobWindowTests` specialist fixtures | Windows, live objects, capture, gestures, focus, scrolling, and restoration |
 | Real application behavior | `ButtonHeistHostedTestSupport` and `AdversarialScenarioCatalog` | Authored heists against the actual BH Demo accessibility surface |
 

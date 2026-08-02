@@ -117,7 +117,7 @@ discovery freshness always request a publication from the same producer.
 
 `Observation.History` is the Vault-owned ordered array of
 `Observation.Event` values. `elementsChanged` contains its immutable snapshot;
-`screenChanged` is the only screen-boundary marker. The running heist machine
+`screenChanged` is the only screen-boundary marker. The running heist reducer
 may retain ordinary private positions while advancing, but positions never
 enter snapshots, events, state answers, or an API. No predicate, action, or
 adapter owns another history or temporal record.
@@ -135,7 +135,7 @@ live UIKit handoff. Missing or ambiguous re-resolution fails safely; it never
 retains the previous id or substitutes a sibling duplicate.
 
 Completed steps project immutable `Observation.Evidence` from Vault truth and
-the events consumed by the machine. Current-state predicates read the current
+the events consumed by the reducer. Current-state predicates read the current
 snapshot through the same target resolver that actions and `get_interface` use.
 Diagnostic evidence is result-local; it is not committed or targetable. A
 public response may expose a compact `delta`, but that value is a one-way,
@@ -148,7 +148,7 @@ targets from the new interface evidence. See the
 the [observation pipeline diagram](diagrams/observation-pipeline.md) for the
 capture, event, predicate, and public-fold boundaries.
 
-### One Heist Machine
+### One Heist Reducer
 
 TheTripwire samples UIKit timing signals: presentation-layer movement, pending
 layout, animations, top view-controller identity, navigation state, window
@@ -157,51 +157,61 @@ accessibility tree.
 
 ```swift
 enum HeistExecution.Decision {
-    case perform(MainActorRequest)
-    case wait
+    case perform(Effect)
+    case wait(WaitRequest)
     case complete(Completion)
 }
 ```
 
-One `HeistExecution` machine runs one complete heist from its first step to its
-final `Completion`. It privately retains every execution detail needed to
-advance the plan: control-flow stack, environments, accumulated step results,
-active expectation progress, and transient observation bookkeeping. `State`
-is the private durable machine phase. `Decision` is only the machine's next
-answer: perform a typed MainActor request, wait for another admitted input, or
-complete.
+One `HeistExecution` value reduces one complete heist from its first step to its
+final `Completion`. It privately retains the control-flow stack, environments,
+step results, expectation progress, deadlines, and observation progress.
+`State` is its private durable phase. Each call to `start(at:timeout:)` or
+`reduce(_:)` returns one `Decision`: perform a typed `Effect`, wait for a fact
+with a stable ID and absolute deadline, or complete.
 
 The Vault reducer accepts admitted snapshots and normalized notification
 payloads and deterministically produces ordered `Observation.Event` values.
-The machine accepts baseline snapshots, those events, and typed outcomes from
-requests it previously returned in authored order. For a fixed heist and input
-order, it is deterministic and replayable. There is no command API, operation
-result, caller-provided baseline, history-start argument, or parallel execution
-owner. Actions and waits are internal machine progress, not independently
-started executors.
+The reducer accepts baseline snapshots, those events, and typed outcomes from
+effects it previously returned. For a fixed heist and event order, it returns
+the same decisions. There is no second command API, operation result,
+caller-provided baseline, history-start argument, or execution owner. Actions
+and waits are private reducer progress, not separate executors.
 
-The MainActor host owns the active leaf's absolute deadline, the whole heist's
-absolute deadline, and one asynchronous task scheduled for the earlier value.
-Its `RuntimeBoundary` is the single owner of elapsed-time reads, cancellable
-waiting, action dispatch, viewport exploration, and failure capture. Production
-binds those operations to live implementations; deterministic scenarios bind
-virtual elapsed time and typed scripted platform effects while retaining the
-real host and machine.
+`HeistExecution` owns the original leaf and whole-heist deadlines. It gives each
+boundary operation the earlier absolute deadline, but keeps both original
+values so it can classify leaf and heist timeouts correctly.
+`HeistExecution.Host` owns elapsed-time reads, cancellable waits, UIKit work,
+action dispatch, viewport exploration, subscriptions, notification leases,
+and failure capture. Production binds those operations to live code.
+Deterministic scenarios bind virtual time and scripted platform effects while
+retaining the real reducer and host.
+
 The leaf deadline starts before baseline acquisition and covers reveal,
 dispatch, expectation evaluation, and the trailing `noChange` required to close
-the observation. There is no separate readiness allowance. Deadlines are
-external control flow, never machine or observation data. Expiry cancels the
-app interaction in flight, waits for its cleanup, captures terminal evidence,
-and admits a typed timeout outcome to the machine. A leaf timeout may enter an
-authored wait `else`; a heist timeout permits no further authored effect. No
-deadline event is admitted to the Vault, appended to `Observation.History`, or
-reduced by the machine.
+the observation. There is no separate readiness allowance. The host reports
+clock and capture facts. The reducer decides whether the leaf deadline, the
+whole-heist deadline, or neither has expired. A leaf timeout may enter an
+authored wait `else`; a heist timeout permits no further authored effect.
+Deadline facts never enter the Vault or `Observation.History`.
 
-Failure evidence is finalized by the same machine. Whenever executed root
+Observation close has two phases. The reducer asks the host for one coverage,
+refresh, or next-cycle sample. The host returns raw evidence, viewport status,
+capture availability, and event times. The reducer decides whether to request
+another sample or commit. The host keeps the sealed notification lease until a
+commit or cancellation effect releases it. The host never evaluates an
+expectation or constructs `LeafOutcome`.
+
+Cancellation follows the same rule. The host sends `cancellationRequested`.
+The reducer returns one `cancelObservation` cleanup effect, admits its matching
+completion fact, and completes with `.cancelled`. The host then throws
+`CancellationError` to the caller.
+
+Failure evidence is finalized by the same reducer. Whenever executed root
 children contain an `abortedAtPath` and screenshot evidence is enabled, the
-machine returns one `captureFailureScreenshot` host request before completing.
+reducer returns one `captureFailureScreenshot` effect before completing.
 The host captures the screen and returns `failureScreenshotCaptured` to that
-machine. Explicit `Fail`, action or expectation failure, wait failure,
+reducer. Explicit `Fail`, action or expectation failure, wait failure,
 control-flow failure, runtime unavailability, viewport restoration failure, and
 deadline expiry all use this path. A screenshot failure is auxiliary evidence;
 it never replaces the original failed path.
@@ -226,7 +236,7 @@ sequenceDiagram
     participant Stream as Observation.Stream
     participant Bus as Notification bus
     participant Vault
-    participant Machine
+    participant Execution as HeistExecution
 
     Demand->>Stream: visible or discovery demand
     Stream->>DisplayLink: resume with canonical demand
@@ -238,8 +248,8 @@ sequenceDiagram
     Vault->>Vault: deterministically reduce ordered Observation.Event values
     Vault->>Vault: commit snapshot + append one History
     Vault-->>Stream: publication
-    Stream->>Machine: publish ordered events
-    Machine->>Machine: reduce active action/wait predicate
+    Stream->>Execution: publish ordered events
+    Execution->>Execution: reduce active action or wait predicate
     Stream->>Bus: acknowledge committed claim
     alt demand remains
         Stream->>DisplayLink: await next pulse
@@ -263,11 +273,11 @@ used only by deterministic execution and never starts that live clock. A pulse s
 one capture cycle, and pulses received while that synchronous cycle is active
 are dropped. A later display pulse starts the next demanded cycle. The cycle
 claims notifications, captures and parses live UIKit state, commits snapshot and
-history, then publishes ordered events to the heist machine. A fresh capture
+history, then publishes ordered events to `HeistExecution`. A fresh capture
 that proves complete observed equality produces `noChange`. That case has no
 payload, but it means neither semantic state nor geometry changed within the
 admitted comparison tolerance.
-Motion with no accessibility representation is not machine evidence. Business
+Motion with no accessibility representation is not execution evidence. Business
 deadlines may cancel work, but no timer, sleep, caller loop, or discovery path
 acts as a second observation clock.
 
@@ -304,7 +314,7 @@ main run loop can begin and complete trivial scheduled work, but it never
 competes with another request or changes that request's outcome. Once app work
 begins, its normal response deadline is the sole client-side terminal timer and
 produces `request.timeout`. A transport disconnect still means no live
-connection, while a heist timeout means the complete machine remained pending
+connection, while a heist timeout means the complete reducer remained pending
 at its declared whole-heist deadline. The boundaries are shown in
 the [transport control plane diagram](diagrams/transport-control-plane.md).
 
@@ -375,15 +385,15 @@ depleted its rays, hit a budget, or was interrupted after dispatch.
 traversal; it derives from canonical vault truth and owns no second graph or
 commit path. There is no compatibility traversal or commit path.
 
-The Vault records each event before delivering it to the running whole-heist
-machine. The machine consumes each event once in order and retains any private
-comparison context itself. It does not subscribe to parser samples, build a
+The Vault records each event before delivering it to the running
+`HeistExecution` reducer. The reducer consumes each event once in order and
+retains its private comparison context. It does not subscribe to parser samples, build a
 private event history, or claim notification ownership.
 
-Actions and waits are successive internal machine progress states. Current
-snapshot truth can satisfy a wait immediately; otherwise the same machine
+Actions and waits are successive internal reducer states. Current snapshot
+truth can satisfy a wait immediately; otherwise the same reducer
 continues with ordered Vault events. Baselines and private history positions are
-established by machine transitions, never supplied by a caller. Observation
+established by reducer transitions, never supplied by a caller. Observation
 requests may reveal a resolvable target or run canonical discovery; viewport
 exit remains an explicit host request.
 
@@ -411,7 +421,7 @@ The pipeline is:
 
 1. Resolve the semantic target against current admitted accessibility state.
 2. Reject missing or ambiguous targets with diagnostics.
-3. Carry the active leaf deadline from the execution host. If reveal will cross
+3. Carry the reducer's active boundary deadline through the execution host. If reveal will cross
    a capture boundary, admit an ordinal-free
    `AdmittedSemanticTarget` that still uniquely selects that exact element.
 4. Reveal nested scroll ancestors outermost-first when viewport movement is
@@ -536,10 +546,10 @@ pipelines are explicit:
 | Result interpretation | `HeistReport.project(result:)` in `HeistResult+Report.swift` | JSON, compact, human, JUnit, doctor, and metric renderers |
 | Result recording decision | `HeistResult.Outcome` and `HeistResultRecordingMode` | `HeistResultRecording` filesystem boundary |
 | Offline validation algebra | `HeistValidation.Result<Value>` composed by `HeistValidation.Report` | Public JSON and text projections |
-| Complete-heist progress | One `HeistExecution` machine; its answer is `Decision` | MainActor host advances it with admitted inputs |
-| Accessibility truth and history | `TheVault.State`: admitted `InterfaceObservation` (topology plus reattached capture evidence), current `Snapshot`, and `Observation.History` | Host admission and machine consumption |
+| Complete-heist progress | One `HeistExecution` reducer; its answer is `Decision` | `HeistExecution.Host` executes effects and returns facts |
+| Accessibility truth and history | `TheVault.State`: admitted `InterfaceObservation` (topology plus reattached capture evidence), current `Snapshot`, and `Observation.History` | Host admission and reducer consumption |
 | Observation pulse and notification admission | `Observation.Stream` cycle driven by TheTripwire's single `CADisplayLink` | Demand resumes or pauses the link; each cycle claims ingress, captures, commits, publishes, evaluates, then acknowledges |
-| Host deadlines | One active-leaf absolute deadline spanning baseline acquisition through trailing `noChange`, capped by the whole-heist deadline, with one scheduled task | Cancels the in-flight effect, admits terminal evidence, and times out only an incomplete final `Decision` |
+| Execution deadlines | `HeistExecution` stores the original leaf and whole-heist deadlines and projects the earlier boundary target | The host reads the clock, waits for that target, and returns a stable-ID deadline fact |
 | Testing request construction | `ButtonHeistTesting.swift` | Synchronous helpers and joined sessions live in their named extension files |
 | Fence action JSON | `FenceJSON+Action.swift` and `FenceJSON+HeistExecution.swift`, one result family each | Fence response formatting |
 | Exported tuple contract enforcement | The single `buttonheist.exported_tuple_return` Bumper rule | One effective-access projection covers functions, properties, subscripts, protocol requirements, and inherited public or package visibility; private and local tuple scratch values never enter the exported-contract projection |
@@ -578,7 +588,7 @@ and the wire decoder accepts only fields legal for its `type` and `outcome`.
 
 `ActionDispatchResult` is the one aggregate of app-side action dispatch. Its
 outcome is success, with an optional payload and resolved element id, or failure,
-with a typed failure kind. The heist machine combines that request outcome with
+with a typed failure kind. The heist reducer combines that request outcome with
 the canonical observation events retained by the Vault to construct the
 completed step directly; it does not translate through a second
 interaction-result or observation model.
@@ -628,7 +638,7 @@ freezes one batch, captures and parses the interface against that exact batch,
 commits both through the Vault, publishes the resulting events, and only then
 acknowledges the batch. A failed or cancelled cycle leaves the claim pending and
 does not manufacture semantic evidence. Heist and action evidence select from
-the canonical `Observation.History` established by machine boundaries; they do
+the canonical `Observation.History` established by reducer boundaries; they do
 not own notification ingress or a parallel temporal record.
 
 `AccessibilityNotificationObserver` owns callback registration generations.
@@ -736,7 +746,7 @@ After admission, `HeistPlanTraversal` owns the semantic walk and its `Event`
 currency. Its invocation stack detects cycles directly; no graph projection or
 topological-order owner exists. Catalogs, descriptions, semantic surfaces, lint,
 and runtime safety each reduce those same events locally without creating another
-plan representation. This converges on the one complete-heist machine and
+plan representation. This converges on the one complete-heist reducer and
 canonical observation boundary below.
 
 ```mermaid
@@ -755,32 +765,32 @@ flowchart TD
     FenceCommand --> HandoffSocket["Handoff socket<br/>client version == app version"]
     HandoffSocket --> Executor["TheBrains-owned InteractionRequestExecutor<br/>one UI FIFO"]
 
-    Executor --> Machine["one complete HeistExecution machine<br/>ordered event reduction"]
-    Host["MainActor host<br/>one absolute leaf deadline"] --> Demand["baseline + visible/discovery observation demand"]
+    Executor --> Execution["one HeistExecution reducer<br/>ordered event reduction"]
+    Host["HeistExecution.Host<br/>live resources + effect execution"] --> Demand["baseline + visible/discovery observation demand"]
     Link["TheTripwire CADisplayLink"] --> Cycle["Observation.Stream cycle"]
     Demand --> Cycle
     Cycle --> Claim["claim notification ingress"]
     Claim --> Capture["capture + parse Snapshot"]
     Capture --> Reduce["TheVault reduction<br/>Snapshot + notification payloads<br/>to ordered Observation.Event values"]
     Reduce --> Vault["TheVault<br/>commit current Snapshot + one History"]
-    Vault --> Machine
-    Machine --> Perform["perform(request)"]
-    Machine --> Wait["wait"]
-    Machine --> Complete["complete(Completion)"]
+    Vault --> Execution
+    Execution --> Perform["perform(Effect)"]
+    Execution --> Wait["wait(WaitRequest)"]
+    Execution --> Complete["complete(Completion)"]
     Perform --> Host
     Wait --> Host
-    Host --> LeafWork["baseline / reveal / dispatch<br/>predicate evaluation / trailing noChange"]
-    LeafWork --> Machine
+    Host --> LeafWork["baseline / reveal / dispatch<br/>raw observation facts"]
+    LeafWork --> Execution
     Complete --> Result["HeistResult<br/>step-local Observation.Evidence"]
     Result --> Project["canonical report projection"]
     Project --> Response["JSON / compact / human / JUnit"]
 ```
 
 All control flow, actions, waits, invocation expectations, and repeat-until are
-private progress inside the one machine. The Vault records each event before
-delivery; the machine consumes it once in authored order. Current-state truth
+private progress inside the one reducer. The Vault records each event before
+delivery; the reducer consumes it once in authored order. Current-state truth
 is evaluated from the current snapshot. Temporal baselines and history
-positions are established privately by machine transitions and never enter an
+positions are established privately by reducer transitions and never enter an
 event, snapshot, command, or boundary API.
 
 A scoped screen notification or snapshot-inferred replacement records a
@@ -838,31 +848,31 @@ matches only after a committed snapshot proves no semantic or geometry change.
 2. Fence admission converts `FenceCommandInput` into `FenceOperationRequest`,
    then lowers it into a one-step or composed `HeistPlan` and sends
    `ClientMessage.heistPlan`.
-3. TheGetaway routes the plan to one complete-heist machine.
-4. When that machine reaches an action it resolves the semantic target and
-   answers `.perform(...)`; the MainActor host performs the request
-   and returns its typed outcome to the same machine.
+3. TheGetaway routes the plan to one `HeistExecution` reducer.
+4. When the reducer reaches an action it resolves the semantic target and
+   answers `.perform(...)`; the MainActor host performs the effect
+   and returns its typed event to the same reducer.
 5. The canonical result and report projectors return the response and classify
    its accumulated accessibility evidence once.
 
 ### Wait
 
-The already-running machine evaluates committed current-state truth when it
+The already-running reducer evaluates committed current-state truth when it
 reaches a wait. If the predicate is not complete, it answers `.wait` and
 consumes later admitted events from the same Vault
 history. Transition predicates require a later event; invocation and repeat
 expectations retain their private comparison progress while child steps run.
 
-The machine may answer `.perform(...)` when the wait requires target
+The reducer may answer `.perform(...)` when the wait requires target
 reveal or canonical viewport discovery. Discovery searches both directional
 rays and exits `.origin`; the host restores the saved origin before returning
 the request outcome. Every movement command requests and consumes a
 discovery-scope observation publication before another movement can begin. The
-host's deadlines remain outside the machine. One absolute leaf deadline covers
-baseline acquisition, reveal or dispatch, ordered predicate evaluation, and
-trailing `noChange`; the whole-heist deadline may end it earlier. One scheduled
-task targets the earlier absolute deadline, cancels the in-flight effect, and
-admits terminal evidence before an incomplete final state becomes a timeout.
+reducer stores the leaf and whole-heist deadlines. One absolute leaf deadline
+covers baseline acquisition, reveal or dispatch, ordered predicate evaluation,
+and trailing `noChange`; the whole-heist deadline may end it earlier. The host
+waits for the earlier target and returns the elapsed-deadline fact. The reducer
+classifies the timeout and requests terminal evidence.
 There is no additional readiness allowance.
 
 `.exists(target)` and `.missing(target)` resolve any element, container, or
