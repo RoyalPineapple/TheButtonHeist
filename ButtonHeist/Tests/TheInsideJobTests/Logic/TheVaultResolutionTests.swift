@@ -27,7 +27,8 @@ final class TheVaultResolutionTests: XCTestCase {
         label: String? = nil,
         value: String? = nil,
         identifier: String? = nil,
-        traits: UIAccessibilityTraits = .none
+        traits: UIAccessibilityTraits = .none,
+        respondsToUserInteraction: Bool = true
     ) -> AccessibilityElement {
         // Every constructed element gets a unique frame so duplicates are
         // distinguishable at the AccessibilityElement (Hashable) level — the
@@ -40,7 +41,8 @@ final class TheVaultResolutionTests: XCTestCase {
             value: value,
             identifier: identifier,
             traits: traits,
-            shape: .frame(AccessibilityRect(frame))
+            shape: .frame(AccessibilityRect(frame)),
+            respondsToUserInteraction: respondsToUserInteraction
         )
     }
 
@@ -122,7 +124,10 @@ final class TheVaultResolutionTests: XCTestCase {
                 HeistId(rawValue: "delete_first")
             ),
             (
-                element(label: "Delete", value: "Second", identifier: "delete_second", traits: [.button, .notEnabled]),
+                // Same traits as delete_first: a genuine interactivity tie is
+                // what keeps the "Delete" pair ambiguous under resolution's
+                // most-interactive-candidate tie-break.
+                element(label: "Delete", value: "Second", identifier: "delete_second", traits: .button),
                 HeistId(rawValue: "delete_second")
             ),
             (

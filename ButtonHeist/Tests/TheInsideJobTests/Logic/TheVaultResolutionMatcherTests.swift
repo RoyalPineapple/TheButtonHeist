@@ -199,6 +199,42 @@ extension TheVaultResolutionTests {
         XCTAssertTrue(candidates[0].contains("visible"))
     }
 
+    func testMatcherAmbiguityResolvesToSoleEnabledCandidate() async {
+        // A FormKit page slide keeps the outgoing page's button in the tree
+        // (same identity, notEnabled) alongside the incoming page's enabled
+        // one. The enabled button is the one a user can press, so it wins.
+        let outgoing = element(label: "Continue", traits: [.button, .notEnabled])
+        let incoming = element(label: "Continue", traits: .button)
+        await register(outgoing, heistId: "continue_outgoing", index: 0)
+        await register(incoming, heistId: "continue_incoming", index: 1)
+
+        let result = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Continue")))
+        XCTAssertEqual(result.resolvedElement?.heistId, "continue_incoming")
+    }
+
+    func testMatcherAmbiguityResolvesToSoleInteractiveCandidate() async {
+        let inert = element(label: "Submit", respondsToUserInteraction: false)
+        let live = element(label: "Submit")
+        await register(inert, heistId: "submit_inert", index: 0)
+        await register(live, heistId: "submit_live", index: 1)
+
+        let result = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Submit")))
+        XCTAssertEqual(result.resolvedElement?.heistId, "submit_live")
+    }
+
+    func testMatcherAmbiguityWithEquallyDisabledCandidatesStaysAmbiguous() async {
+        let one = element(label: "Delete", traits: .notEnabled, respondsToUserInteraction: false)
+        let two = element(label: "Delete", traits: .notEnabled, respondsToUserInteraction: false)
+        await register(one, heistId: "delete_1", index: 0)
+        await register(two, heistId: "delete_2", index: 1)
+
+        let result = vault.resolveTarget(literalTarget(ResolvedElementPredicate.label("Delete")))
+        guard case .ambiguous = result else {
+            XCTFail("Expected .ambiguous, got \(result)")
+            return
+        }
+    }
+
     func testMatcherNoMatchReturnsNotFound() async {
         let element = element(label: "OK", traits: .button)
         await register(element, heistId: "button_ok", index: 0)

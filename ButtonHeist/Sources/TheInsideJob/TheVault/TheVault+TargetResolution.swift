@@ -95,11 +95,37 @@ extension TheVault {
                 }
                 return .resolved(match)
             default:
+                if case .elements(let matches) = self,
+                   let sole = Self.soleMostInteractiveCandidate(in: matches.exactMatches) {
+                    return .resolved(.element(sole))
+                }
                 return .ambiguous(TargetAmbiguityFacts(
                     resolutionScope: resolutionScope,
                     matchSet: self
                 ))
             }
+        }
+
+        /// Duplicate identity resolves the way a VoiceOver user resolves it:
+        /// by which element actually takes the interaction. An enabled
+        /// element outranks a `notEnabled` one, and an element that responds
+        /// to user interaction outranks one that does not — a page sliding
+        /// out keeps its elements in the tree, same identity, but they stop
+        /// taking interaction. A unique most-interactive candidate wins the
+        /// match; a genuine tie stays ambiguous, because two equally
+        /// interactive elements with the same identity is a real
+        /// accessibility finding, not a tie to break silently.
+        private static func soleMostInteractiveCandidate(
+            in matches: [InterfaceTree.Element]
+        ) -> InterfaceTree.Element? {
+            func interactivity(_ entry: InterfaceTree.Element) -> Int {
+                (entry.element.traits.contains(.notEnabled) ? 0 : 2)
+                    + (entry.element.respondsToUserInteraction ? 1 : 0)
+            }
+            let ranked = matches.map { (interactivity($0), $0) }
+            guard let top = ranked.map(\.0).max(), top > 0 else { return nil }
+            let leaders = ranked.filter { $0.0 == top }
+            return leaders.count == 1 ? leaders[0].1 : nil
         }
     }
 
