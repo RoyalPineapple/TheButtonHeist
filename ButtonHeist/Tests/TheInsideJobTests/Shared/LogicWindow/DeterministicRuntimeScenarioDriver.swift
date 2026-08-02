@@ -708,7 +708,6 @@ final class DeterministicRuntimeScenarioDriver {
         var clockRequestGeneration: UInt64 = 0
         var observationRequestGeneration: UInt64 = 0
         var requiresObservationRequest = false
-        var requiresActionDeadlineWait = false
         for (index, input) in inputs.enumerated() {
             try await synchronizePulse(
                 input,
@@ -717,12 +716,8 @@ final class DeterministicRuntimeScenarioDriver {
                 clockRequestGeneration: &clockRequestGeneration,
                 observationRequestGeneration: &observationRequestGeneration,
                 requiresObservationRequest: requiresObservationRequest,
-                requiresActionDeadlineWait: &requiresActionDeadlineWait,
                 session: session
             )
-            let deadlineGenerationBeforeAction = actionRequiresDeadlineWait(input)
-                ? session.clockProbe.currentGeneration
-                : nil
             try await executeInput(
                 input,
                 at: index,
@@ -734,9 +729,9 @@ final class DeterministicRuntimeScenarioDriver {
             if let duration = pulseDuration(input), duration > .zero {
                 requiresObservationRequest = true
             }
-            if let deadlineGenerationBeforeAction {
-                clockRequestGeneration = deadlineGenerationBeforeAction
-                requiresActionDeadlineWait = true
+            if case .action(_, .resultAfterAdvancingClock) = input {
+                requiresObservationRequest = true
+                observationRequestGeneration = session.inputProbe.currentGeneration
             }
         }
         let authorCancelled = lastInputCancelsExecution()
@@ -753,7 +748,6 @@ final class DeterministicRuntimeScenarioDriver {
         clockRequestGeneration: inout UInt64,
         observationRequestGeneration: inout UInt64,
         requiresObservationRequest: Bool,
-        requiresActionDeadlineWait: inout Bool,
         session: Session
     ) async throws {
         guard let duration = pulseDuration(input) else { return }
@@ -777,13 +771,6 @@ final class DeterministicRuntimeScenarioDriver {
             if case .observationRequested = settlement {
                 observationRequestGeneration = session.inputProbe.currentGeneration
             }
-        }
-        if requiresActionDeadlineWait {
-            guard await session.clockProbe.waitForRequest(after: clockRequestGeneration) else {
-                throw CancellationError()
-            }
-            clockRequestGeneration = session.clockProbe.currentGeneration
-            requiresActionDeadlineWait = false
         }
         guard tick > 0, duration > .zero else { return }
         guard await session.clockProbe.waitForRequest(after: clockRequestGeneration) else {
@@ -809,17 +796,6 @@ final class DeterministicRuntimeScenarioDriver {
         case .notification, .action, .cancelDuringAction,
              .cancelAfterObservationWaiter, .cancel:
             nil
-        }
-    }
-
-    private func actionRequiresDeadlineWait(_ input: DeterministicRuntimeInput) -> Bool {
-        switch input {
-        case .action(_, .resultAfterAdvancingClock):
-            true
-        case .notification, .pulse,
-             .action(_, .resultAfterQueuingNotificationAndAdvancingClock),
-             .action, .cancelDuringAction, .cancelAfterObservationWaiter, .cancel:
-            false
         }
     }
 

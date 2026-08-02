@@ -56,7 +56,6 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     func testRefreshReresolveActivateSuccessStopsPolicy() async throws {
-        let initialTarget = await makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let refreshedTarget = await makeLiveTarget(
             heistId: "refreshed",
             label: "Refreshed Target",
@@ -89,7 +88,7 @@ final class ActivationPolicyTests: XCTestCase {
             showFingerprint: { point in
                 fingerprintPoints.append(point)
             }
-        ).apply(to: initialTarget)
+        ).apply()
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .activate)
@@ -114,7 +113,6 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     func testRefreshReresolveFailureReturnsWithoutActivationAttemptOrDispatch() async {
-        let initialTarget = await makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         var activateCount = 0
         var dispatchedPoints: [CGPoint] = []
 
@@ -130,7 +128,7 @@ final class ActivationPolicyTests: XCTestCase {
                 dispatchedPoints.append(point)
                 return TestPreparedDispatch(result: true)
             }
-        ).apply(to: initialTarget)
+        ).apply()
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)
@@ -142,7 +140,6 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     func testActivationPointDispatchCanCompleteActivate() async throws {
-        let initialTarget = await makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let refreshedTarget = await makeLiveTarget(heistId: "refreshed", activationPoint: CGPoint(x: 30, y: 40))
         var activateCount = 0
         var dispatchedPoints: [CGPoint] = []
@@ -160,7 +157,7 @@ final class ActivationPolicyTests: XCTestCase {
                 dispatchedPoints.append(point)
                 return TestPreparedDispatch(result: true)
             }
-        ).apply(to: initialTarget)
+        ).apply()
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .activate)
@@ -174,7 +171,6 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     func testRefusedActivationWithSemanticChangeSkipsActivationPointFallback() async throws {
-        let initialTarget = await makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let refreshedTarget = await makeLiveTarget(heistId: "refreshed", activationPoint: CGPoint(x: 30, y: 40))
         var activationPointDispatches = 0
         var semanticChangeChecks = 0
@@ -191,7 +187,7 @@ final class ActivationPolicyTests: XCTestCase {
                 activationPointDispatches += 1
                 return TestPreparedDispatch(result: true)
             }
-        ).apply(to: initialTarget)
+        ).apply()
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(semanticChangeChecks, 1)
@@ -203,7 +199,6 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     func testRefusedActivationWithoutSemanticChangeRetainsActivationPointFallback() async throws {
-        let initialTarget = await makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let refreshedTarget = await makeLiveTarget(heistId: "refreshed", activationPoint: CGPoint(x: 30, y: 40))
         var activationPointDispatches = 0
         var semanticChangeChecks = 0
@@ -220,7 +215,7 @@ final class ActivationPolicyTests: XCTestCase {
                 activationPointDispatches += 1
                 return TestPreparedDispatch(result: true)
             }
-        ).apply(to: initialTarget)
+        ).apply()
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(semanticChangeChecks, 1)
@@ -233,10 +228,6 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     func testRefusedActivationWithoutQuiescenceProofDoesNotDispatchActivationPoint() async throws {
-        let initialTarget = await makeLiveTarget(
-            heistId: "initial",
-            activationPoint: CGPoint(x: 10, y: 20)
-        )
         let refreshedTarget = await makeLiveTarget(
             heistId: "refreshed",
             activationPoint: CGPoint(x: 30, y: 40)
@@ -252,7 +243,7 @@ final class ActivationPolicyTests: XCTestCase {
                 activationPointDispatches += 1
                 return TestPreparedDispatch(result: true)
             }
-        ).apply(to: initialTarget)
+        ).apply()
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(activationPointDispatches, 0)
@@ -267,7 +258,6 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     func testNonFiniteActivationPointStopsBeforeMechanicalDispatch() async throws {
-        let initialTarget = await makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let refreshedTarget = await makeLiveTarget(
             heistId: "refreshed",
             activationPoint: CGPoint(x: 30, y: 40)
@@ -292,7 +282,7 @@ final class ActivationPolicyTests: XCTestCase {
             showFingerprint: { _ in },
             textEntryActivationFailure: { _, _ in nil }
         )
-        let result = await policy.apply(to: initialTarget)
+        let result = await policy.apply()
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(
@@ -304,7 +294,6 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     func testTextEntryActivationPointDispatchRequiresFocusConfirmation() async throws {
-        let initialTarget = await makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let refreshedTarget = await makeLiveTarget(
             heistId: "refreshed",
             traits: .textEntry,
@@ -323,7 +312,7 @@ final class ActivationPolicyTests: XCTestCase {
                 focusConfirmationTrace = trace
                 return .failure(.activate, message: "text entry did not focus", activationTrace: trace)
             }
-        ).apply(to: initialTarget)
+        ).apply()
 
         let expectedTrace = ActivationTrace(.activationPointFallback(
             axActivateReturned: false,
@@ -337,7 +326,6 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     func testNonTextEntryActivationPointDispatchDoesNotRequireFocusConfirmation() async throws {
-        let initialTarget = await makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let refreshedTarget = await makeLiveTarget(
             heistId: "refreshed",
             traits: .button,
@@ -356,14 +344,13 @@ final class ActivationPolicyTests: XCTestCase {
                 focusConfirmationCount += 1
                 return .failure(.activate, message: "unexpected focus confirmation")
             }
-        ).apply(to: initialTarget)
+        ).apply()
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(focusConfirmationCount, 0)
     }
 
     func testFinalFailureUsesRefreshedTargetAndFreshActivationPoint() async throws {
-        let initialTarget = await makeLiveTarget(heistId: "initial", activationPoint: CGPoint(x: 10, y: 20))
         let refreshedTarget = await makeLiveTarget(
             heistId: "refreshed",
             label: "Refreshed Button",
@@ -394,7 +381,7 @@ final class ActivationPolicyTests: XCTestCase {
                 dispatchedPoints.append(point)
                 return TestPreparedDispatch(result: false)
             }
-        ).apply(to: initialTarget)
+        ).apply()
 
         XCTAssertFalse(result.success)
         XCTAssertEqual(result.method, .activate)

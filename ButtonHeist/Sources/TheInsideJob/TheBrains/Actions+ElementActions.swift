@@ -136,7 +136,7 @@ extension Actions {
                 completeActivationPointDispatch: safecracker.completePreparedTouch,
                 showFingerprint: safecracker.showFingerprint,
                 textEntryActivationFailure: textEntryActivationFailure
-            ).apply(to: context.liveTarget)
+            ).apply()
         }
     }
 

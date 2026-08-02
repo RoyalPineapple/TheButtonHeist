@@ -17,10 +17,11 @@ flowchart TD
     REFRESH -- "resolved" --> BOUNDARY["capture the semantic boundary"]
     BOUNDARY --> AXACT["accessibilityActivate()<br/>on the live element"]
     AXACT -- ".success" --> OK1["success, method .activate<br/>ActivationTrace: axActivateReturned true,<br/>tapActivationDispatched false"]
-    AXACT -- ".refused" --> OBSERVE["capture the next post-boundary cycle"]
-    OBSERVE -- "semantic or geometry change" --> OKFALSE["success, method .activate<br/>ActivationTrace: axActivateReturned false,<br/>tapActivationDispatched false"]
-    OBSERVE -- "one stable capture" --> OBSERVE
-    OBSERVE -- "required consecutive stable captures" --> DIAG["record implementation introspection<br/>as diagnostic evidence only"]
+    AXACT -- ".refused" --> OBSERVE["capture a post-action candidate"]
+    OBSERVE -- "next capture differs" --> OBSERVE
+    OBSERVE -- "second matching capture" --> COMPARE["compare the stable candidate<br/>with the pre-action boundary"]
+    COMPARE -- "semantic or geometry change" --> OKFALSE["success, method .activate<br/>ActivationTrace: axActivateReturned false,<br/>tapActivationDispatched false"]
+    COMPARE -- "same observed state" --> DIAG["record implementation introspection<br/>as diagnostic evidence only"]
     OBSERVE -- "deadline or unavailable capture" --> FAILQUIET["failure<br/>tapActivationDispatched false"]
     AXACT -- ".objectDeallocated" --> DIAG
     DIAG --> TAP["activationPointDispatch at the declared<br/>activationPoint — not a computed frame point"]
@@ -31,9 +32,10 @@ flowchart TD
 Notes:
 
 - `accessibilityActivate()` is the operation that VoiceOver uses. Button Heist calls it first on the target with fresh live geometry.
-- Some UIKit controls return `false` after they change the screen. A post-boundary semantic or geometry change prevents a second dispatch.
+- Some UIKit controls return `false` after they change the screen. A stable semantic or geometry change prevents a second dispatch.
 - A notification can trigger a capture. The notification alone does not prove that the target action changed the interface.
-- One stable capture does not prove quiescence. Button Heist requires two consecutive stable captures before it sends a tap.
+- One changed capture does not prove an effect. Button Heist requires two matching post-action captures before it compares the state with the boundary.
+- Button Heist sends one tap when the stable candidate matches the boundary.
 - The activation-point tap uses the same `activate` command. Button Heist delivers this command through touch injection.
 - An unavailable capture does not permit a tap. The action fails when the deadline cannot prove quiescence.
 - Every enabled target enters this policy. `notEnabled` is the only difference from VoiceOver.
