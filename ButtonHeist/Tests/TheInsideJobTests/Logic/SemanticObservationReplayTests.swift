@@ -113,44 +113,54 @@ final class SemanticObservationReplayTests: SemanticObservationStreamTestCase {
     func testCancellingObservationWaitRemovesWaiter() async {
         let stream = vault.semanticObservationStream
         stream.start()
-        let start = vault.state.history.endIndex
-        let task = Task { @MainActor in
-            await stream.waitForObservation(
-                after: start,
-                scope: .visible,
-                boundary: .cancellation
-            )
+        for boundary in [
+            SemanticObservationWaitBoundary.cancellation,
+            .cancellableObservationCycle,
+        ] {
+            let start = vault.state.history.endIndex
+            let task = Task { @MainActor in
+                await stream.waitForObservation(
+                    after: start,
+                    scope: .visible,
+                    boundary: boundary
+                )
+            }
+            await waitForObservationWaiterCount(1)
+
+            task.cancel()
+            let result = await task.value
+
+            XCTAssertEqual(result, .cancelled)
+            XCTAssertEqual(stream.observationWaiterCount, 0)
         }
-        await waitForObservationWaiterCount(1)
-
-        task.cancel()
-        let result = await task.value
-
-        XCTAssertEqual(result, .cancelled)
-        XCTAssertEqual(stream.observationWaiterCount, 0)
     }
 
     func testDiscoveryCycleCompletesWaiterWithoutInventingObservation() async {
         let stream = vault.semanticObservationStream
         stream.start()
-        let start = vault.state.history.endIndex
-        let task = Task { @MainActor in
-            await stream.waitForObservation(
-                after: start,
-                scope: .discovery,
-                boundary: .observationCycle
+        for boundary in [
+            SemanticObservationWaitBoundary.observationCycle,
+            .cancellableObservationCycle,
+        ] {
+            let start = vault.state.history.endIndex
+            let task = Task { @MainActor in
+                await stream.waitForObservation(
+                    after: start,
+                    scope: .discovery,
+                    boundary: boundary
+                )
+            }
+            await waitForObservationWaiterCount(1)
+
+            stream.completeObservationWaiters(
+                completedScope: .discovery,
+                observationCommitted: false
             )
+            let result = await task.value
+
+            XCTAssertEqual(result, .cycleCompletedWithoutObservation)
+            XCTAssertEqual(stream.observationWaiterCount, 0)
         }
-        await waitForObservationWaiterCount(1)
-
-        stream.completeObservationWaiters(
-            completedScope: .discovery,
-            observationCommitted: false
-        )
-        let result = await task.value
-
-        XCTAssertEqual(result, .cycleCompletedWithoutObservation)
-        XCTAssertEqual(stream.observationWaiterCount, 0)
     }
 }
 #endif // DEBUG

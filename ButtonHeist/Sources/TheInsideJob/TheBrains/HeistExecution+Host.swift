@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
+import ButtonHeistSupport
 import Foundation
 import ThePlans
 @_spi(ButtonHeistInternals) import TheScore
@@ -23,7 +24,7 @@ extension HeistExecution {
                         await brains.navigation.exploreForWait(target: target, deadline: deadline, stopWhen: { false })
                     },
                     captureFailure: { _, mode in
-                        switch await brains.captureScreenPayload(mode: mode, observationBoundary: .observationCycle) {
+                        switch await brains.captureScreenPayload(mode: mode, observationBoundary: .cancellableObservationCycle) {
                         case .success(let payload): .captured(payload)
                         case .failure(let failure): .unavailable(kind: failure.actionFailureKind, message: failure.message)
                         }
@@ -194,7 +195,7 @@ extension HeistExecution {
                 return await commitObservation(id: id, observationID: observationID, runtime: &runtime)
 
             case .captureFailureScreenshot(let id, let path, let mode):
-                return .failureScreenshotCaptured(id, await runtimeBoundary.captureFailure(path, mode), at: runtimeBoundary.now())
+                return await captureFailure(id: id, path: path, mode: mode)
 
             case .cancelObservation(let id, let observationID):
                 if let resource = runtime.observation,
@@ -204,6 +205,29 @@ extension HeistExecution {
                 }
                 return .cancellationCompleted(id, at: runtimeBoundary.now())
             }
+        }
+
+        private func captureFailure(
+            id: RequestID,
+            path: HeistExecutionPath,
+            mode: ScreenCaptureMode
+        ) async -> Event {
+            let completion = TimedOneShot<HeistFailureCapture?>()
+            var captureTask: Task<Void, Never>?
+            let capture = await completion.wait(
+                cancellationValue: nil,
+                onRegistered: { completion in
+                    captureTask = Task { @MainActor [runtimeBoundary] in
+                        let capture = await runtimeBoundary.captureFailure(path, mode)
+                        completion.resolve(returning: capture)
+                    }
+                }
+            )
+            captureTask?.cancel()
+            guard let capture else {
+                return .cancellationRequested(at: runtimeBoundary.now())
+            }
+            return .failureScreenshotCaptured(id, capture, at: runtimeBoundary.now())
         }
 
         private func isCancellationCleanup(_ effect: Effect) -> Bool {

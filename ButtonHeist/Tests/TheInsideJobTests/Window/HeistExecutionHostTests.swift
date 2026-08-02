@@ -10,7 +10,7 @@ import XCTest
 
 @MainActor
 final class HeistExecutionHostTests: ButtonHeistTestCase {
-    func testCancellationDuringFailureCaptureAbandonsCaptureAndTerminates() async throws {
+    func testCancellationCompletesBeforePendingFailureCaptureReturns() async throws {
         let tripwire = TheTripwire()
         let brains = TheBrains(
             tripwire: tripwire,
@@ -20,6 +20,7 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         )
         let captureEntered = CompletionSignal()
         let captureReleased = CompletionSignal()
+        let captureReturned = CompletionSignal()
         var captureRequestCount = 0
         let stream = brains.vault.semanticObservationStream
         stream.start()
@@ -43,6 +44,7 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
                 await Task { [captureReleased] in
                     await captureReleased.wait()
                 }.value
+                captureReturned.finish()
                 return .unavailable(
                     kind: .actionFailed,
                     message: "fixture capture unavailable"
@@ -63,14 +65,18 @@ final class HeistExecutionHostTests: ButtonHeistTestCase {
         await captureEntered.wait()
 
         execution.cancel()
-        captureReleased.finish()
-
         do {
             _ = try await execution.value
             XCTFail("Expected cancelled execution")
         } catch is CancellationError {
-            XCTAssertEqual(captureRequestCount, 1)
+        } catch {
+            XCTFail("Expected CancellationError, got \(error)")
         }
+        XCTAssertFalse(captureReturned.isFinished)
+
+        captureReleased.finish()
+        await captureReturned.wait()
+        XCTAssertEqual(captureRequestCount, 1)
     }
 
     func testDeadlineDoesNotEndLaterEventDelivery() async {
