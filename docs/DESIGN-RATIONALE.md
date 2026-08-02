@@ -48,7 +48,7 @@ may never stop.
 EarlGrey's insight was that a test should act only when the app is idle,
 and that the framework — not the author — should own knowing when that is.
 The Button Heist keeps the thesis without a hidden idle currency. The Vault
-commits complete snapshots and ordered events; the heist machine evaluates its
+commits complete snapshots and ordered events; the heist reducer evaluates its
 outcome from that replayable history
 ([Scope and limits](SCOPE-AND-LIMITS.md)).
 

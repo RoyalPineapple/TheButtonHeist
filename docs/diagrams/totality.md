@@ -26,10 +26,12 @@ flowchart TD
         WAITT["WaitStep.timeout mandatory<br/>default 30 s · maximum 60 s or BUTTONHEIST_MAX_WAIT_TIMEOUT"]
         REPEATT["RepeatUntilStep.timeout mandatory<br/>same configured WaitTimeout maximum"]
         HEISTT["HeistTimeout at runtime boundary<br/>default 60 s · finite and positive<br/>no policy maximum"]
-        HOST["HeistExecution.Host<br/>one task for the earlier active-leaf<br/>or whole-heist absolute deadline"]
-        HEISTT --> HOST
-        WAITT --> HOST
-        REPEATT --> HOST
+        EXECUTION["HeistExecution<br/>stores both deadlines and projects<br/>the earlier absolute target"]
+        HOST["HeistExecution.Host<br/>waits for the projected target<br/>and returns a deadline fact"]
+        HEISTT --> EXECUTION
+        WAITT --> EXECUTION
+        REPEATT --> EXECUTION
+        EXECUTION --> HOST
     end
 
     structural --> HALT
