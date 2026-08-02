@@ -144,6 +144,7 @@ import UIKit
         #expect(action.actionEvidence?.result?.outcome.failureKind == .timeout)
         #expect(completed.report?.nodes.first?.failure?.actionKind == .timeout)
         #expect(completed.effectTranscript == [.action(command)])
+        #expect(completed.observationCaptureCount == 2)
     }
 
     @Test func `notification wait consumes the authored notification on its next pulse`() async throws {
