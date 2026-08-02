@@ -724,6 +724,13 @@ ownership through the complete plan. Disconnect cancels that client's active and
 queued work. Per-client `ClientRequestPipeline` instances preserve frame and
 admission order only; control traffic remains outside the interaction executor.
 
+`drain()` cancels active and queued work, then waits for active cleanup. Its
+cleanup deadline bounds that wait. At expiry, the executor abandons the active
+request identity and releases every drain caller. A late completion from that
+request cannot change the current phase or advance a replacement request. An
+owner cancellation that expires without a drain rejects new work until a drain
+resets the executor.
+
 Plan identity follows the same boundary rule. `HeistPlanName` and
 `HeistReferenceName` are distinct roles backed by one exact identifier grammar.
 Source, JSON, and CLI text is admitted once into those roles,

@@ -409,10 +409,14 @@ final class InteractionRequestExecutor {
             beginCancellation(active: active, pending: [], drainWaiters: [continuation])
             resolveCancellation(for: active)
         case .cancelling(var state):
-            resolveCancellation(for: state.pending)
+            let pending = state.pending
             state.pending.removeAll()
             state.drainWaiters.append(continuation)
             phase = .cancelling(state)
+            resolveCancellation(for: pending)
+            if state.deadlineExpired {
+                finishDrain(state.drainWaiters)
+            }
         }
     }
 
@@ -451,6 +455,9 @@ final class InteractionRequestExecutor {
         state.deadlineExpired = true
         phase = .cancelling(state)
         resolveCancellation(for: pending)
+        if !state.drainWaiters.isEmpty {
+            finishDrain(state.drainWaiters)
+        }
     }
 
     private func finishDrain(_ waiters: [CheckedContinuation<Void, Never>]) {
