@@ -415,7 +415,7 @@ final class InteractionRequestExecutor {
             phase = .cancelling(state)
             resolveCancellation(for: pending)
             if state.deadlineExpired {
-                finishDrain(state.drainWaiters)
+                releaseExpiredDrain(state)
             }
         }
     }
@@ -456,7 +456,17 @@ final class InteractionRequestExecutor {
         phase = .cancelling(state)
         resolveCancellation(for: pending)
         if !state.drainWaiters.isEmpty {
-            finishDrain(state.drainWaiters)
+            releaseExpiredDrain(state)
+        }
+    }
+
+    private func releaseExpiredDrain(_ state: CancellationState) {
+        var state = state
+        let waiters = state.drainWaiters
+        state.drainWaiters.removeAll()
+        phase = .cancelling(state)
+        for waiter in waiters {
+            waiter.resume()
         }
     }
 
