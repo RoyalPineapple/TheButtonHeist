@@ -127,62 +127,82 @@ final class TheBrainsInteractionRequestTests: XCTestCase {
     }
 
     @MainActor
-    func testDrainWaitsForCancellationInsensitiveCleanup() async {
-        let brains = TheBrains(tripwire: TheTripwire())
-        let activeGate = PipelineTestGate()
-        let drainCompleted = CompletionSignal()
-        let joinedDrainCompleted = CompletionSignal()
-
-        let active = Task { @MainActor in
-            await brains.executeInAppRequest {
-                await activeGate.suspendIgnoringCancellation()
-            }
-        }
-        await activeGate.entered.wait()
-
-        let drain = Task { @MainActor in
-            await brains.stopInteractionRequests()
-            drainCompleted.finish()
-        }
-        guard case .cancelled = await active.value else {
-            activeGate.release()
-            await drain.value
-            return XCTFail("Expected drain to cancel the active request outcome")
-        }
-        XCTAssertFalse(drainCompleted.isFinished)
-        guard case .rejected(.stopping) = await brains.executeInAppRequest({}) else {
-            activeGate.release()
-            await drain.value
-            return XCTFail("Expected stopping rejection to resolve its completion")
-        }
-        let joinedDrain = Task { @MainActor in
-            await brains.stopInteractionRequests()
-            joinedDrainCompleted.finish()
-        }
-
-        activeGate.release()
-        await drain.value
-        await joinedDrain.value
-        XCTAssertTrue(drainCompleted.isFinished)
-        XCTAssertTrue(joinedDrainCompleted.isFinished)
-        guard case .completed(let value) = await brains.executeInAppRequest({ "ready" }) else {
-            return XCTFail("Expected requests to resume after drain")
-        }
-        XCTAssertEqual(value, "ready")
-    }
-
-    @MainActor
-    func testCancellationDeadlinePoisonsAdmissionUntilCleanupFinishes() async {
+    func testDrainDeadlineInvalidatesLateRequestCompletion() async {
         let deadline = ManualInteractionCleanupDeadline()
         let executor = InteractionRequestExecutor(
             cleanupDeadlineScheduler: deadline.schedule
         )
         let activeGate = PipelineTestGate()
+        let drainCompleted = CompletionSignal()
+        let joinedDrainCompleted = CompletionSignal()
+        let lateReturn = CompletionSignal()
+        let replacementGate = PipelineTestGate()
+        let followingCompleted = CompletionSignal()
+        var activeCancellationCount = 0
+
+        XCTAssertEqual(executor.submit(owner: .inApp, operation: {
+            await activeGate.suspendIgnoringCancellation()
+            lateReturn.finish()
+        }, completion: { outcome in
+            if case .cancelled = outcome {
+                activeCancellationCount += 1
+            }
+        }), .accepted)
+        await activeGate.entered.wait()
+
+        let drain = Task { @MainActor in
+            await executor.drain()
+            drainCompleted.finish()
+        }
+        let joinedDrain = Task { @MainActor in
+            await executor.drain()
+            joinedDrainCompleted.finish()
+        }
+        await Task.yield()
+        XCTAssertEqual(activeCancellationCount, 1)
+        XCTAssertFalse(drainCompleted.isFinished)
+        XCTAssertFalse(joinedDrainCompleted.isFinished)
+
+        deadline.fire()
+        await drain.value
+        await joinedDrain.value
+        XCTAssertTrue(drainCompleted.isFinished)
+        XCTAssertTrue(joinedDrainCompleted.isFinished)
+        XCTAssertEqual(executor.submit(owner: .inApp, operation: {
+            await replacementGate.suspend()
+        }, completion: { _ in }), .accepted)
+        await replacementGate.entered.wait()
+        XCTAssertEqual(executor.submit(owner: .inApp, operation: {
+            followingCompleted.finish()
+        }, completion: { _ in }), .accepted)
+
+        // The abandoned task can return, but its old identity cannot change the
+        // current executor phase or advance the replacement request's queue.
+        activeGate.release()
+        await lateReturn.wait()
+        await Task.yield()
+        XCTAssertEqual(activeCancellationCount, 1)
+        XCTAssertFalse(followingCompleted.isFinished)
+
+        replacementGate.release()
+        await followingCompleted.wait()
+        await executor.drain()
+    }
+
+    @MainActor
+    func testCancellationDeadlineRejectsAdmissionUntilDrainAbandonsRequest() async {
+        let deadline = ManualInteractionCleanupDeadline()
+        let executor = InteractionRequestExecutor(
+            cleanupDeadlineScheduler: deadline.schedule
+        )
+        let activeGate = PipelineTestGate()
+        let lateReturn = CompletionSignal()
         var activeCancellationCount = 0
         var queuedCancellationCount = 0
 
         XCTAssertEqual(executor.submit(owner: .transportClient(testLease(1)), operation: {
             await activeGate.suspendIgnoringCancellation()
+            lateReturn.finish()
         }, completion: { outcome in
             if case .cancelled = outcome {
                 activeCancellationCount += 1
@@ -214,9 +234,10 @@ final class TheBrainsInteractionRequestTests: XCTestCase {
             await executor.drain()
         }
         await drainStarted.wait()
-        activeGate.release()
         await drain.value
         XCTAssertEqual(activeCancellationCount, 1)
+        activeGate.release()
+        await lateReturn.wait()
     }
 }
 

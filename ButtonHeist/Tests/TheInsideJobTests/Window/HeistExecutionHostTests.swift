@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 #if DEBUG
+import ButtonHeistSupport
 import UIKit
 import XCTest
 
@@ -9,6 +10,69 @@ import XCTest
 
 @MainActor
 final class HeistExecutionHostTests: ButtonHeistTestCase {
+    func testCancellationDuringFailureCaptureAbandonsCaptureAndTerminates() async throws {
+        let tripwire = TheTripwire()
+        let brains = TheBrains(
+            tripwire: tripwire,
+            failureEvidencePolicy: .screenshot,
+            notificationIngress: .injected,
+            pulseIngress: .injected
+        )
+        let captureEntered = CompletionSignal()
+        let captureReleased = CompletionSignal()
+        var captureRequestCount = 0
+        let stream = brains.vault.semanticObservationStream
+        stream.start()
+        defer {
+            captureReleased.finish()
+            stream.stop()
+        }
+        let boundary = HeistExecution.Host.RuntimeBoundary(
+            now: { RuntimeElapsed.now },
+            wait: { _ in false },
+            dispatch: { command, _ in
+                .failure(
+                    .empty(for: command.type),
+                    message: "Unexpected action dispatch"
+                )
+            },
+            explore: { _, _ in .failed(.originUnavailable) },
+            captureFailure: { _, _ in
+                captureRequestCount += 1
+                captureEntered.finish()
+                await Task { [captureReleased] in
+                    await captureReleased.wait()
+                }.value
+                return .unavailable(
+                    kind: .actionFailed,
+                    message: "fixture capture unavailable"
+                )
+            }
+        )
+        let execution = Task { @MainActor in
+            try await HeistExecution.Host(
+                brains: brains,
+                runtimeBoundary: boundary
+            ).execute(
+                try HeistPlan(body: [
+                    .fail(FailStep(message: try .init(validating: "expected failure"))),
+                ]),
+                timeout: try .seconds(60)
+            )
+        }
+        await captureEntered.wait()
+
+        execution.cancel()
+        captureReleased.finish()
+
+        do {
+            _ = try await execution.value
+            XCTFail("Expected cancelled execution")
+        } catch is CancellationError {
+            XCTAssertEqual(captureRequestCount, 1)
+        }
+    }
+
     func testDeadlineDoesNotEndLaterEventDelivery() async {
         let deadline = HostDeadlineProbe([.elapsed, .suspended])
         let inbox = HeistExecution.Host.ObservationInbox(

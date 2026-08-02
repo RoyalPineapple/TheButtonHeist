@@ -202,9 +202,12 @@ another sample or commit. The host keeps the sealed notification lease until a
 commit or cancellation effect releases it. The host never evaluates an
 expectation or constructs `LeafOutcome`.
 
-Cancellation follows the same rule. The host sends `cancellationRequested`.
-The reducer returns one `cancelObservation` cleanup effect, admits its matching
-completion fact, and completes with `.cancelled`. The host then throws
+Cancellation remains inside the reducer. During active work, the host sends
+`cancellationRequested`. The reducer returns one `cancelObservation` cleanup
+effect, admits its matching completion fact, and completes with `.cancelled`.
+During failure capture, cancellation skips the optional evidence and completes
+with `.cancelled`. A capture admitted first completes the failed result. A
+cancellation admitted first absorbs a late capture. The host then throws
 `CancellationError` to the caller.
 
 Failure evidence is finalized by the same reducer. Whenever executed root
@@ -720,6 +723,13 @@ while direct in-app heists enter the same queue before bootstrap and retain
 ownership through the complete plan. Disconnect cancels that client's active and
 queued work. Per-client `ClientRequestPipeline` instances preserve frame and
 admission order only; control traffic remains outside the interaction executor.
+
+`drain()` cancels active and queued work, then waits for active cleanup. Its
+cleanup deadline bounds that wait. At expiry, the executor abandons the active
+request identity and releases every drain caller. A late completion from that
+request cannot change the current phase or advance a replacement request. An
+owner cancellation that expires without a drain rejects new work until a drain
+resets the executor.
 
 Plan identity follows the same boundary rule. `HeistPlanName` and
 `HeistReferenceName` are distinct roles backed by one exact identifier grammar.
