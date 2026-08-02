@@ -17,7 +17,8 @@ import Testing
 // - deadline equality and leaf-versus-whole precedence —
 //   `DeterministicRuntimeScenarioDriverTests`.
 // - caller cancellation has one absorbing cleanup path —
-//   `cancellation during observation close closes it once`.
+//   `cancellation during observation close closes it once` and
+//   `cancellation before failure capture is terminal and absorbing`.
 
 @Suite struct ExecutionInvariantLedgerTests {
     @Test func `completed action absorbs late events and cancellation`() throws {
@@ -157,6 +158,80 @@ import Testing
             return
         }
         #expect(completion.outcome == .cancelled)
+    }
+
+    @Test func `cancellation before failure capture is terminal and absorbing`() throws {
+        let plan = try HeistPlan(body: [
+            .fail(FailStep(message: try .init(validating: "expected failure"))),
+        ])
+        var execution = try HeistExecution(
+            plan: plan,
+            failureCaptureMode: .raw
+        )
+        let now = ContinuousClock.now
+
+        guard case .perform(.captureFailureScreenshot(let captureID, _, _)) = execution.start(
+            at: now,
+            timeout: try .seconds(60)
+        ) else {
+            Issue.record("Invariant violated: a failed execution must request configured evidence")
+            return
+        }
+        guard case .complete(let cancellation) = execution.reduce(
+            .cancellationRequested(at: now)
+        ) else {
+            Issue.record("Invariant violated: cancellation must abandon optional failure evidence")
+            return
+        }
+        guard case .complete(let afterLateCapture) = execution.reduce(
+            .failureScreenshotCaptured(
+                captureID,
+                .unavailable(kind: .actionFailed, message: "late capture"),
+                at: now
+            )
+        ) else {
+            Issue.record("Invariant violated: cancelled execution must absorb late failure evidence")
+            return
+        }
+
+        #expect(cancellation.outcome == .cancelled)
+        #expect(cancellation.failureCapture == nil)
+        #expect(afterLateCapture.outcome == .cancelled)
+        #expect(afterLateCapture.failureCapture == nil)
+    }
+
+    @Test func `admitted failure capture wins before late cancellation`() throws {
+        let plan = try HeistPlan(body: [
+            .fail(FailStep(message: try .init(validating: "expected failure"))),
+        ])
+        var execution = try HeistExecution(
+            plan: plan,
+            failureCaptureMode: .raw
+        )
+        let now = ContinuousClock.now
+        let capture = HeistFailureCapture.unavailable(
+            kind: .actionFailed,
+            message: "fixture capture unavailable"
+        )
+
+        guard case .perform(.captureFailureScreenshot(let captureID, _, _)) = execution.start(
+            at: now,
+            timeout: try .seconds(60)
+        ),
+              case .complete(let completed) = execution.reduce(
+                  .failureScreenshotCaptured(captureID, capture, at: now)
+              ),
+              case .complete(let afterLateCancellation) = execution.reduce(
+                  .cancellationRequested(at: now)
+              ) else {
+            Issue.record("Invariant violated: admitted failure evidence must complete execution")
+            return
+        }
+
+        #expect(completed.outcome == .completed)
+        #expect(completed.failureCapture == capture)
+        #expect(afterLateCancellation.outcome == .completed)
+        #expect(afterLateCancellation.failureCapture == capture)
     }
 
     @Test func `stale deadline and effect events cannot advance a later leaf`() throws {

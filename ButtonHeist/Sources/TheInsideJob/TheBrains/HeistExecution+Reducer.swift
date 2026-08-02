@@ -100,6 +100,9 @@ extension HeistExecution {
                 return .complete(completion)
             }
             if case .awaitingFailureScreenshot(let effect, let children) = state {
+                if case .cancellationRequested = event {
+                    return complete(steps: [], outcome: .cancelled)
+                }
                 guard case .failureScreenshotCaptured(_, let failureCapture, _) = event,
                       effect.admits(event) else {
                     return .perform(effect)

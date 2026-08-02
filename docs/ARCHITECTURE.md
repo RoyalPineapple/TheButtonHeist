@@ -202,9 +202,12 @@ another sample or commit. The host keeps the sealed notification lease until a
 commit or cancellation effect releases it. The host never evaluates an
 expectation or constructs `LeafOutcome`.
 
-Cancellation follows the same rule. The host sends `cancellationRequested`.
-The reducer returns one `cancelObservation` cleanup effect, admits its matching
-completion fact, and completes with `.cancelled`. The host then throws
+Cancellation remains inside the reducer. During active work, the host sends
+`cancellationRequested`. The reducer returns one `cancelObservation` cleanup
+effect, admits its matching completion fact, and completes with `.cancelled`.
+During failure capture, cancellation skips the optional evidence and completes
+with `.cancelled`. A capture admitted first completes the failed result. A
+cancellation admitted first absorbs a late capture. The host then throws
 `CancellationError` to the caller.
 
 Failure evidence is finalized by the same reducer. Whenever executed root

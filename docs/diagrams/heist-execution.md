@@ -29,6 +29,7 @@ stateDiagram-v2
     Running --> Running : reduce(Event)
     Running --> FailureCapture : failed result needs capture
     FailureCapture --> Complete : matching capture fact
+    FailureCapture --> Complete : cancellationRequested
     Running --> Cancelling : cancellationRequested
     Cancelling --> Complete : matching cleanup fact
     Running --> Complete : final result
@@ -114,7 +115,9 @@ timeout result. No deadline fact enters `Observation.History`.
 
 Failure screenshots are reducer finalization. If the failed result needs one,
 the reducer returns `captureFailureScreenshot`, admits the matching capture
-fact, and then completes.
+fact, and then completes. Cancellation skips a pending failure screenshot and
+completes with `.cancelled`. The first admitted terminal event wins, and the
+complete state absorbs every later event.
 
 Cancellation has one typed path:
 
@@ -124,6 +127,9 @@ Cancellation has one typed path:
    cleanup fact.
 4. The reducer completes with `.cancelled`.
 5. The host throws `CancellationError` and releases heist lifetime resources.
+
+Cancellation during failure capture starts at step 4 because no observation
+resource remains open.
 
 No result projection performs another capture, discovery, predicate
 evaluation, or history reconstruction.
