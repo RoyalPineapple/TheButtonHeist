@@ -20,6 +20,8 @@ struct ActivationPolicy<PreparedDispatch: Sendable> {
     var accessibilityActivate: @MainActor (
         TheVault.LiveActionTarget
     ) -> Result<ActivationDispatchEvidence, TheVault.LiveTargetStaleness<HeistId>>
+    var settleRefusedActivation: @MainActor () async
+        -> Observation.Stream.RefusedActivationSettlement
     var refreshAndResolve: @MainActor () async -> ActivationRefreshResult
     var prepareActivationPointDispatch: @MainActor (CGPoint) -> PreparedDispatch?
     var completeActivationPointDispatch: @MainActor (PreparedDispatch) async -> Bool
@@ -55,17 +57,24 @@ struct ActivationPolicy<PreparedDispatch: Sendable> {
                 failureKind: .targetUnavailable
             )
         }
-        if activateOutcome == .success {
-            showFingerprint(activationPoint)
-            let trace = ActivationTrace(.accessibilityActivate)
-            if let failure = await textEntryActivationFailure(treeElement, trace) {
-                return failure.withSubjectEvidence(subjectEvidence)
-            }
-            return .success(
-                payload: .activate,
+        switch activateOutcome {
+        case .success:
+            return await accessibilityActivationResult(
+                returned: true,
+                treeElement: treeElement,
                 subjectEvidence: subjectEvidence,
-                activationTrace: trace
+                activationPoint: activationPoint
             )
+        case .refused:
+            if let result = await refusedActivationResult(
+                treeElement: treeElement,
+                subjectEvidence: subjectEvidence,
+                activationPoint: activationPoint
+            ) {
+                return result
+            }
+        case .objectDeallocated:
+            break
         }
 
         guard let activationX = try? FiniteCoordinate(validating: Double(activationPoint.x)),
@@ -107,6 +116,56 @@ struct ActivationPolicy<PreparedDispatch: Sendable> {
                 activateOutcome: activateOutcome,
                 implementsAccessibilityActivation: implementsAccessibilityActivation
             ),
+            subjectEvidence: subjectEvidence,
+            activationTrace: trace
+        )
+    }
+
+    @MainActor
+    private func refusedActivationResult(
+        treeElement: InterfaceTree.Element,
+        subjectEvidence: ActionSubjectEvidence,
+        activationPoint: CGPoint
+    ) async -> TheSafecracker.ActionDispatchResult? {
+        switch await settleRefusedActivation() {
+        case .effectObserved:
+            return await accessibilityActivationResult(
+                returned: false,
+                treeElement: treeElement,
+                subjectEvidence: subjectEvidence,
+                activationPoint: activationPoint
+            )
+        case .quiescent:
+            return nil
+        case .unavailable:
+            return .failure(
+                .activate,
+                message: "activate failed: accessibilityActivate() declined and action quiescence "
+                    + "was not proven before the action deadline; activation-point dispatch was not attempted",
+                subjectEvidence: subjectEvidence,
+                activationTrace: ActivationTrace(.accessibilityActivate(
+                    axActivateReturned: false
+                ))
+            )
+        }
+    }
+
+    @MainActor
+    private func accessibilityActivationResult(
+        returned: Bool,
+        treeElement: InterfaceTree.Element,
+        subjectEvidence: ActionSubjectEvidence,
+        activationPoint: CGPoint
+    ) async -> TheSafecracker.ActionDispatchResult {
+        showFingerprint(activationPoint)
+        let trace = ActivationTrace(.accessibilityActivate(
+            axActivateReturned: returned
+        ))
+        if let failure = await textEntryActivationFailure(treeElement, trace) {
+            return failure.withSubjectEvidence(subjectEvidence)
+        }
+        return .success(
+            payload: .activate,
             subjectEvidence: subjectEvidence,
             activationTrace: trace
         )

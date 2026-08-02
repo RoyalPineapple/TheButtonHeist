@@ -7,6 +7,14 @@ import ButtonHeistTesting
 
 private enum MenuScreen {
     static let addItem = HeistDef<String>("MenuScreen.addItem", parameter: "item") { item in
+        If {
+            Case(.missing(.label(item))) {
+                swipe(.label(.contains("Soup of the Day")), .up)
+                    .withoutExpectation("The following wait proves that the menu item is visible")
+                WaitFor(.exists(.label(item)), timeout: 2)
+            }
+            Else {}
+        }
         CustomAction("Add to Cart", on: .label(item))
             .expect(.elementsChanged, timeout: 2)
     }

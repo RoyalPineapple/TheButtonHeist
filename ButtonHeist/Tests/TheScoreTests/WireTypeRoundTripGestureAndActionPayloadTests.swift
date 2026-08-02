@@ -44,17 +44,18 @@ extension WireTypeRoundTripTests {
             assertDecodingError(error, contains: ["require tapActivationDispatched"])
         }
 
-        let declinedWithoutFallback = """
+        let declinedAfterObservedEffect = """
         {
           "axActivateReturned": false,
           "tapActivationDispatched": false
         }
         """
-        XCTAssertThrowsError(
-            try decoder.decode(ActivationTrace.self, from: Data(declinedWithoutFallback.utf8))
-        ) { error in
-            assertDecodingError(error, contains: ["axActivateReturned=false requires activation-point fallback fields"])
-        }
+        let trace = try decoder.decode(
+            ActivationTrace.self,
+            from: Data(declinedAfterObservedEffect.utf8)
+        )
+        XCTAssertEqual(trace.axActivateReturned, false)
+        XCTAssertFalse(trace.tapActivationDispatched)
     }
 
     func testActionResultRoundTripPreservesTiming() throws {
