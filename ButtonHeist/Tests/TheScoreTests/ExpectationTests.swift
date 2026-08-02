@@ -117,6 +117,39 @@ import ThePlans
         #expect(afterNoChange.result == .satisfied)
     }
 
+    @Test func `terminal no-change settles only after authored predicates match`() throws {
+        let predicate = try resolved(.notification("Saved"))
+        let authoredEvents: [Observation.Event] = [
+            .noChange,
+            .notification(try notification(text: "Saved")),
+        ]
+        let earlyNoChange = Expectation([predicate], requiringNoChange: true)
+            .evaluating(authoredEvents[0])
+        let authoredMatch = earlyNoChange.evaluating(authoredEvents[1])
+        let settled = authoredMatch.evaluating(.noChange)
+
+        #expect(earlyNoChange.result != .satisfied)
+        #expect(authoredMatch.result != .satisfied)
+        #expect(settled.result == .satisfied)
+        #expect(Expectation(
+            [predicate],
+            events: authoredEvents,
+            requiringNoChange: true
+        ) == authoredMatch)
+        #expect(Expectation(
+            [predicate],
+            events: authoredEvents + [.noChange],
+            requiringNoChange: true
+        ) == settled)
+    }
+
+    @Test func `terminal no-change without authored predicates requires one no-change`() {
+        let expectation = Expectation(requiringNoChange: true)
+
+        #expect(expectation.result != .satisfied)
+        #expect(expectation.evaluating(.noChange).result == .satisfied)
+    }
+
     @Test func `empty expectation is complete before and after events`() {
         let expectation = Expectation()
 

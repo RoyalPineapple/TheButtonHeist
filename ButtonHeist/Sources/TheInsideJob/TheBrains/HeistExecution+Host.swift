@@ -1,212 +1,62 @@
 #if canImport(UIKit)
 #if DEBUG
 import Foundation
-import os
 import ThePlans
 @_spi(ButtonHeistInternals) import TheScore
 
 extension HeistExecution {
     @MainActor
     internal final class Host {
-        /// The live operations that the execution state machine asks the
-        /// platform to perform. Keeping them together makes scheduling and
-        /// platform effects explicit without changing the Machine, Vault, or
-        /// observation stream into test doubles.
         internal struct RuntimeBoundary {
             let now: @MainActor () -> RuntimeElapsed.Instant
-            /// Returns `true` only when the requested deadline elapsed.
             let wait: @MainActor (Duration) async -> Bool
-            let dispatch: @MainActor (
-                ResolvedHeistActionCommand,
-                SemanticObservationDeadline
-            ) async -> TheSafecracker.ActionDispatchResult
-            let explore: @MainActor (
-                ResolvedAccessibilityTarget?,
-                SemanticObservationDeadline
-            ) async -> Navigation.ViewportExit.Outcome
-            let captureFailure: @MainActor (
-                HeistExecutionPath,
-                ScreenCaptureMode
-            ) async -> HeistFailureCapture
+            let dispatch: @MainActor (ResolvedHeistActionCommand, SemanticObservationDeadline) async -> TheSafecracker.ActionDispatchResult
+            let explore: @MainActor (ResolvedAccessibilityTarget?, SemanticObservationDeadline) async -> Navigation.ViewportExit.Outcome
+            let captureFailure: @MainActor (HeistExecutionPath, ScreenCaptureMode) async -> HeistFailureCapture
 
             static func live(brains: TheBrains) -> Self {
                 .init(
                     now: { RuntimeElapsed.now },
-                    wait: { delay in await Task.cancellableSleep(for: delay) },
-                    dispatch: { command, deadline in
-                        await brains.dispatchRuntimeAction(command, deadline: deadline)
-                    },
+                    wait: { await Task.cancellableSleep(for: $0) },
+                    dispatch: { await brains.dispatchRuntimeAction($0, deadline: $1) },
                     explore: { target, deadline in
-                        await brains.navigation.exploreForWait(
-                            target: target,
-                            deadline: deadline,
-                            stopWhen: { false }
-                        )
+                        await brains.navigation.exploreForWait(target: target, deadline: deadline, stopWhen: { false })
                     },
-                    captureFailure: { path, mode in
-                        await Self.liveFailureCapture(
-                            brains: brains,
-                            failedPath: path,
-                            mode: mode
-                        )
+                    captureFailure: { _, mode in
+                        switch await brains.captureScreenPayload(mode: mode, observationBoundary: .observationCycle) {
+                        case .success(let payload): .captured(payload)
+                        case .failure(let failure): .unavailable(kind: failure.actionFailureKind, message: failure.message)
+                        }
                     }
                 )
-            }
-
-            private static func liveFailureCapture(
-                brains: TheBrains,
-                failedPath _: HeistExecutionPath,
-                mode: ScreenCaptureMode
-            ) async -> HeistFailureCapture {
-                switch await brains.captureScreenPayload(
-                    mode: mode,
-                    observationBoundary: .observationCycle
-                ) {
-                case .success(let payload): .captured(payload)
-                case .failure(let failure): .unavailable(
-                    kind: failure.actionFailureKind,
-                    message: failure.message
-                )
-                }
             }
         }
 
         private struct Lifetime {
-            let eventSubscription: SemanticObservationSubscription
-            let observationDemand: SemanticObservationDemand
-            let notificationScope: AccessibilityNotificationScopeLease
+            let subscription: SemanticObservationSubscription
+            let demand: SemanticObservationDemand
+            let notifications: AccessibilityNotificationScopeLease
         }
 
-        private struct InstalledLifetime {
-            let inbox: ObservationInbox
-            let lifetime: Lifetime
-            let baseline: Observation.Stream.ExecutionAdmission
-        }
-
-        private struct ActiveObservation {
+        private struct ObservationResource {
             let id: RequestID
             let boundary: TheVault.State.HistoryBoundary
-            let scopeSubscription: SemanticObservationSubscription
-            let notificationWindow: AccessibilityNotificationScopeLease
+            let subscription: SemanticObservationSubscription
+            let notifications: AccessibilityNotificationScopeLease
             let deadline: SemanticObservationDeadline
             var lastTreeChangeAt: RuntimeElapsed.Instant?
-            var viewportStatus: ViewportStatus
         }
 
         private struct Runtime {
-            var machine: Machine
-            var observation: ActiveObservation?
-            var deadlines: DeadlineTargets
+            var execution: HeistExecution
+            var observation: ObservationResource?
             var historyIndex: Int
-        }
-
-        private struct ObservationCloseResult {
-            let evidence: Observation.Evidence
-            let timing: HeistExpectationTiming
-            let viewportStatus: ViewportStatus
-        }
-
-        private enum ObservationCloseCapture {
-            case coverage
-            case singleCycle
-        }
-
-        private enum ViewportStatus {
-            case available
-            case unavailable
-            case failed(Navigation.ViewportExit.Failure)
-
-            mutating func record(_ outcome: Navigation.ViewportExit.Outcome?) {
-                if case .failed = self { return }
-                self = switch outcome {
-                case .restored?, .retained?, .superseded?: .available
-                case .failed(let failure)?: .failed(failure)
-                case nil: .unavailable
-                }
-            }
-        }
-
-        private enum DeadlineTargets {
-            case whole(SemanticObservationDeadline)
-            case leaf(whole: SemanticObservationDeadline, leaf: SemanticObservationDeadline)
-
-            var whole: SemanticObservationDeadline {
-                switch self {
-                case .whole(let whole), .leaf(let whole, _): whole
-                }
-            }
-
-            func expiration(at now: RuntimeElapsed.Instant) -> DeadlineExpiration? {
-                switch self {
-                case .whole(let whole):
-                    whole.hasTimeRemaining(at: now) ? nil : .whole
-                case .leaf(let whole, let leaf):
-                    switch (leaf.hasTimeRemaining(at: now), whole.hasTimeRemaining(at: now)) {
-                    case (true, true): nil
-                    case (false, true): .leaf
-                    case (true, false): .whole
-                    case (false, false): .leafAndWhole
-                    }
-                }
-            }
-
-            func remainingDuration(at now: RuntimeElapsed.Instant) -> Duration {
-                switch self {
-                case .whole(let whole): whole.remainingDuration(at: now)
-                case .leaf(let whole, let leaf): min(
-                    whole.remainingDuration(at: now),
-                    leaf.remainingDuration(at: now)
-                )
-                }
-            }
-        }
-
-        private enum DeadlineExpiration {
-            case leaf
-            case whole
-            case leafAndWhole
-
-            var includesWhole: Bool {
-                switch self {
-                case .leaf: false
-                case .whole, .leafAndWhole: true
-                }
-            }
-        }
-
-        private enum Waiting {
-            case event(Observation.Event)
-            case cancelled
-            case deadline
-        }
-
-        private enum PerformedEffect {
-            case input(Input)
-            case observationBegan(ActiveObservation)
-            case viewportExited(RequestID, Navigation.ViewportExit.Outcome)
-            case observationClosed(
-                ActiveObservation,
-                source: ObservationFinishSource,
-                result: ObservationCloseResult
-            )
-        }
-
-        private enum EffectRace {
-            case effect(PerformedEffect, completedObservationCycle: Bool)
-            case deadline(
-                observationClosed: PerformedEffect?,
-                completedObservationCycle: Bool
-            )
-            case cancelled(completedObservationCycle: Bool)
         }
 
         private let brains: TheBrains
         private let runtimeBoundary: RuntimeBoundary
 
-        internal init(
-            brains: TheBrains,
-            runtimeBoundary: RuntimeBoundary? = nil
-        ) {
+        internal init(brains: TheBrains, runtimeBoundary: RuntimeBoundary? = nil) {
             self.brains = brains
             self.runtimeBoundary = runtimeBoundary ?? .live(brains: brains)
         }
@@ -218,7 +68,7 @@ extension HeistExecution {
             actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy = .default
         ) async throws -> Completion {
             try await execute(
-                try Machine(
+                try HeistExecution(
                     plan: plan,
                     argument: argument,
                     failureCaptureMode: brains.failureEvidencePolicy.captureMode,
@@ -228,658 +78,267 @@ extension HeistExecution {
             )
         }
 
-        internal func execute(
-            _ action: HeistActionCommand,
-            timeout: HeistTimeout
-        ) async throws -> Completion {
+        internal func execute(_ action: HeistActionCommand, timeout: HeistTimeout) async throws -> Completion {
             try await execute(
-                Machine(action: action, failureCaptureMode: brains.failureEvidencePolicy.captureMode),
+                HeistExecution(action: action, failureCaptureMode: brains.failureEvidencePolicy.captureMode),
                 timeout: timeout
             )
         }
 
-        private func execute(_ machine: Machine, timeout: HeistTimeout) async throws -> Completion {
-            guard let installation = installLifetime() else {
+        private func execute(_ execution: HeistExecution, timeout: HeistTimeout) async throws -> Completion {
+            let stream = brains.vault.semanticObservationStream
+            let inbox = ObservationInbox(waitUntilDeadline: runtimeBoundary.wait)
+            guard let admission = stream.admitExecutionBoundary(receive: { inbox.yield($0) }) else {
                 try Task.checkCancellation()
-                throw HeistExecution.Failure.runtimeUnavailable
+                throw Failure.runtimeUnavailable
             }
-            let wholeDeadline = SemanticObservationDeadline(
-                start: runtimeBoundary.now(),
-                timeout: .seconds(timeout.seconds)
+            let lifetime = Lifetime(
+                subscription: admission.subscription,
+                demand: admission.demand,
+                notifications: brains.vault.accessibilityNotifications.beginHeistScope()
             )
-            var runtime = Runtime(
-                machine: machine,
-                observation: nil,
-                deadlines: .whole(wholeDeadline),
-                historyIndex: installation.baseline.retainedHistoryIndex
-            )
-            defer { release(installation.lifetime, historyIndex: runtime.historyIndex) }
+            var runtime = Runtime(execution: execution, observation: nil, historyIndex: admission.retainedHistoryIndex)
+            defer { release(lifetime, runtime: &runtime) }
 
-            try Task.checkCancellation()
-            var initialBaseline: Observation.Stream.ExecutionAdmission? = installation.baseline
-            var decision = runtime.machine.start()
-            var effectCompletedObservationCycle = false
-
-            do {
-                while true {
-                    try Task.checkCancellation()
-                    switch decision {
-                    case .complete(let completion):
-                        let terminalNotificationCursor = brains.vault.accessibilityNotifications.cursor()
-                        let notificationsAdmitted = await admitTerminalNotifications(
-                            installation.lifetime.notificationScope,
-                            after: terminalNotificationCursor
-                        )
-                        try Task.checkCancellation()
-                        guard notificationsAdmitted else {
-                            throw HeistExecution.Failure.accessibilityTreeUnavailable
-                        }
-                        return completion
-
-                    case .perform(let request):
-                        decision = try await performDecision(
-                            request,
-                            currentDecision: decision,
-                            inbox: installation.inbox,
-                            runtime: &runtime,
-                            initialBaseline: &initialBaseline,
-                            effectCompletedObservationCycle: &effectCompletedObservationCycle
-                        )
-
-                    case .wait:
-                        if let event = await installation.inbox.pop() {
-                            decision = advance(event, runtime: &runtime)
-                            continue
-                        }
-                        if let expiration = runtime.deadlines.expiration(at: runtimeBoundary.now()) {
-                            decision = await terminalDeadlineDecision(
-                                expiration,
-                                inbox: installation.inbox,
-                                currentDecision: decision,
-                                runtime: &runtime
-                            )
-                            continue
-                        }
-                        switch await waitForEvent(
-                            from: installation.inbox,
-                            before: runtime.deadlines.remainingDuration(at: runtimeBoundary.now())
-                        ) {
-                        case .event(let event):
-                            decision = advance(event, runtime: &runtime)
-                        case .cancelled:
-                            throw CancellationError()
-                        case .deadline:
-                            decision = await terminalDeadlineDecision(
-                                runtime.deadlines.expiration(at: runtimeBoundary.now()) ?? .whole,
-                                inbox: installation.inbox,
-                                currentDecision: decision,
-                                runtime: &runtime
-                            )
-                        }
+            var baseline: Observation.Stream.ExecutionAdmission? = admission
+            var decision = runtime.execution.start(at: runtimeBoundary.now(), timeout: timeout)
+            while true {
+                switch decision {
+                case .complete(let completion):
+                    if completion.outcome == .cancelled {
+                        throw CancellationError()
                     }
+                    let cursor = brains.vault.accessibilityNotifications.cursor()
+                    guard await admitTerminalNotifications(lifetime.notifications, after: cursor) else {
+                        throw Failure.accessibilityTreeUnavailable
+                    }
+                    return completion
+
+                case .perform(let effect):
+                    guard !Task.isCancelled || isCancellationCleanup(effect) else {
+                        decision = runtime.execution.reduce(.cancellationRequested(at: runtimeBoundary.now()))
+                        continue
+                    }
+                    let event = await execute(
+                        effect,
+                        runtime: &runtime,
+                        baseline: &baseline,
+                        inbox: inbox
+                    )
+                    decision = Task.isCancelled && !isCancellationCleanup(effect)
+                        ? runtime.execution.reduce(.cancellationRequested(at: runtimeBoundary.now()))
+                        : runtime.execution.reduce(event)
+
+                case .wait(let request):
+                    let event: Event
+                    switch await inbox.wait(for: request, at: runtimeBoundary.now()) {
+                    case .event(let observation):
+                        event = .observation(request.id, observation, at: runtimeBoundary.now())
+                    case .deadline:
+                        event = .deadlineElapsed(request.id, at: runtimeBoundary.now())
+                    case .cancelled:
+                        event = .cancellationRequested(at: runtimeBoundary.now())
+                    }
+                    record(event, runtime: &runtime)
+                    decision = runtime.execution.reduce(event)
                 }
-            } catch is CancellationError {
-                await restoreTerminalViewport(
-                    runtime: &runtime,
-                    effectCompletedObservationCycle: effectCompletedObservationCycle
-                )
-                throw CancellationError()
             }
         }
 
-        private func installLifetime() -> InstalledLifetime? {
-            let stream = brains.vault.semanticObservationStream
-            let inbox = ObservationInbox()
-            guard let baseline = stream.admitExecutionBoundary(
-                receive: { inbox.yield($0) }
-            ) else {
-                return nil
-            }
-            return .init(
-                inbox: inbox,
-                lifetime: .init(
-                    eventSubscription: baseline.subscription,
-                    observationDemand: baseline.demand,
-                    notificationScope: brains.vault.accessibilityNotifications.beginHeistScope()
-                ),
-                baseline: baseline
-            )
-        }
-
-        private func performDecision(
-            _ request: MainActorRequest,
-            currentDecision: Decision,
-            inbox: ObservationInbox,
+        private func execute(
+            _ effect: Effect,
             runtime: inout Runtime,
-            initialBaseline: inout Observation.Stream.ExecutionAdmission?,
-            effectCompletedObservationCycle: inout Bool
-        ) async throws -> Decision {
-            let baseline: Observation.Stream.ExecutionAdmission?
-            if case .beginObservation(_, let observationRequest) = request,
-               observationRequest.scope == .visible {
-                baseline = initialBaseline
-                initialBaseline = nil
-            } else {
-                baseline = nil
-            }
-            let race = await raceEffect(
-                request,
-                runtime: runtime,
-                baseline: baseline
-            )
-            let effect: PerformedEffect
-            switch race {
-            case .effect(let returnedEffect, let completedObservationCycle):
-                effectCompletedObservationCycle = completedObservationCycle
-                effect = returnedEffect
-            case .cancelled(let completedObservationCycle):
-                effectCompletedObservationCycle = completedObservationCycle
-                throw CancellationError()
-            case .deadline(let terminalClose, let completedObservationCycle):
-                effectCompletedObservationCycle = completedObservationCycle
-                if completedObservationCycle,
-                   let terminalClose {
-                    return runtime.machine.advance(admit(
-                        terminalClose,
-                        expiration: runtime.deadlines.expiration(at: runtimeBoundary.now()),
-                        runtime: &runtime
-                    ))
-                }
-                if case .dispatch(let id, let command) = request {
-                    return await timedOutDispatchDecision(
-                        id,
-                        command: command,
-                        inbox: inbox,
-                        runtime: &runtime
-                    )
-                }
-                return await terminalDeadlineDecision(
-                    runtime.deadlines.expiration(at: runtimeBoundary.now()) ?? .whole,
-                    inbox: inbox,
-                    currentDecision: currentDecision,
-                    reducesStaleEffectRequest: true,
-                    runtime: &runtime
-                )
-            }
-            do {
-                try Task.checkCancellation()
-            } catch {
-                admitCompletedCloseBeforeCancellation(effect, runtime: &runtime)
-                throw error
-            }
-            effectCompletedObservationCycle = false
+            baseline: inout Observation.Stream.ExecutionAdmission?,
+            inbox: ObservationInbox
+        ) async -> Event {
             switch effect {
-            case .input(.failureScreenshotCaptured):
-                return runtime.machine.advance(admit(effect, runtime: &runtime))
-
-            case .observationClosed:
-                let expiration = runtime.deadlines.expiration(at: runtimeBoundary.now())
-                let decision = runtime.machine.advance(admit(
-                    effect,
-                    expiration: expiration,
-                    runtime: &runtime
-                ))
-                return decision
-
-            case .viewportExited:
-                let decision = runtime.machine.advance(admit(effect, runtime: &runtime))
-                guard let expiration = runtime.deadlines.expiration(at: runtimeBoundary.now()) else {
-                    return decision
-                }
-                return await terminalDeadlineDecision(
-                    expiration,
-                    inbox: inbox,
-                    currentDecision: decision,
-                    runtime: &runtime
-                )
-
-            case .observationBegan(let observation):
-                let decision = admitObservationBegan(effect, observation: observation, runtime: &runtime)
-                guard let expiration = runtime.deadlines.expiration(at: runtimeBoundary.now()) else {
-                    return decision
-                }
-                return await terminalDeadlineDecision(
-                    expiration,
-                    inbox: inbox,
-                    currentDecision: decision,
-                    runtime: &runtime
-                )
-
-            case .input:
-                guard let expiration = runtime.deadlines.expiration(at: runtimeBoundary.now()) else {
-                    return runtime.machine.advance(admit(effect, runtime: &runtime))
-                }
-                discard(effect)
-                return await terminalDeadlineDecision(
-                    expiration,
-                    inbox: inbox,
-                    currentDecision: currentDecision,
-                    reducesStaleEffectRequest: true,
-                    runtime: &runtime
-                )
-            }
-        }
-
-        private func admitObservationBegan(
-            _ effect: PerformedEffect, observation: ActiveObservation, runtime: inout Runtime
-        ) -> Decision {
-            let decision = runtime.machine.advance(admit(effect, runtime: &runtime))
-            let stream = brains.vault.semanticObservationStream
-            let historyIndex = stream.executionHistoryIndex(reusing: brains.vault.state.current)
-            guard case .wait = decision,
-                  observation.boundary.historyIndex == historyIndex,
-                  runtime.historyIndex <= historyIndex,
-                  historyIndex < brains.vault.state.history.endIndex
-            else { return decision }
-            if runtime.historyIndex < observation.boundary.historyIndex {
-                stream.advanceHistoryProtection(
-                    from: runtime.historyIndex,
-                    to: observation.boundary.historyIndex
-                )
-                runtime.historyIndex = observation.boundary.historyIndex
-            }
-            return advance(.noChange, runtime: &runtime)
-        }
-
-        private func timedOutDispatchDecision(
-            _ id: RequestID,
-            command: ResolvedHeistActionCommand,
-            inbox: ObservationInbox,
-            runtime: inout Runtime
-        ) async -> Decision {
-            let effect = PerformedEffect.input(.dispatchCompleted(
-                id,
-                .failure(
-                    .empty(for: command.type),
-                    message: "action dispatch timed out at the action deadline",
-                    failureKind: .timeout
-                )
-            ))
-            let decision = runtime.machine.advance(admit(effect, runtime: &runtime))
-            return await terminalDeadlineDecision(
-                runtime.deadlines.expiration(at: runtimeBoundary.now()) ?? .whole,
-                inbox: inbox,
-                currentDecision: decision,
-                runtime: &runtime
-            )
-        }
-
-        private func perform(
-            _ request: MainActorRequest,
-            runtime: Runtime,
-            baseline: Observation.Stream.ExecutionAdmission?
-        ) async throws -> PerformedEffect {
-            switch request {
-            case .currentSnapshot(let id, let scope):
-                let current: TheVault.State.Current?
-                switch scope {
+            case .currentSnapshot(let id, let scope, let deadline):
+                let current: TheVault.State.Current? = switch scope {
                 case .visible:
-                    current = await brains.vault.semanticObservationStream
-                        .admittedVisibleObservation(boundary: .cancellation)
-                case .discovery:
-                    current = await brains.navigation.fullGraph()?.current
+                    await brains.vault.semanticObservationStream
+                        .admittedVisibleObservation(boundary: .externalDeadline(deadline))
+                case .discovery: await brains.navigation.fullGraph(deadline: deadline)?.current
                 }
-                return .input(.currentSnapshot(id, current?.snapshot))
+                return .currentSnapshot(id, current?.snapshot, at: runtimeBoundary.now())
 
-            case .beginObservation(let id, let request):
-                return try await beginObservation(
+            case .beginObservation(let id, let scope, let deadline):
+                return await beginObservation(
                     id: id,
-                    request: request,
-                    runtime: runtime,
-                    baseline: baseline
+                    scope: scope,
+                    deadline: deadline,
+                    runtime: &runtime,
+                    baseline: &baseline,
+                    inbox: inbox
                 )
 
-            case .dispatch(let id, let command):
-                guard let deadline = activeLeafDeadline(id: id, runtime: runtime) else {
-                    return .input(.dispatchCompleted(id, .failure(
-                        .empty(for: command.type),
-                        message: "action dispatch has no active leaf deadline",
-                        failureKind: .actionFailed
-                    )))
-                }
-                return .input(.dispatchCompleted(
-                    id,
-                    await runtimeBoundary.dispatch(command, deadline)
-                ))
+            case .dispatch(let id, let command, let deadline):
+                let result = await runtimeBoundary.dispatch(command, deadline)
+                inbox.advanceNoChange(to: brains.vault.state.history.endIndex)
+                return .dispatchCompleted(id, result, at: runtimeBoundary.now())
 
-            case .explore(let id, let predicate):
-                let outcome: Navigation.ViewportExit.Outcome
-                if let deadline = activeLeafDeadline(id: id, runtime: runtime) {
-                    outcome = await runtimeBoundary.explore(
-                        predicate.resolved.watchTarget,
-                        deadline
-                    )
-                } else {
-                    outcome = .failed(.originUnavailable)
-                }
-                return .viewportExited(id, outcome)
+            case .explore(let id, let predicate, let deadline):
+                let outcome = await runtimeBoundary.explore(predicate.resolved.watchTarget, deadline)
+                return .viewportExited(id, outcome, at: runtimeBoundary.now())
 
-            case .finishObservation(let requestID, let observationID, let exitPosition):
-                return try await finishObservation(
+            case .sampleObservationClose(let requestID, let observationID, let exitPosition, let capture, let source):
+                return await sampleObservationClose(
                     requestID: requestID,
                     observationID: observationID,
                     exitPosition: exitPosition,
-                    runtime: runtime
+                    capture: capture,
+                    source: source,
+                    runtime: &runtime
                 )
 
-            case .captureFailureScreenshot(let id, let failedPath, let mode):
-                return .input(.failureScreenshotCaptured(
-                    id,
-                    await runtimeBoundary.captureFailure(failedPath, mode)
-                ))
+            case .commitObservationClose(let id, let observationID):
+                return await commitObservation(id: id, observationID: observationID, runtime: &runtime)
+
+            case .captureFailureScreenshot(let id, let path, let mode):
+                return .failureScreenshotCaptured(id, await runtimeBoundary.captureFailure(path, mode), at: runtimeBoundary.now())
+
+            case .cancelObservation(let id, let observationID):
+                if let resource = runtime.observation,
+                   observationID == resource.id {
+                    runtime.observation = nil
+                    release(resource, runtime: &runtime)
+                }
+                return .cancellationCompleted(id, at: runtimeBoundary.now())
             }
         }
 
-        private func raceEffect(
-            _ request: MainActorRequest,
-            runtime: Runtime,
-            baseline: Observation.Stream.ExecutionAdmission?
-        ) async -> EffectRace {
-            let receipt = SemanticObservationCycleReceipt()
-            if case .captureFailureScreenshot = request {
-                let winner = await SemanticObservationCycleContext.$receipt.withValue(receipt) {
-                    do {
-                        return EffectRace.effect(try await perform(
-                            request,
-                            runtime: runtime,
-                            baseline: baseline
-                        ), completedObservationCycle: false)
-                    } catch {
-                        return .cancelled(completedObservationCycle: false)
-                    }
-                }
-                if case .effect(let effect, _) = winner {
-                    return .effect(effect, completedObservationCycle: receipt.completed)
-                }
-                if case .cancelled = winner {
-                    return .cancelled(completedObservationCycle: receipt.completed)
-                }
-                return winner
-            }
-            let delay = runtime.deadlines.remainingDuration(at: runtimeBoundary.now())
-            let winner = await SemanticObservationCycleContext.$receipt.withValue(receipt) {
-                await withTaskGroup(of: EffectRace.self) { group in
-                    group.addTask { [self] in
-                        do {
-                            return .effect(
-                                try await perform(
-                                    request,
-                                    runtime: runtime,
-                                    baseline: baseline
-                                ),
-                                completedObservationCycle: false
-                            )
-                        } catch {
-                            return .cancelled(completedObservationCycle: false)
-                        }
-                    }
-                    group.addTask {
-                        await self.runtimeBoundary.wait(delay)
-                            ? .deadline(observationClosed: nil, completedObservationCycle: false)
-                            : .cancelled(completedObservationCycle: false)
-                    }
-                    let winner = await group.next()
-                        ?? .cancelled(completedObservationCycle: false)
-                    group.cancelAll()
-                    var terminalClose: PerformedEffect?
-                    while let result = await group.next() {
-                        guard case .effect(let effect, _) = result else { continue }
-                        if case .observationClosed = effect {
-                            terminalClose = effect
-                        } else {
-                            discard(effect)
-                        }
-                    }
-                    return (winner, terminalClose)
-                }
-            }
-            switch winner.0 {
-            case .effect(let effect, _):
-                return .effect(effect, completedObservationCycle: receipt.completed)
-            case .deadline:
-                return .deadline(
-                    observationClosed: winner.1,
-                    completedObservationCycle: receipt.completed
-                )
-            case .cancelled:
-                return .cancelled(completedObservationCycle: receipt.completed)
-            }
+        private func isCancellationCleanup(_ effect: Effect) -> Bool {
+            if case .cancelObservation = effect { return true }
+            return false
         }
 
         private func beginObservation(
             id: RequestID,
-            request: ObservationRequest,
-            runtime: Runtime,
-            baseline: Observation.Stream.ExecutionAdmission?
-        ) async throws -> PerformedEffect {
-            precondition(runtime.observation == nil, "Only one observation boundary may be active")
+            scope: SemanticObservationScope,
+            deadline: SemanticObservationDeadline,
+            runtime: inout Runtime,
+            baseline: inout Observation.Stream.ExecutionAdmission?,
+            inbox: ObservationInbox
+        ) async -> Event {
             let stream = brains.vault.semanticObservationStream
-            let scope = stream.subscribe(scope: request.scope)
-            let leafDeadline = SemanticObservationDeadline(
-                start: runtimeBoundary.now(),
-                timeout: request.timeout
-            )
-            let beginsAction: Bool
-            if case .action(let leaf)? = runtime.machine.running.activeLeaf,
-               leaf.id == id,
-               case .beginningObservation = leaf.phase {
-                beginsAction = true
-            } else {
-                beginsAction = false
-            }
-            let viewportOutcome: Navigation.ViewportExit.Outcome?
-            let capture: TheVault.State.Current?
+            let subscription = stream.subscribe(scope: scope)
             let boundary: TheVault.State.HistoryBoundary
-            switch request.scope {
+            let captured: TheVault.State.Current?
+            switch scope {
             case .visible:
-                if let baseline {
-                    let initial = await stream.admitExecutionBaseline(
-                        baseline,
-                        deadline: leafDeadline
-                    )
-                    capture = initial.current
-                    boundary = initial.boundary
-                    if capture == nil, beginsAction {
-                        stream.activateExecutionDelivery(baseline.subscription)
-                    }
+                if let initial = baseline {
+                    baseline = nil
+                    let admitted = await stream.admitExecutionBaseline(initial, deadline: deadline)
+                    captured = admitted.current
+                    boundary = admitted.boundary
                 } else {
-                    capture = await stream.admittedVisibleObservation(
-                        boundary: .externalDeadline(leafDeadline)
-                    )
-                    boundary = .init(
-                        baseline: capture?.snapshot,
-                        historyIndex: stream.executionHistoryIndex(reusing: capture)
-                    )
+                    captured = await stream.admittedVisibleObservation(boundary: .externalDeadline(deadline))
+                    boundary = .init(baseline: captured?.snapshot, historyIndex: stream.executionHistoryIndex(reusing: captured))
                 }
-                viewportOutcome = capture == nil ? nil : .retained
             case .discovery:
-                capture = nil
-                viewportOutcome = await brains.navigation.fullGraph(deadline: leafDeadline)?.viewportExit
-                boundary = stream.observationBoundary(scope: request.scope)
+                captured = nil
+                _ = await brains.navigation.fullGraph(deadline: deadline)
+                boundary = stream.observationBoundary(scope: scope)
             }
-            do {
-                try Task.checkCancellation()
-            } catch {
-                scope.cancel()
-                throw error
-            }
-            let notificationWindow = brains.vault.accessibilityNotifications.beginActionWindow()
-            var viewportStatus = ViewportStatus.available
-            viewportStatus.record(viewportOutcome)
-            let observation = ActiveObservation(
+            inbox.advance(to: boundary)
+            let resource = ObservationResource(
                 id: id,
                 boundary: boundary,
-                scopeSubscription: scope,
-                notificationWindow: notificationWindow,
-                deadline: leafDeadline,
-                lastTreeChangeAt: nil,
-                viewportStatus: viewportStatus
+                subscription: subscription,
+                notifications: brains.vault.accessibilityNotifications.beginActionWindow(),
+                deadline: deadline,
+                lastTreeChangeAt: nil
             )
-            guard beginsAction || capture != nil || boundary.baseline != nil else {
-                return .observationClosed(
-                    observation,
-                    source: .deadline,
-                    result: .init(
-                        evidence: .init(
-                            baseline: nil,
-                            events: [],
-                            current: nil,
-                            coverage: .incomplete(.captureUnavailable)
-                        ),
-                        timing: expectationTiming(for: observation),
-                        viewportStatus: .unavailable
-                    )
-                )
+            precondition(runtime.observation == nil, "An execution owns one active observation")
+            runtime.observation = resource
+            if runtime.historyIndex < boundary.historyIndex {
+                stream.advanceHistoryProtection(from: runtime.historyIndex, to: boundary.historyIndex)
+                runtime.historyIndex = boundary.historyIndex
             }
-            return .observationBegan(observation)
+            return .observationBegan(id, baseline: captured?.snapshot, at: runtimeBoundary.now())
         }
 
-        private func finishObservation(
+        private func sampleObservationClose(
             requestID: RequestID,
             observationID: RequestID,
             exitPosition: Navigation.ViewportExitPosition,
-            runtime: Runtime
-        ) async throws -> PerformedEffect {
-            guard let observation = runtime.observation, observation.id == observationID else {
-                return .input(.observationFinished(
-                    source: .request(requestID), observationID: observationID,
-                    evidence: .init(
-                        baseline: nil,
-                        events: [],
-                        current: nil,
-                        coverage: .incomplete(.captureUnavailable)
-                    ),
-                    outcome: .unavailable,
-                    timing: .init(budgetMs: 0, elapsedMs: 0, lastTreeChangeElapsedMs: nil)
-                ))
-            }
-            let result = await closeObservation(
-                observation,
-                exitPosition: exitPosition,
-                capture: .coverage,
-                runtime: runtime
-            )
-            return .observationClosed(
-                observation,
-                source: .request(requestID),
-                result: result
-            )
-        }
-
-        private func admit(
-            _ effect: PerformedEffect,
-            expiration: DeadlineExpiration? = nil,
+            capture: ObservationCloseCapture,
+            source: ObservationCloseSource,
             runtime: inout Runtime
-        ) -> Input {
-            switch effect {
-            case .input(let input):
-                return input
-            case .observationBegan(let observation):
-                precondition(runtime.observation == nil, "Only one observation boundary may be active")
-                runtime.observation = observation
-                runtime.deadlines = .leaf(
-                    whole: runtime.deadlines.whole,
-                    leaf: observation.deadline
-                )
-                return .observationBegan(observation.id, baseline: observation.boundary.baseline)
-            case .viewportExited(let id, let outcome):
-                if var observation = runtime.observation, observation.id == id {
-                    observation.viewportStatus.record(outcome)
-                    runtime.observation = observation
+        ) async -> Event {
+            guard let resource = runtime.observation else {
+                preconditionFailure("The reducer requested an observation close sample without an active observation")
+            }
+            precondition(
+                resource.id == observationID,
+                "The reducer requested an observation close sample for a different observation"
+            )
+            let viewportExit: Navigation.ViewportExit.Outcome? = if case .origin = exitPosition {
+                await brains.navigation.fullGraph(deadline: resource.deadline)?.viewportExit
+            } else { nil }
+            var captureAvailable = false
+            _ = await resource.notifications.admitCausallyCovered { coverage -> Void? in
+                captureAvailable = switch capture {
+                case .coverage:
+                    await self.brains.vault.semanticObservationStream
+                        .visibleObservation(covering: coverage) != nil
+                case .refresh:
+                    if case .committed = await self.brains.vault.semanticObservationStream
+                        .refreshedVisibleObservation(boundary: .externalDeadline(resource.deadline)) {
+                        true
+                    } else {
+                        false
+                    }
+                case .nextCycle:
+                    await self.brains.vault.semanticObservationStream
+                        .visibleObservationAfterNextCycle(covering: coverage) != nil
                 }
-                return .viewportExited(id, outcome)
-            case .observationClosed(let observation, let source, let result):
-                return admitObservationCloseResult(
-                    observation,
-                    source: source,
-                    result: result,
-                    expiration: expiration,
-                    runtime: &runtime
-                )
+                return nil
             }
-        }
-
-        private func discard(_ effect: PerformedEffect) {
-            guard case .observationBegan(let observation) = effect else { return }
-            release(observation)
-        }
-
-        private func admitCompletedCloseBeforeCancellation(
-            _ effect: PerformedEffect,
-            runtime: inout Runtime
-        ) {
-            guard case .observationClosed = effect else {
-                discard(effect)
-                return
-            }
-            _ = admit(effect, expiration: .whole, runtime: &runtime)
-        }
-
-        private func advance(
-            _ event: Observation.Event,
-            runtime: inout Runtime
-        ) -> Decision {
-            if event.changesInterface, var observation = runtime.observation {
-                observation.lastTreeChangeAt = runtimeBoundary.now()
-                runtime.observation = observation
-            }
-            return runtime.machine.advance(.event(event))
-        }
-
-        private func deadlineDecision(
-            _ expiration: DeadlineExpiration,
-            runtime: inout Runtime
-        ) async -> Decision {
-            guard let observation = runtime.observation else {
-                return runtime.machine.finishAfterHeistTimeout()
-            }
-            let result = await closeObservation(
-                observation,
-                exitPosition: .current,
-                capture: .singleCycle,
-                runtime: runtime
+            let evidence = evidence(after: resource.boundary, captureAvailable: captureAvailable)
+            let endedAt = runtimeBoundary.now()
+            return .observationCloseSampled(
+                requestID, source: source, observationID: observationID, evidence: evidence,
+                close: .init(
+                    captureAvailable: captureAvailable,
+                    viewportExit: viewportExit,
+                    lastTreeChangeAt: resource.lastTreeChangeAt
+                ), at: endedAt
             )
-            let input = admitObservationCloseResult(
-                observation,
-                source: .deadline,
-                result: result,
-                expiration: expiration,
-                runtime: &runtime
-            )
-            return runtime.machine.advance(input)
         }
 
-        private func terminalDeadlineDecision(
-            _ expiration: DeadlineExpiration,
-            inbox: ObservationInbox,
-            currentDecision: Decision,
-            reducesStaleEffectRequest: Bool = false,
+        private func record(_ event: Event, runtime: inout Runtime) {
+            guard case .observation(_, let observation, let at) = event,
+                  observation.changesInterface else { return }
+            runtime.observation?.lastTreeChangeAt = at
+        }
+
+        private func commitObservation(
+            id: RequestID,
+            observationID: RequestID,
             runtime: inout Runtime
-        ) async -> Decision {
-            var decision = currentDecision
-            var mayReduceEvent = reducesStaleEffectRequest
-            while mayReduceEvent || {
-                if case .wait = decision { return true }
-                return false
-            }() {
-                guard let event = await inbox.pop() else { break }
-                decision = advance(event, runtime: &runtime)
-                mayReduceEvent = false
+        ) async -> Event {
+            guard let resource = runtime.observation else {
+                preconditionFailure("The reducer requested an observation close commit without an active observation")
             }
-            if case .complete = decision { return decision }
-            return await deadlineDecision(expiration, runtime: &runtime)
-        }
-
-        private func admitObservationCloseResult(
-            _ observation: ActiveObservation,
-            source: ObservationFinishSource,
-            result: ObservationCloseResult,
-            expiration: DeadlineExpiration? = nil,
-            runtime: inout Runtime
-        ) -> Input {
-            release(observation)
+            precondition(
+                resource.id == observationID,
+                "The reducer requested an observation close commit for a different observation"
+            )
             runtime.observation = nil
-            runtime.deadlines = .whole(runtime.deadlines.whole)
+            _ = await resource.notifications.admitCausallyCovered { _ in true }
+            release(resource, runtime: &runtime)
+            return .observationCloseCommitted(id, at: runtimeBoundary.now())
+        }
+
+        private func evidence(after boundary: TheVault.State.HistoryBoundary, captureAvailable: Bool) -> Observation.Evidence {
+            let evidence = brains.vault.state.evidence(after: boundary)
+            guard !captureAvailable, evidence.coverage == .complete else { return evidence }
+            return .init(baseline: evidence.baseline, events: evidence.events, current: evidence.current, coverage: .incomplete(.captureUnavailable))
+        }
+
+        private func release(_ resource: ObservationResource, runtime: inout Runtime) {
+            resource.subscription.cancel()
+            resource.notifications.cancel()
             let nextHistoryIndex = brains.vault.semanticObservationStream
                 .executionHistoryIndex(reusing: brains.vault.state.current)
             brains.vault.semanticObservationStream.advanceHistoryProtection(
@@ -887,263 +346,188 @@ extension HeistExecution {
                 to: nextHistoryIndex
             )
             runtime.historyIndex = nextHistoryIndex
-            let expectationSatisfied = runtime.machine.running.activeLeaf.map {
-                $0.id == observation.id && $0.expectationIsProven(by: result.evidence)
-            } ?? false
-            let actionDispatchAdmitted = runtime.machine.running.activeLeaf.map { activeLeaf in
-                guard case .action(let action) = activeLeaf else { return true }
-                return action.phase.dispatch != nil
-            } ?? false
-            let outcome: LeafOutcome
-            if case .available = result.viewportStatus,
-               expectationSatisfied,
-               actionDispatchAdmitted {
-                outcome = .completed
-            } else {
-                outcome = observationOutcome(
-                    viewportStatus: result.viewportStatus,
-                    expiration: expiration,
-                    hasObservedState: result.evidence.baseline != nil || result.evidence.current != nil
-                )
-            }
-            return .observationFinished(
-                source: source,
-                observationID: observation.id,
-                evidence: result.evidence,
-                outcome: outcome,
-                timing: result.timing
-            )
         }
 
-        private func observationOutcome(
-            viewportStatus: ViewportStatus,
-            expiration: DeadlineExpiration?,
-            hasObservedState: Bool
-        ) -> LeafOutcome {
-            switch viewportStatus {
-            case .failed(let failure): .viewportExitFailed(failure)
-            case .unavailable where !hasObservedState: .unavailable
-            case .unavailable:
-                expiration.map { $0.includesWhole ? .heistTimedOut : .timedOut } ?? .unavailable
-            case .available:
-                expiration.map { $0.includesWhole ? .heistTimedOut : .timedOut } ?? .completed
-            }
-        }
-
-        private func closeObservation(
-            _ observation: ActiveObservation,
-            exitPosition: Navigation.ViewportExitPosition,
-            capture: ObservationCloseCapture,
-            runtime: Runtime
-        ) async -> ObservationCloseResult {
-            var viewportStatus = observation.viewportStatus
-            if case .origin = exitPosition {
-                viewportStatus.record(await brains.navigation.fullGraph(
-                    deadline: activeLeafDeadline(id: observation.id, runtime: runtime)
-                )?.viewportExit)
-            }
-            let coverageAdmitted = await observation.notificationWindow.admitCausallyCovered { [self] coverage -> Bool? in
-                let stream = brains.vault.semanticObservationStream
-                let coverageCaptured = switch capture {
-                case .coverage where stream.hasCommittedObservation(covering: coverage):
-                    true
-                case .coverage:
-                    await stream.visibleObservation(covering: coverage) != nil
-                case .singleCycle:
-                    await stream.visibleObservationAfterNextCycle(covering: coverage) != nil
-                }
-                guard coverageCaptured else { return nil }
-                guard case .coverage = capture else {
-                    guard activeLeafEvidence(for: observation, runtime: runtime).map({
-                        $0.0.needsStabilityCapture(after: $0.1)
-                    }) == true else {
-                        return true
-                    }
-                    return await stream.visibleObservationAfterNextCycle(covering: coverage) != nil
-                }
-                while activeLeafEvidence(for: observation, runtime: runtime).map({
-                    $0.0.expectationIsProven(by: $0.1)
-                }) != true {
-                    guard case .committed = await stream.refreshedVisibleObservation(
-                        boundary: .externalDeadline(observation.deadline)
-                    ) else {
-                        return nil
-                    }
-                }
-                return true
-            }
-            viewportStatus.record(coverageAdmitted == nil ? nil : .retained)
-            return ObservationCloseResult(
-                evidence: evidence(for: observation, terminalCaptureAvailable: coverageAdmitted != nil),
-                timing: expectationTiming(for: observation),
-                viewportStatus: viewportStatus
-            )
-        }
-
-        private func activeLeafEvidence(
-            for observation: ActiveObservation,
-            runtime: Runtime
-        ) -> (HeistExecution.ActiveLeaf, Observation.Evidence)? {
-            guard let leaf = runtime.machine.running.activeLeaf,
-                  leaf.id == observation.id else { return nil }
-            return (leaf, brains.vault.state.evidence(after: observation.boundary))
-        }
-
-        private func restoreTerminalViewport(
-            runtime: inout Runtime,
-            effectCompletedObservationCycle: Bool
-        ) async {
-            guard let observation = runtime.observation else { return }
-            guard !effectCompletedObservationCycle else {
-                release(observation)
+        private func release(_ lifetime: Lifetime, runtime: inout Runtime) {
+            if let resource = runtime.observation {
                 runtime.observation = nil
-                runtime.deadlines = .whole(runtime.deadlines.whole)
-                return
+                release(resource, runtime: &runtime)
             }
-            let result = await closeObservation(
-                observation,
-                exitPosition: .current,
-                capture: .singleCycle,
-                runtime: runtime
-            )
-            _ = admitObservationCloseResult(
-                observation,
-                source: .deadline,
-                result: result,
-                expiration: .whole,
-                runtime: &runtime
-            )
+            lifetime.subscription.cancel()
+            lifetime.demand.cancel()
+            lifetime.notifications.cancel()
+            brains.vault.semanticObservationStream.releaseHistory(from: runtime.historyIndex)
         }
 
-        private func activeLeafDeadline(id: RequestID, runtime: Runtime) -> SemanticObservationDeadline? {
-            guard runtime.observation?.id == id,
-                  case .leaf(_, let leaf) = runtime.deadlines else { return nil }
-            return leaf
-        }
-
-        private func evidence(for observation: ActiveObservation, terminalCaptureAvailable: Bool) -> Observation.Evidence {
-            let evidence = brains.vault.state.evidence(after: observation.boundary)
-            if terminalCaptureAvailable || evidence.coverage != .complete {
-                return evidence
-            }
-            return .init(
-                baseline: evidence.baseline,
-                events: evidence.events,
-                current: evidence.current,
-                coverage: .incomplete(.captureUnavailable)
-            )
-        }
-
-        private func expectationTiming(for observation: ActiveObservation) -> HeistExpectationTiming {
-            .init(
-                budgetMs: RuntimeElapsed.admit(milliseconds: observation.deadline.budgetMilliseconds),
-                elapsedMs: RuntimeElapsed.milliseconds(
-                    since: observation.deadline.start,
-                    endedAt: runtimeBoundary.now()
-                ),
-                lastTreeChangeElapsedMs: observation.lastTreeChangeAt.map {
-                    RuntimeElapsed.milliseconds(since: observation.deadline.start, endedAt: $0)
-                }
-            )
-        }
-
-        private func waitForEvent(from inbox: ObservationInbox, before delay: Duration) async -> Waiting {
-            await withTaskGroup(of: Waiting.self) { group in
-                group.addTask {
-                    guard let event = await inbox.next() else { return .cancelled }
-                    return .event(event)
-                }
-                group.addTask {
-                    await self.runtimeBoundary.wait(delay) ? .deadline : .cancelled
-                }
-                let first = await group.next() ?? .deadline
-                if case .event = first {
-                    group.cancelAll()
-                    return first
-                }
-                if let queuedEvent = await inbox.pop() {
-                    group.cancelAll()
-                    return .event(queuedEvent)
-                }
-                group.cancelAll()
-                var queuedEvent: Observation.Event?
-                while let result = await group.next() {
-                    if case .event(let event) = result {
-                        queuedEvent = event
-                    }
-                }
-                return queuedEvent.map(Waiting.event) ?? first
-            }
-        }
-
-        private func release(_ observation: ActiveObservation) {
-            observation.scopeSubscription.cancel()
-            observation.notificationWindow.cancel()
-        }
-
-        private func release(_ lifetime: Lifetime, historyIndex: Int) {
-            lifetime.eventSubscription.cancel()
-            lifetime.observationDemand.cancel()
-            lifetime.notificationScope.cancel()
-            brains.vault.semanticObservationStream.releaseHistory(
-                from: historyIndex
-            )
-        }
-
-        private func admitTerminalNotifications(
-            _ scope: AccessibilityNotificationScopeLease,
-            after cursor: AccessibilityNotificationCursor
-        ) async -> Bool {
-            guard let admitted = await scope.admitCausallyCovered({ [self] coverage in
-                let terminalCoverage = AccessibilityNotificationCoverage(
+        private func admitTerminalNotifications(_ lease: AccessibilityNotificationScopeLease, after cursor: AccessibilityNotificationCursor) async -> Bool {
+            await lease.admitCausallyCovered { [brains] coverage in
+                let terminal = AccessibilityNotificationCoverage(
                     after: cursor,
                     through: coverage.through,
-                    scopedScreenChangedThrough: coverage.scopedScreenChangedThrough > cursor.sequence
-                        ? coverage.scopedScreenChangedThrough
-                        : 0
+                    scopedScreenChangedThrough: coverage.scopedScreenChangedThrough > cursor.sequence ? coverage.scopedScreenChangedThrough : 0
                 )
-                guard terminalCoverage.requiresObservation else {
-                    return true
-                }
-                return await brains.vault.semanticObservationStream
-                    .visibleObservationThroughCausalCycles(covering: terminalCoverage) != nil
-            }), admitted else {
-                scope.cancel()
-                return false
-            }
-            return true
+                guard terminal.requiresObservation else { return true }
+                return await brains.vault.semanticObservationStream.visibleObservationThroughCausalCycles(covering: terminal) != nil
+            } != nil
         }
-
     }
 }
 
-private actor ObservationInbox {
-    private let stream: AsyncStream<Observation.Event>
-    nonisolated private let emit: AsyncStream<Observation.Event>.Continuation
-    nonisolated private let count = OSAllocatedUnfairLock(initialState: 0)
-
-    init() {
-        let stream = AsyncStream<Observation.Event>.makeStream()
-        self.stream = stream.stream
-        emit = stream.continuation
-    }
-
-    nonisolated func yield(_ event: Observation.Event) {
-        count.withLock { $0 += 1 }
-        emit.yield(event)
-    }
-
-    func pop() async -> Observation.Event? {
-        guard count.withLock({ $0 > 0 }) else { return nil }
-        return await next()
-    }
-
-    func next() async -> Observation.Event? {
-        for await event in stream {
-            count.withLock { $0 -= 1 }
-            return event
+extension HeistExecution.Host {
+    @MainActor
+    internal final class ObservationInbox {
+        internal enum Outcome: Equatable {
+            case event(Observation.Event)
+            case deadline
+            case cancelled
         }
-        return nil
+
+        private struct Waiter {
+            let id: UInt64
+            let continuation: CheckedContinuation<Outcome, Never>
+            var deadline: Task<Void, Never>?
+        }
+
+        private let waitUntilDeadline: @MainActor (Duration) async -> Bool
+        private var events: ArraySlice<Observation.Publication.Entry> = []
+        private var leafHistoryIndex = 0
+        private var noChangeHistoryIndex: Int?
+        private var nextWaiterID: UInt64 = 0
+        private var waiter: Waiter?
+
+        internal init(
+            waitUntilDeadline: @escaping @MainActor (Duration) async -> Bool
+        ) {
+            self.waitUntilDeadline = waitUntilDeadline
+        }
+
+        internal func yield(_ entry: Observation.Publication.Entry) {
+            guard admits(entry) else { return }
+            guard let waiter else {
+                events.append(entry)
+                return
+            }
+            resolve(waiter.id, with: .event(entry.event))
+        }
+
+        /// Opens a new observation window after its baseline was captured.
+        ///
+        /// The execution-level subscription remains installed across leaves.
+        /// History position, rather than arrival time, decides whether a queued
+        /// event belongs to the leaf that begins after this baseline.
+        internal func advance(to boundary: TheVault.State.HistoryBoundary) {
+            precondition(
+                waiter == nil,
+                "An observation baseline cannot advance while a wait is pending"
+            )
+            leafHistoryIndex = boundary.historyIndex
+            noChangeHistoryIndex = nil
+            discardUnadmittedEvents()
+        }
+
+        /// Records the exact history position reached when dispatch returned.
+        /// Transient evidence published during dispatch remains deliverable,
+        /// while an earlier stillness event cannot settle the action afterward.
+        internal func advanceNoChange(to historyIndex: Int) {
+            precondition(
+                waiter == nil,
+                "Dispatch completion cannot advance stillness while a wait is pending"
+            )
+            precondition(
+                historyIndex >= leafHistoryIndex,
+                "Dispatch completion cannot precede its observation baseline"
+            )
+            noChangeHistoryIndex = historyIndex
+            discardUnadmittedEvents()
+        }
+
+        internal func wait(
+            for request: HeistExecution.WaitRequest,
+            at now: RuntimeElapsed.Instant
+        ) async -> Outcome {
+            nextWaiterID += 1
+            let id = nextWaiterID
+            return await withTaskCancellationHandler {
+                await withCheckedContinuation { continuation in
+                    install(
+                        id: id,
+                        deadline: request.deadline.remainingDuration(at: now),
+                        continuation: continuation
+                    )
+                }
+            } onCancel: {
+                Task { @MainActor [weak self] in
+                    self?.resolve(id, with: .cancelled)
+                }
+            }
+        }
+
+        private func install(
+            id: UInt64,
+            deadline: Duration,
+            continuation: CheckedContinuation<Outcome, Never>
+        ) {
+            precondition(waiter == nil, "An observation inbox admits exactly one pending wait")
+            if let event = popEvent() {
+                continuation.resume(returning: .event(event))
+                return
+            }
+            guard !Task.isCancelled else {
+                continuation.resume(returning: .cancelled)
+                return
+            }
+            waiter = Waiter(
+                id: id,
+                continuation: continuation,
+                deadline: nil
+            )
+            let waitUntilDeadline = self.waitUntilDeadline
+            let deadlineTask = Task { @MainActor [weak self] in
+                let elapsed = await waitUntilDeadline(deadline)
+                self?.resolve(id, with: elapsed ? .deadline : .cancelled)
+            }
+            guard waiter?.id == id else {
+                deadlineTask.cancel()
+                return
+            }
+            waiter?.deadline = deadlineTask
+        }
+
+        private func resolve(
+            _ id: UInt64,
+            with outcome: Outcome
+        ) {
+            guard let waiter, waiter.id == id else { return }
+            self.waiter = nil
+            waiter.deadline?.cancel()
+            waiter.continuation.resume(returning: outcome)
+        }
+
+        private func popEvent() -> Observation.Event? {
+            while let entry = events.popFirst() {
+                guard admits(entry) else { continue }
+                if events.isEmpty {
+                    events = []
+                }
+                return entry.event
+            }
+            if events.isEmpty {
+                events = []
+            }
+            return nil
+        }
+
+        private func discardUnadmittedEvents() {
+            events = ArraySlice(events.filter { admits($0) })
+        }
+
+        private func admits(_ entry: Observation.Publication.Entry) -> Bool {
+            guard entry.historyIndex >= leafHistoryIndex else { return false }
+            guard case .noChange = entry.event,
+                  let noChangeHistoryIndex
+            else { return true }
+            return entry.historyIndex >= noChangeHistoryIndex
+        }
     }
 }
 

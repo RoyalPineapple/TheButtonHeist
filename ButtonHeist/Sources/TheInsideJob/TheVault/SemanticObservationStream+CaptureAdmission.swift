@@ -16,13 +16,13 @@ extension Observation.Stream {
     /// Starts an execution's no-change-only delivery before its first visible
     /// observation has a leaf deadline.
     internal func admitExecutionBoundary(
-        receive: @escaping @MainActor (Observation.Event) -> Void
+        receive: @escaping @MainActor (Observation.Publication.Entry) -> Void
     ) -> ExecutionAdmission? {
         let baseline = admittedObservation(scope: .visible, after: nil)
         let historyIndex = executionHistoryIndex(reusing: baseline)
         protectHistory(from: historyIndex)
         let demand = beginActiveObservationDemand()
-        let installation = subscribe(
+        let installation = subscribePositioned(
             scope: .visible,
             replayingAfter: historyIndex,
             delivery: .noChangesUntilActivated,
@@ -35,7 +35,7 @@ extension Observation.Stream {
             return nil
         }
         retained.lazy.filter {
-            if case .noChange = $0 { return true }
+            if case .noChange = $0.event { return true }
             return false
         }.forEach(receive)
         return .init(

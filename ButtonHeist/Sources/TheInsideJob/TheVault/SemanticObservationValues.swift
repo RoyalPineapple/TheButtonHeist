@@ -39,8 +39,35 @@ extension Observation {
 
     /// One admitted observation's current state and authored events.
     internal struct Publication: Sendable {
+        /// One retained semantic event paired with its absolute history
+        /// position. Event values remain position-free; a publication carries
+        /// the position from retained truth into live delivery.
+        internal struct Entry: Sendable, Equatable {
+            internal let historyIndex: Int
+            internal let event: Observation.Event
+        }
+
         internal let current: TheVault.State.Current
-        internal let events: [Event]
+        internal let entries: [Entry]
+
+        internal var events: [Event] {
+            entries.map(\.event)
+        }
+
+        internal init(
+            current: TheVault.State.Current,
+            events: [Event],
+            historyRange: Range<Int>
+        ) {
+            precondition(
+                events.count == historyRange.count,
+                "Every published observation event must have one history position"
+            )
+            self.current = current
+            entries = zip(historyRange, events).map { historyIndex, event in
+                Entry(historyIndex: historyIndex, event: event)
+            }
+        }
     }
 
     internal struct Admission: Sendable {

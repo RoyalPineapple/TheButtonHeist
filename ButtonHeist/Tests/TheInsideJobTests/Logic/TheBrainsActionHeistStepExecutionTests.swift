@@ -7,27 +7,30 @@ import XCTest
 @testable import TheInsideJob
 @_spi(ButtonHeistInternals) @testable import TheScore
 
-final class HeistMachineStepExecutionTests: XCTestCase {
+final class HeistExecutionStepExecutionTests: XCTestCase {
     func testBareActionUsesStandardPolicyBudgetAndOneTypedRequestPipeline() throws {
         let policy = ActionExpectationTimeoutPolicy(standard: 3, screenTransition: 12)
         let plan = try HeistPlan(body: [
             .action(ActionStep(command: .dismiss)),
         ])
-        var machine = try HeistExecution.Machine(
+        var execution = try HeistExecution(
             plan: plan,
             actionExpectationTimeoutPolicy: policy
         )
-        let observation = try XCTUnwrap(machine.start().singleBeginObservationRequest)
-
-        XCTAssertEqual(
-            observation.request.timeout,
-            .seconds(policy.standard.seconds)
+        let now = ContinuousClock.now
+        let observation = try XCTUnwrap(
+            execution.start(at: now, timeout: .default).singleBeginObservationRequest
         )
 
-        var driver = try HeistMachineTestDriver(
+        XCTAssertEqual(
+            observation.deadline.timeoutSeconds,
+            policy.standard.seconds
+        )
+
+        var driver = try HeistExecutionTestDriver(
             plan: plan,
             actionExpectationTimeoutPolicy: policy,
-            script: MachineRunScript(events: [.noChange])
+            script: ExecutionRunScript(events: [.noChange])
         )
 
         let completion = try driver.run()
@@ -36,7 +39,8 @@ final class HeistMachineStepExecutionTests: XCTestCase {
         XCTAssertEqual(driver.requests.map(\.kind), [
             .beginObservation,
             .dispatch,
-            .finishObservation,
+            .sampleObservationClose,
+            .commitObservationClose,
         ])
         XCTAssertEqual(Array(driver.history), [.noChange])
     }
@@ -48,24 +52,31 @@ final class HeistMachineStepExecutionTests: XCTestCase {
                 expectationPolicy: .waived(try ActionExpectationWaiver(validating: "fixture"))
             )),
         ])
-        var machine = try HeistExecution.Machine(plan: plan)
-        let observation = try XCTUnwrap(machine.start().singleBeginObservationRequest)
-        let dispatch = try XCTUnwrap(machine.advance(.observationBegan(
+        var execution = try HeistExecution(plan: plan)
+        let now = ContinuousClock.now
+        let observation = try XCTUnwrap(execution.start(at: now, timeout: .default).singleBeginObservationRequest)
+        let dispatch = try XCTUnwrap(execution.reduce(.observationBegan(
             observation.id,
-            baseline: nil
+            baseline: nil,
+            at: now
         )).singleDispatchRequest)
 
-        guard case .wait = machine.advance(.dispatchCompleted(
+        guard case .wait(let firstWait) = execution.reduce(.dispatchCompleted(
             dispatch.id,
-            .success(payload: .dismiss)
+            .success(payload: .dismiss),
+            at: now
         )),
-              case .wait = machine.advance(.event(.elementsChanged(
-                makeTestObservationSnapshot(labels: ["Unexpected"])
-              ))) else {
+              case .wait(let secondWait) = execution.reduce(.observation(
+                firstWait.id,
+                .elementsChanged(makeTestObservationSnapshot(labels: ["Unexpected"])),
+                at: now
+              )) else {
             return XCTFail("A waived action must remain active until its no-change witness")
         }
 
-        guard case .perform(.finishObservation) = machine.advance(.event(.noChange)) else {
+        guard case .perform(.sampleObservationClose) = execution.reduce(
+            .observation(secondWait.id, .noChange, at: now)
+        ) else {
             return XCTFail("A no-change witness must finish the waived action")
         }
     }
@@ -80,7 +91,7 @@ final class HeistMachineStepExecutionTests: XCTestCase {
             let plan = try HeistPlan(body: [
                 .action(ActionStep(command: .dismiss, expectationPolicy: policy)),
             ])
-            var driver = try HeistMachineTestDriver(plan: plan)
+            var driver = try HeistExecutionTestDriver(plan: plan)
 
             let completion = try driver.run()
             let action = try XCTUnwrap(completion.steps.first)
@@ -102,18 +113,28 @@ final class HeistMachineStepExecutionTests: XCTestCase {
                 expectationPolicy: .expect(ActionExpectation(predicate: .notification("Saved")))
             )),
         ])
-        var machine = try HeistExecution.Machine(plan: plan)
-        let observation = try XCTUnwrap(machine.start().singleBeginObservationRequest)
-        let dispatch = try XCTUnwrap(machine.advance(.observationBegan(
+        var execution = try HeistExecution(plan: plan)
+        let now = ContinuousClock.now
+        let observation = try XCTUnwrap(execution.start(at: now, timeout: .default).singleBeginObservationRequest)
+        let dispatch = try XCTUnwrap(execution.reduce(.observationBegan(
             observation.id,
-            baseline: nil
+            baseline: nil,
+            at: now
         )).singleDispatchRequest)
-        _ = machine.advance(.dispatchCompleted(dispatch.id, .success(payload: .dismiss)))
+        guard case .wait(let firstWait) = execution.reduce(
+            .dispatchCompleted(dispatch.id, .success(payload: .dismiss), at: now)
+        ) else {
+            return XCTFail("A dispatched action must await its authored expectation")
+        }
 
-        guard case .wait = machine.advance(.event(heistNotification("Saved"))) else {
+        guard case .wait(let terminalWait) = execution.reduce(
+            .observation(firstWait.id, heistNotification("Saved"), at: now)
+        ) else {
             return XCTFail("The authored expectation must still await terminal no-change")
         }
-        guard case .perform(.finishObservation) = machine.advance(.event(.noChange)) else {
+        guard case .perform(.sampleObservationClose) = execution.reduce(
+            .observation(terminalWait.id, .noChange, at: now)
+        ) else {
             return XCTFail("No-change after the authored expectation must finish the action")
         }
     }
@@ -142,79 +163,81 @@ final class HeistMachineStepExecutionTests: XCTestCase {
                     ))
                 )),
             ])
-            var machine = try HeistExecution.Machine(
+            var execution = try HeistExecution(
                 plan: plan,
                 actionExpectationTimeoutPolicy: policy
             )
+            let now = ContinuousClock.now
             let observation = try XCTUnwrap(
-                machine.start().singleBeginObservationRequest,
+                execution.start(at: now, timeout: .default).singleBeginObservationRequest,
                 expectationCase.name
             )
 
             XCTAssertEqual(
-                observation.request.timeout,
-                .seconds(expectationCase.expected.seconds),
+                observation.deadline.timeoutSeconds,
+                expectationCase.expected.seconds,
                 expectationCase.name
             )
         }
     }
 
-    func testStaleAndDuplicateDispatchCompletionsCannotAdvanceAction() throws {
+    func testStaleAndDuplicateDispatchCompletionsRetainTheActiveDecision() throws {
         let plan = try HeistPlan(body: [
             .action(ActionStep(command: .dismiss)),
         ])
-        var machine = try HeistExecution.Machine(plan: plan)
-        let observation = try XCTUnwrap(machine.start().singleBeginObservationRequest)
+        var execution = try HeistExecution(plan: plan)
+        let now = ContinuousClock.now
+        let observation = try XCTUnwrap(execution.start(at: now, timeout: .default).singleBeginObservationRequest)
         let dispatchRequest = try XCTUnwrap(
-            machine.advance(.observationBegan(
+            execution.reduce(.observationBegan(
                 observation.id,
-                baseline: nil
+                baseline: nil,
+                at: now
             )).singleDispatchRequest
         )
-        guard case .wait = machine.advance(.observationBegan(
+        guard case .perform(.dispatch(let retainedDispatchID, _, _)) = execution.reduce(.observationBegan(
             observation.id,
-            baseline: makeTestObservationSnapshot(labels: ["Late"])
-        )) else {
+            baseline: makeTestObservationSnapshot(labels: ["Late"]),
+            at: now
+        )), retainedDispatchID == dispatchRequest.id else {
             return XCTFail("A duplicate observation receipt must be ignored")
         }
 
-        guard case .wait = machine.advance(.dispatchCompleted(
+        guard case .perform(.dispatch(let retainedStaleDispatchID, _, _)) = execution.reduce(.dispatchCompleted(
             HeistExecution.RequestID(rawValue: dispatchRequest.id.rawValue + 1),
-            .success(payload: .dismiss)
-        )) else {
+            .success(payload: .dismiss),
+            at: now
+        )), retainedStaleDispatchID == dispatchRequest.id else {
             return XCTFail("A stale dispatch completion must be ignored")
         }
-        guard case .wait = machine.advance(.dispatchCompleted(
+        guard case .wait(let settledWait) = execution.reduce(.dispatchCompleted(
             dispatchRequest.id,
-            .success(payload: .dismiss)
+            .success(payload: .dismiss),
+            at: now
         )) else {
             return XCTFail("The admitted dispatch completion must await settlement")
         }
-        guard case .wait = machine.advance(.dispatchCompleted(
+        guard case .wait(let retainedWait) = execution.reduce(.dispatchCompleted(
             dispatchRequest.id,
-            .failure(.dismiss, message: "duplicate")
+            .failure(.dismiss, message: "duplicate"),
+            at: now
         )) else {
             return XCTFail("A duplicate dispatch completion must be ignored")
         }
-        guard case .action(let leaf) = machine.running.activeLeaf else {
-            return XCTFail("The admitted action must remain active")
-        }
-        guard case .observing(_, let dispatch) = leaf.phase else {
-            return XCTFail("The admitted dispatch must remain attached to observation")
-        }
-        XCTAssertNotEqual(leaf.phase.expectation?.result, .satisfied)
-        XCTAssertTrue(dispatch.success)
+        XCTAssertEqual(retainedWait, settledWait)
     }
 
     func testHostBaselineStartsActionWithoutSecondSnapshotRequest() throws {
         let plan = try HeistPlan(body: [
             .action(ActionStep(command: .dismiss)),
         ])
-        var machine = try HeistExecution.Machine(plan: plan)
-        let observation = try XCTUnwrap(machine.start().singleBeginObservationRequest)
-        let dispatch = try XCTUnwrap(machine.advance(.observationBegan(
+        var execution = try HeistExecution(plan: plan)
+        let now = ContinuousClock.now
+        let observation = try XCTUnwrap(execution.start(at: now, timeout: .default).singleBeginObservationRequest)
+        let dispatch = try XCTUnwrap(execution.reduce(.observationBegan(
             observation.id,
-            baseline: makeTestObservationSnapshot(labels: ["Before"])
+            baseline: makeTestObservationSnapshot(labels: ["Before"]),
+            at: now
         )).singleDispatchRequest)
 
         XCTAssertEqual(dispatch.id, observation.id)
@@ -225,9 +248,9 @@ final class HeistMachineStepExecutionTests: XCTestCase {
             .action(ActionStep(command: .dismiss)),
             .warn(WarnStep(message: "later")),
         ])
-        var driver = try HeistMachineTestDriver(
+        var driver = try HeistExecutionTestDriver(
             plan: plan,
-            script: MachineRunScript(
+            script: ExecutionRunScript(
                 events: [.noChange],
                 dispatchResults: [
                     .failure(.dismiss, message: "dismiss unavailable"),
@@ -242,26 +265,22 @@ final class HeistMachineStepExecutionTests: XCTestCase {
         XCTAssertEqual(completion.steps.first(where: { $0.status == .failed })?.path, completion.steps.first?.path)
     }
 
-    func testCancelledActionIsTerminalFailure() throws {
+    func testCancellationIsTerminalExecutionOutcome() throws {
         let plan = try HeistPlan(body: [
             .action(ActionStep(command: .dismiss)),
             .warn(WarnStep(message: "later")),
         ])
-        var driver = try HeistMachineTestDriver(
+        var driver = try HeistExecutionTestDriver(
             plan: plan,
-            script: MachineRunScript(
-                events: [.noChange, .noChange],
-                leafOutcomes: [.cancelled]
+            script: ExecutionRunScript(
+                waitDispositions: [.cancellationRequested]
             )
         )
 
         let completion = try driver.run()
 
-        XCTAssertEqual(completion.steps.map(\.status), [.failed, .skipped])
-        XCTAssertEqual(
-            completion.steps.first?.actionEvidence?.result?.outcome.failureKind,
-            .actionFailed
-        )
+        XCTAssertEqual(completion.outcome, .cancelled)
+        XCTAssertTrue(completion.steps.isEmpty)
     }
 
     func testWarnAndFailRetainCanonicalPathsAndStatuses() throws {
@@ -270,7 +289,7 @@ final class HeistMachineStepExecutionTests: XCTestCase {
             .fail(FailStep(message: "stop")),
             .warn(WarnStep(message: "unreachable")),
         ])
-        var driver = try HeistMachineTestDriver(plan: plan)
+        var driver = try HeistExecutionTestDriver(plan: plan)
 
         let completion = try driver.run()
 
@@ -287,12 +306,13 @@ final class HeistMachineStepExecutionTests: XCTestCase {
         let plan = try HeistPlan(body: [
             .fail(FailStep(message: "stop")),
         ])
-        var machine = try HeistExecution.Machine(
+        var execution = try HeistExecution(
             plan: plan,
             failureCaptureMode: .raw
         )
+        let now = ContinuousClock.now
 
-        guard case .perform(let request) = machine.start(),
+        guard case .perform(let request) = execution.start(at: now, timeout: .default),
               case let .captureFailureScreenshot(
                   id,
                   failedPath: failedPath,
@@ -307,10 +327,10 @@ final class HeistMachineStepExecutionTests: XCTestCase {
             width: 1,
             height: 1
         )
-        guard case .complete(let completion) = machine.advance(
-            .failureScreenshotCaptured(id, .captured(screenshot))
+        guard case .complete(let completion) = execution.reduce(
+            .failureScreenshotCaptured(id, .captured(screenshot), at: now)
         ) else {
-            return XCTFail("The screenshot completion must finish the same machine")
+            return XCTFail("The screenshot completion must finish the same execution")
         }
         XCTAssertEqual(completion.steps.map(\.kind), [.fail])
         XCTAssertEqual(completion.steps.map(\.status), [.failed])
@@ -319,33 +339,38 @@ final class HeistMachineStepExecutionTests: XCTestCase {
     }
 }
 
-private enum MachineRequestKind: Equatable {
+private enum ExecutionEffectKind: Equatable {
     case currentSnapshot
     case beginObservation
     case dispatch
     case explore
-    case finishObservation
+    case sampleObservationClose
+    case commitObservationClose
     case captureFailureScreenshot
+    case cancelObservation
 }
 
 struct BeginObservationRequest {
     let id: HeistExecution.RequestID
-    let request: HeistExecution.ObservationRequest
+    let scope: SemanticObservationScope
+    let deadline: SemanticObservationDeadline
 }
 
 struct DispatchRequest {
     let id: HeistExecution.RequestID
 }
 
-private extension HeistExecution.MainActorRequest {
-    var kind: MachineRequestKind {
+private extension HeistExecution.Effect {
+    var kind: ExecutionEffectKind {
         switch self {
         case .currentSnapshot: .currentSnapshot
         case .beginObservation: .beginObservation
         case .dispatch: .dispatch
         case .explore: .explore
-        case .finishObservation: .finishObservation
+        case .sampleObservationClose: .sampleObservationClose
+        case .commitObservationClose: .commitObservationClose
         case .captureFailureScreenshot: .captureFailureScreenshot
+        case .cancelObservation: .cancelObservation
         }
     }
 }
@@ -353,15 +378,15 @@ private extension HeistExecution.MainActorRequest {
 extension HeistExecution.Decision {
     var singleBeginObservationRequest: BeginObservationRequest? {
         guard case .perform(let action) = self,
-              case .beginObservation(let id, let request) = action else {
+              case .beginObservation(let id, let scope, let deadline) = action else {
             return nil
         }
-        return BeginObservationRequest(id: id, request: request)
+        return BeginObservationRequest(id: id, scope: scope, deadline: deadline)
     }
 
     var singleDispatchRequest: DispatchRequest? {
         guard case .perform(let request) = self,
-              case .dispatch(let id, _) = request else {
+              case .dispatch(let id, _, _) = request else {
             return nil
         }
         return DispatchRequest(id: id)

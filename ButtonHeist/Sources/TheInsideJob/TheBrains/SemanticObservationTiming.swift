@@ -27,6 +27,20 @@ struct SemanticObservationDeadline: Sendable, Equatable {
         elapsedSeconds(at: now) < timeoutSeconds
     }
 
+    /// The absolute instant at which this budget expires.
+    var expiration: RuntimeElapsed.Instant {
+        start.advanced(by: .saturatingSeconds(timeoutSeconds))
+    }
+
+    /// Chooses the original deadline whose absolute expiration is earlier.
+    ///
+    /// This intentionally returns one input unchanged instead of rebuilding a
+    /// deadline from the remaining interval: result projection still needs the
+    /// leaf's authored budget even when the enclosing heist expires first.
+    func earlier(than other: Self) -> Self {
+        expiration <= other.expiration ? self : other
+    }
+
     func remainingSeconds(at now: RuntimeElapsed.Instant = RuntimeElapsed.now) -> Double {
         max(0, timeoutSeconds - elapsedSeconds(at: now))
     }

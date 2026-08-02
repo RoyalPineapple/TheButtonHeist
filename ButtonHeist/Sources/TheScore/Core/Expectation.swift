@@ -15,6 +15,7 @@ private func multiset<Value: Hashable>(
 /// fresh expectation and feeding the recorded events in order.
 package struct Expectation: Sendable, Equatable {
     private let pending: [Step]
+    private let requiresSettlement: Bool
 
     package init(
         _ predicates: [ObservationPredicate] = [],
@@ -34,8 +35,12 @@ package struct Expectation: Sendable, Equatable {
         }
     }
 
-    private init(pending: [Step]) {
+    private init(
+        pending: [Step],
+        requiresSettlement: Bool = false
+    ) {
         self.pending = pending
+        self.requiresSettlement = requiresSettlement
     }
 
     /// Returns this expectation advanced by one newly published event.
@@ -47,8 +52,8 @@ package struct Expectation: Sendable, Equatable {
     }
 
     package func requiringNoChange() -> Expectation {
-        guard !pending.contains(where: \.isNoChange) else { return self }
-        return Expectation(pending: pending + [.current(.noChange)])
+        guard !requiresSettlement else { return self }
+        return Expectation(pending: pending, requiresSettlement: true)
     }
 
     package enum Result: Sendable, Equatable {
@@ -62,14 +67,15 @@ package struct Expectation: Sendable, Equatable {
     }
 
     package var result: Result {
-        guard let description = pending.first?.description else {
-            return .satisfied
+        if let description = pending.first?.description {
+            return .waiting(description)
         }
-        return .waiting(description)
+        return requiresSettlement ? .waiting(ObservationPredicate.noChange.description) : .satisfied
     }
 
     package var isWaitingOnlyForNoChange: Bool {
-        pending.count == 1 && pending[0].isNoChange
+        requiresSettlement && pending.isEmpty
+            || pending.count == 1 && pending[0].isNoChange
     }
 
     package var hasMatchedTemporalBaseline: Bool {
@@ -80,6 +86,7 @@ package struct Expectation: Sendable, Equatable {
     }
 
     private func evaluating(_ input: Input) -> Expectation {
+        let maySettle = requiresSettlement && pending.isEmpty
         var next: [Step] = []
         next.reserveCapacity(pending.count)
 
@@ -96,10 +103,11 @@ package struct Expectation: Sendable, Equatable {
                 if index + 1 < pending.count {
                     next.append(contentsOf: pending[(index + 1)...])
                 }
-                return Expectation(pending: next)
+                return Expectation(pending: next, requiresSettlement: requiresSettlement)
             }
         }
-        return Expectation(pending: next)
+        let requiresSettlement = requiresSettlement && !(maySettle && input.isNoChange)
+        return Expectation(pending: next, requiresSettlement: requiresSettlement)
     }
 }
 
@@ -119,6 +127,11 @@ private extension Expectation {
 
         var isScreenBoundary: Bool {
             guard case .event(.screenChanged) = self else { return false }
+            return true
+        }
+
+        var isNoChange: Bool {
+            guard case .event(.noChange) = self else { return false }
             return true
         }
     }

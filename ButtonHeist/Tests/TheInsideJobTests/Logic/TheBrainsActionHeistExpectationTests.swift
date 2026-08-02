@@ -7,7 +7,7 @@ import XCTest
 @testable import TheInsideJob
 @_spi(ButtonHeistInternals) @testable import TheScore
 
-final class HeistMachineExpectationTests: XCTestCase {
+final class HeistExecutionExpectationTests: XCTestCase {
     func testOneEventCannotSatisfyBothTemporalLegs() throws {
         let predicate = try AccessibilityPredicate.elementsChanged([
             .updated(.label("Total"), .value()),
@@ -44,7 +44,7 @@ final class HeistMachineExpectationTests: XCTestCase {
         XCTAssertEqual(live.result, .satisfied)
     }
 
-    func testActionExpectationConsumesHistoryAfterDispatch() throws {
+    func testActionRequiresTerminalNoChangeAfterAuthoredMatchWhenEarlyNoChangeArrivesFirst() throws {
         let missing = makeTestObservationSnapshot(labels: ["Submit"])
         let ready = makeTestObservationSnapshot(labels: ["Submit", "Ready"])
         let plan = try HeistPlan(body: [
@@ -58,9 +58,9 @@ final class HeistMachineExpectationTests: XCTestCase {
                 ))
             )),
         ])
-        var driver = try HeistMachineTestDriver(
+        var driver = try HeistExecutionTestDriver(
             plan: plan,
-            script: MachineRunScript(
+            script: ExecutionRunScript(
                 snapshots: [missing],
                 events: [
                     .noChange,
@@ -101,9 +101,9 @@ final class HeistMachineExpectationTests: XCTestCase {
                 ))
             )),
         ])
-        var driver = try HeistMachineTestDriver(
+        var driver = try HeistExecutionTestDriver(
             plan: plan,
-            script: MachineRunScript(
+            script: ExecutionRunScript(
                 snapshots: [initial],
                 events: [
                     .elementsChanged(processingStarted),
@@ -129,9 +129,9 @@ final class HeistMachineExpectationTests: XCTestCase {
                 timeout: try .seconds(1)
             )),
         ])
-        var driver = try HeistMachineTestDriver(
+        var driver = try HeistExecutionTestDriver(
             plan: plan,
-            script: MachineRunScript(events: [
+            script: ExecutionRunScript(events: [
                 heistNotification("Saving"),
                 heistNotification("Saved"),
                 .noChange,
@@ -147,7 +147,7 @@ final class HeistMachineExpectationTests: XCTestCase {
         )
     }
 
-    func testWaitRequiresNoChangeAfterMatchingEvent() throws {
+    func testWaitRequiresTerminalNoChangeAfterMatchingEventWhenEarlyNoChangeArrivesFirst() throws {
         let events: [Observation.Event] = [
             .noChange,
             heistNotification("Saved"),
@@ -159,9 +159,9 @@ final class HeistMachineExpectationTests: XCTestCase {
                 timeout: try .seconds(1)
             )),
         ])
-        var driver = try HeistMachineTestDriver(
+        var driver = try HeistExecutionTestDriver(
             plan: plan,
-            script: MachineRunScript(events: events)
+            script: ExecutionRunScript(events: events)
         )
 
         let completion = try driver.run()
@@ -170,109 +170,87 @@ final class HeistMachineExpectationTests: XCTestCase {
         XCTAssertEqual(Array(driver.history), events)
     }
 
-    func testSubstantiveEventDuringFinalCaptureReopensObservation() throws {
+    func testProvenCloseSampleRejectsStaleSampleAndSurvivesLateCommit() throws {
         let plan = try HeistPlan(body: [
             .wait(WaitStep(
                 predicate: .notification("Saved"),
                 timeout: try .seconds(1)
             )),
         ])
-        var machine = try HeistExecution.Machine(plan: plan)
-        guard case .perform(let beginRequest) = machine.start(),
-              case .beginObservation(let id, _) = beginRequest else {
-            return XCTFail("The wait must begin one observation")
-        }
-        let baseline = makeTestObservationSnapshot(labels: [])
-        guard case .wait = machine.advance(
-            .observationBegan(id, baseline: baseline)
+        var execution = try HeistExecution(plan: plan)
+        let now = ContinuousClock.now
+        guard case .perform(.beginObservation(let observationID, _, _)) = execution.start(
+            at: now,
+            timeout: .default
         ),
-              case .wait = machine.advance(.event(heistNotification("Saved"))),
-              case .perform(let firstFinish) = machine.advance(.event(.noChange)),
-              case .finishObservation(
-                let firstFinishID,
-                let firstObservationID,
-                _
-              ) = firstFinish else {
-            return XCTFail("A matched, unchanged wait must request final evidence")
+              case .wait(let matchedWait) = execution.reduce(
+                  .observationBegan(observationID, baseline: nil, at: now)
+              ),
+              case .wait(let settledWait) = execution.reduce(
+                  .observation(matchedWait.id, heistNotification("Saved"), at: now)
+              ),
+              case .perform(.sampleObservationClose(let firstCloseID, let firstObservationID, _, _, _)) = execution.reduce(
+                  .observation(settledWait.id, .noChange, at: now)
+              ), firstObservationID == observationID else {
+            return XCTFail("A settled wait must request its first close sample")
         }
-        XCTAssertEqual(firstObservationID, id)
-        XCTAssertTrue(
-            machine.running.activeLeaf?.admits(.request(firstFinishID)) == true
-        )
 
-        guard case .wait = machine.advance(
-            .event(.elementsChanged(makeTestObservationSnapshot(labels: ["Late Change"])))
-        ) else {
-            return XCTFail("A final-capture change must reopen observation")
-        }
-        guard case .wait(let activeLeaf)? = machine.running.activeLeaf else {
-            return XCTFail("The active leaf must remain an observation wait")
-        }
-        if case .finishingObservation = activeLeaf.phase {
-            XCTFail("A reopened observation must not retain a finishing request")
-        }
-        XCTAssertFalse(
-            machine.running.activeLeaf?.admits(.request(firstFinishID)) == true
+        let lateChange = Observation.Event.elementsChanged(
+            makeTestObservationSnapshot(labels: ["Late Change"])
         )
-
-        guard case .perform(let secondFinish) = machine.advance(
-            .event(.noChange)
-        ),
-              case .finishObservation(
-                let secondFinishID,
-                let secondObservationID,
-                _
-              ) = secondFinish else {
-            return XCTFail("Fresh stillness must request final evidence again")
-        }
-        XCTAssertEqual(secondObservationID, id)
-        XCTAssertNotEqual(secondFinishID, firstFinishID)
-        XCTAssertFalse(
-            machine.running.activeLeaf?.admits(.request(firstFinishID)) == true
+        let unprovenEvidence = Observation.Evidence(
+            baseline: nil,
+            events: [heistNotification("Saved"), lateChange],
+            current: makeTestObservationSnapshot(labels: ["Late Change"]),
+            coverage: .complete
         )
-        XCTAssertTrue(
-            machine.running.activeLeaf?.admits(.request(secondFinishID)) == true
-        )
-
-        let lateChange = makeTestObservationSnapshot(labels: ["Late Change"])
-        let events: [Observation.Event] = [
-            heistNotification("Saved"),
-            .noChange,
-            .elementsChanged(lateChange),
-            .noChange,
-        ]
-        var history = Observation.History(retentionLimit: events.count)
-        let recorded = history.record(events, protectedBy: nil)
-        let evidence = history.evidence(
-            in: recorded,
-            baseline: baseline,
-            current: lateChange
-        )
-        guard case .wait = machine.advance(.observationFinished(
-            source: .request(firstFinishID),
-            observationID: id,
-            evidence: evidence,
-            outcome: .completed,
-            timing: HeistResultFixture.expectationTiming
-        )) else {
-            return XCTFail("A superseded final-capture response must be ignored")
-        }
-        guard case .wait(let activeLeaf)? = machine.running.activeLeaf,
-              case .finishingObservation(let activeFinishID, _) = activeLeaf.phase else {
-            return XCTFail("The replacement final capture must remain active")
-        }
-        XCTAssertEqual(activeFinishID, secondFinishID)
-
-        guard case .complete(let completion) = machine.advance(
-            .observationFinished(
-                source: .deadline,
-                observationID: id,
-                evidence: evidence,
-                outcome: .completed,
-                timing: HeistResultFixture.expectationTiming
+        guard case .perform(.sampleObservationClose(let refreshedCloseID, let refreshedObservationID, _, _, _)) = execution.reduce(
+            .observationCloseSampled(
+                firstCloseID,
+                source: .request,
+                observationID: observationID,
+                evidence: unprovenEvidence,
+                close: .init(captureAvailable: true, viewportExit: nil, lastTreeChangeAt: nil),
+                at: now
             )
-        ) else {
-            return XCTFail("Satisfied final evidence at the deadline must complete")
+        ), refreshedObservationID == observationID,
+           refreshedCloseID != firstCloseID else {
+            return XCTFail("An unproven close sample must request fresh evidence")
+        }
+
+        guard case .perform(.sampleObservationClose(let retainedCloseID, _, _, _, _)) = execution.reduce(
+            .observationCloseSampled(
+                firstCloseID,
+                source: .request,
+                observationID: observationID,
+                evidence: unprovenEvidence,
+                close: .init(captureAvailable: true, viewportExit: nil, lastTreeChangeAt: nil),
+                at: now
+            )
+        ), retainedCloseID == refreshedCloseID else {
+            return XCTFail("A stale close sample must not replace the refreshed request")
+        }
+
+        let provenEvidence = Observation.Evidence(
+            baseline: nil,
+            events: [heistNotification("Saved"), lateChange, .noChange],
+            current: makeTestObservationSnapshot(labels: ["Late Change"]),
+            coverage: .complete
+        )
+        guard case .perform(.commitObservationClose(let commitID, let committedObservationID)) = execution.reduce(
+            .observationCloseSampled(
+                refreshedCloseID,
+                source: .request,
+                observationID: observationID,
+                evidence: provenEvidence,
+                close: .init(captureAvailable: true, viewportExit: nil, lastTreeChangeAt: nil),
+                at: now.advanced(by: .seconds(2))
+            )
+        ), committedObservationID == observationID,
+           case .complete(let completion) = execution.reduce(
+               .observationCloseCommitted(commitID, at: now.advanced(by: .seconds(3)))
+           ) else {
+            return XCTFail("The proven sample must remain complete while its close commit finishes")
         }
         XCTAssertEqual(completion.steps.first?.status, .passed)
     }
@@ -298,7 +276,7 @@ final class HeistMachineExpectationTests: XCTestCase {
     }
 }
 
-private extension HeistMachineExpectationTests {
+private extension HeistExecutionExpectationTests {
     func totalSnapshot(value: String) -> Observation.Snapshot {
         makeTestObservationSnapshot(nodes: [
             .parsedElement(
