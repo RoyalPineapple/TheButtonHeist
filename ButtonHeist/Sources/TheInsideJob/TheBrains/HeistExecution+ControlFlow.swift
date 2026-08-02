@@ -4,7 +4,7 @@ import Foundation
 import ThePlans
 @_spi(ButtonHeistInternals) import TheScore
 
-extension HeistExecution.Machine {
+extension HeistExecution {
     mutating func advanceTopContinuation() -> HeistExecution.Decision {
         guard let continuation = running.continuations.popLast() else {
             preconditionFailure("A running execution advances through an active continuation")
@@ -24,12 +24,12 @@ extension HeistExecution.Machine {
     }
 
     mutating func advanceControlFlow(
-        _ input: HeistExecution.Input
+        _ event: HeistExecution.Event
     ) -> HeistExecution.Decision {
-        guard case .currentSnapshot(let id, let snapshot) = input,
+        guard case .currentSnapshot(_, let snapshot, _) = event,
               let continuation = running.continuations.last,
-              continuation.awaitingSnapshotRequestID == id else {
-            return .wait
+              continuation.awaitingSnapshot else {
+            return wait()
         }
         running.continuations.removeLast()
         switch continuation {
@@ -67,7 +67,7 @@ extension HeistExecution.Machine {
         }
 
         guard let continuation = running.continuations.popLast() else {
-            return decision
+            return wait()
         }
 
         let result: HeistExecutionStepResult
@@ -96,7 +96,7 @@ extension HeistExecution.Machine {
             )
         case .sequence, .inline, .forEachString, .repeatUntil, .invocation, .waitElse:
             running.continuations.append(continuation)
-            return decision
+            return wait()
         }
         return resume(afterCompletedLeaf: result)
     }
@@ -110,9 +110,13 @@ extension HeistExecution.Machine {
         running.continuations.append(.conditional(.init(
             step: step,
             context: context,
-            progress: .awaitingSnapshot(id)
+            progress: .awaitingSnapshot
         )))
-        return .perform(.currentSnapshot(id, scope: scope))
+        return perform(.currentSnapshot(
+            id,
+            scope: scope,
+            deadline: running.executionDeadline
+        ))
     }
 
     private mutating func requestInitialSnapshot(
@@ -127,10 +131,14 @@ extension HeistExecution.Machine {
             resolvedMatching: matching,
             matchedCount: 0,
             iterationIndex: 0,
-            progress: .awaitingSnapshot(id, previousMatchHash: nil),
+            progress: .awaitingSnapshot(previousMatchHash: nil),
             iterations: .empty
         )))
-        return .perform(.currentSnapshot(id, scope: .discovery))
+        return perform(.currentSnapshot(
+            id,
+            scope: .discovery,
+            deadline: running.executionDeadline
+        ))
     }
 
     private mutating func requestSnapshot(
@@ -146,31 +154,28 @@ extension HeistExecution.Machine {
             resolvedMatching: continuation.resolvedMatching,
             matchedCount: continuation.matchedCount,
             iterationIndex: continuation.iterationIndex,
-            progress: .awaitingSnapshot(
-                id,
-                previousMatchHash: previousMatchHash
-            ),
+            progress: .awaitingSnapshot(previousMatchHash: previousMatchHash),
             iterations: continuation.iterations
         )))
-        return .perform(.currentSnapshot(id, scope: .discovery))
+        return perform(.currentSnapshot(
+            id,
+            scope: .discovery,
+            deadline: running.executionDeadline
+        ))
     }
 }
 
 private extension HeistExecution.Continuation {
-    var awaitingSnapshotRequestID: HeistExecution.RequestID? {
+    var awaitingSnapshot: Bool {
         switch self {
         case .conditional(let conditional):
-            guard case .awaitingSnapshot(let id) = conditional.progress else {
-                return nil
-            }
-            return id
+            if case .awaitingSnapshot = conditional.progress { return true }
+            return false
         case .forEachElement(let loop):
-            guard case .awaitingSnapshot(let id, _) = loop.progress else {
-                return nil
-            }
-            return id
+            if case .awaitingSnapshot = loop.progress { return true }
+            return false
         case .sequence, .inline, .forEachString, .repeatUntil, .invocation, .waitElse:
-            return nil
+            return false
         }
     }
 }
@@ -187,7 +192,7 @@ private func heistTimeoutFailure(contract: String) -> HeistFailureDetail {
 private extension HeistExecution.ForEachElementContinuation {
     var previousMatchHash: SemanticHash? {
         switch progress {
-        case .awaitingSnapshot(_, let previousMatchHash):
+        case .awaitingSnapshot(let previousMatchHash):
             previousMatchHash
         case .executing(_, let matchHash):
             matchHash
@@ -195,7 +200,7 @@ private extension HeistExecution.ForEachElementContinuation {
     }
 }
 
-private extension HeistExecution.Machine {
+private extension HeistExecution {
     mutating func advance(
         _ sequence: HeistExecution.SequenceContinuation
     ) -> HeistExecution.Decision {
@@ -351,7 +356,7 @@ private extension HeistExecution.Machine {
 
 }
 
-private extension HeistExecution.Machine {
+private extension HeistExecution {
     mutating func begin(
         conditional step: ConditionalStep,
         context: HeistExecution.StepContext
@@ -448,7 +453,7 @@ private extension HeistExecution.Machine {
     }
 }
 
-private extension HeistExecution.Machine {
+private extension HeistExecution {
     func conditionalSelection(
         _ step: ConditionalStep,
         environment: HeistExecutionEnvironment,
@@ -527,7 +532,7 @@ private extension Array where Element == ResolvedPresenceCondition {
     }
 }
 
-private extension HeistExecution.Machine {
+private extension HeistExecution {
     mutating func begin(
         forEachElement step: ForEachElementStep,
         context: HeistExecution.StepContext
@@ -559,8 +564,8 @@ private extension HeistExecution.Machine {
         _ loop: HeistExecution.ForEachElementContinuation,
         snapshot: Observation.Snapshot?
     ) -> HeistExecution.Decision {
-        guard case .awaitingSnapshot(_, let previousMatchHash) = loop.progress else {
-            return .wait
+        guard case .awaitingSnapshot(let previousMatchHash) = loop.progress else {
+            return wait()
         }
         guard let snapshot else {
             return resume(afterCompletedLeaf: forEachElementUnavailable(
@@ -747,7 +752,7 @@ private extension HeistExecution.Machine {
     }
 }
 
-private extension HeistExecution.Machine {
+private extension HeistExecution {
     func forEachElementIteration(
         _ loop: HeistExecution.ForEachElementContinuation,
         children: HeistExecutedChildren
@@ -973,7 +978,7 @@ private extension Hasher {
     }
 }
 
-private extension HeistExecution.Machine {
+private extension HeistExecution {
     mutating func begin(
         invocation step: HeistInvocationStep,
         context: HeistExecution.StepContext
@@ -1053,7 +1058,7 @@ private extension HeistExecution.Machine {
     }
 }
 
-private extension HeistExecution.Machine {
+private extension HeistExecution {
     struct InvocationResolution {
         let requestedPath: HeistInvocationPath
         let resolvedPath: HeistInvocationPath
@@ -1185,7 +1190,7 @@ private extension HeistExecution.Machine {
     }
 }
 
-private extension HeistExecution.Machine {
+private extension HeistExecution {
     mutating func advance(
         _ loop: HeistExecution.RepeatUntilContinuation
     ) -> HeistExecution.Decision {
@@ -1243,7 +1248,7 @@ private extension HeistExecution.Machine {
     }
 }
 
-extension HeistExecution.Machine {
+extension HeistExecution {
     mutating func resumeRepeatCheck(
         _ loop: HeistExecution.RepeatUntilContinuation,
         bodyChildren: HeistPassingChildren,
@@ -1505,7 +1510,7 @@ extension HeistExecution.Machine {
     }
 }
 
-private extension HeistExecution.Machine {
+private extension HeistExecution {
     func inlineResult(
         _ inline: HeistExecution.InlineContinuation,
         children: HeistExecutedChildren

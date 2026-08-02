@@ -4,7 +4,7 @@ import Foundation
 import ThePlans
 @_spi(ButtonHeistInternals) import TheScore
 
-extension HeistExecution.Machine {
+extension HeistExecution {
     internal mutating func begin(
         action step: ActionStep,
         path: HeistExecutionPath,
@@ -46,6 +46,8 @@ extension HeistExecution.Machine {
         }
 
         let id = nextID()
+        let deadline = observationDeadline(observationTimeout)
+        running.observationDeadline = deadline
         running.activeLeaf = .action(HeistExecution.ActionLeaf(
             id: id,
             step: step,
@@ -54,12 +56,10 @@ extension HeistExecution.Machine {
             path: path,
             phase: .beginningObservation
         ))
-        return .perform(.beginObservation(
+        return perform(.beginObservation(
             id,
-            HeistExecution.ObservationRequest(
-                scope: expectation.observationScope,
-                timeout: observationTimeout
-            )
+            scope: expectation.observationScope,
+            deadline: activeDeadline
         ))
     }
 }

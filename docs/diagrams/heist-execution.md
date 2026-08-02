@@ -1,8 +1,8 @@
 # Heist Execution
 
-One pure machine advances one complete heist. It owns authored control-flow
-progress and returns only the next effect request, a request to wait for another
-event, or the complete result.
+One pure `HeistExecution` reducer advances one complete heist. It owns the
+execution meaning. It returns only the next `Effect`, a `WaitRequest`, or the
+final `Completion`.
 
 **Illustrates:** [ARCHITECTURE.md](../ARCHITECTURE.md), [API.md](../API.md),
 [WIRE-PROTOCOL.md](../WIRE-PROTOCOL.md)
@@ -18,114 +18,112 @@ event, or the complete result.
 
 ```mermaid
 stateDiagram-v2
-    state "State.pending(Action.perform)" as Perform
-    state "State.pending(Action.wait)" as Wait
-    state "State.complete(Completion)" as Complete
+    state "ready" as Ready
+    state "running" as Running
+    state "awaiting failure screenshot" as FailureCapture
+    state "cancelling" as Cancelling
+    state "complete" as Complete
 
-    [*] --> Perform : first boundary effect
-    [*] --> Wait : no effect required yet
-    Perform --> Perform : typed request outcome
-    Perform --> Wait : observation armed
-    Wait --> Wait : nonmatching Event
-    Wait --> Perform : matching Event or boundary work
-    Perform --> Complete : final effect outcome
-    Wait --> Complete : final Event
-    Complete --> [*]
+    [*] --> Ready
+    Ready --> Running : start(at, timeout)
+    Running --> Running : reduce(Event)
+    Running --> FailureCapture : failed result needs capture
+    FailureCapture --> Complete : matching capture fact
+    Running --> Cancelling : cancellationRequested
+    Cancelling --> Complete : matching cleanup fact
+    Running --> Complete : final result
+    Complete --> Complete : any late fact
 ```
 
-The machine has no clock, UIKit object, observation subscription, or async task.
-Its private continuation stack says where nested control flow resumes after the
-active leaf. For the same plan and ordered inputs, it returns the same states.
+The private state stores control-flow progress, step results, expectation
+progress, stable request IDs, and the original leaf and whole-heist deadlines.
+It has no UIKit object, task, socket, closure, subscription, or notification
+lease. For the same plan, start time, and ordered facts, it returns the same
+decisions.
 
 ## Ordered Execution
 
 ```mermaid
 sequenceDiagram
     participant Caller
-    participant Host as MainActor effect host
-    participant Machine as HeistExecution.Machine
+    participant Host as HeistExecution.Host
+    participant Execution as HeistExecution
     participant Vault as TheVault.State
     participant UIKit
 
-    Caller->>Host: execute complete HeistPlan
-    Host->>Machine: start()
-    loop until State.complete
-        alt Action.perform(request)
-            Machine-->>Host: typed MainActor request
-            alt capture or observation boundary
-                Host->>Vault: capture / read current truth
-                Vault-->>Host: Snapshot, history position, or Evidence
-            else dispatch or viewport movement
-                Host->>UIKit: perform requested effect
-                UIKit-->>Host: typed outcome
+    Caller->>Host: execute(HeistPlan)
+    Host->>Execution: start(at, timeout)
+    loop until complete
+        alt perform(Effect)
+            Execution-->>Host: typed Effect with stable ID
+            alt snapshot or observation effect
+                Host->>Vault: capture or read current truth
+                Vault-->>Host: raw snapshot or evidence facts
+            else action or viewport effect
+                Host->>UIKit: perform requested work
+                UIKit-->>Host: raw outcome
             end
-            Host->>Machine: typed Input
-        else Action.wait
+            Host->>Execution: reduce(Event)
+        else wait(WaitRequest)
+            Execution-->>Host: stable ID + absolute deadline
             Vault-->>Host: next ordered Observation.Event
-            Host->>Machine: event
+            Host->>Execution: reduce(Event)
+        else complete(Completion)
+            Execution-->>Host: terminal Completion
         end
     end
-    Machine-->>Host: Completion
-    Host-->>Caller: admitted HeistResult
+    Host-->>Caller: HeistResult or CancellationError
 ```
 
-The host subscribes once for the heist. The Vault records each event before
-delivery, so live consumption and retained replay share one order. A leaf's
-observation boundary selects its baseline and history position atomically; no
-caller supplies either value.
+The host subscribes once for the heist. The Vault records each observation
+event before delivery, so live execution and retained evidence share one order.
+The host owns the live resources. It does not inspect reducer state.
 
-Subscription installation returns the live subscription and retained replay as
-one value. The host constructs its session before consuming replay, so neither
-the stream nor the host needs an installation callback phase or event buffer.
-Within a running session, observation is exactly idle, establishing its
-boundary, or active with the resources owned by that leaf.
+## Observation Close
+
+```mermaid
+flowchart LR
+    Reduce["HeistExecution<br/>reduce fact"] --> Sample["sampleObservationClose<br/>coverage, refresh, or next cycle"]
+    Sample --> Host["Host performs one capture<br/>and keeps sealed lease"]
+    Host --> Facts["raw evidence + viewport +<br/>capture and timing facts"]
+    Facts --> Decide{"proof complete or<br/>deadline rule complete?"}
+    Decide -- "no" --> Sample
+    Decide -- "yes" --> Commit["commitObservationClose"]
+    Commit --> Release["Host releases resource<br/>and returns matching fact"]
+    Release --> Result["Reducer constructs LeafOutcome<br/>and projects the result"]
+```
+
+The reducer chooses the sample mode. A requested close first admits causal
+coverage, then asks for deadline-bounded refreshes until the authored
+expectation and structural `noChange` are proved or time expires. A deadline
+close takes one next-cycle sample. It takes one more next-cycle sample only when
+the first sample proves the authored part but still needs stability. The host
+never evaluates an expectation or constructs `LeafOutcome`.
 
 ## Deadline Boundary
 
-The host owns two absolute policies and one scheduled task: the active leaf's
-deadline and the whole heist's deadline. After every crank it schedules the task
-for whichever absolute deadline comes first. The machine never receives a clock
-event and cannot manufacture timeout state.
+The reducer stores the original leaf and whole-heist deadlines. It gives each
+boundary effect and wait the earlier absolute target. It keeps both originals
+so leaf timeout, whole-heist timeout, and equal expiry stay distinct.
 
-When the task expires, the host:
+The host reads the clock and waits. It returns a stable-ID deadline fact. The
+reducer rejects stale facts, closes active observation evidence, and decides the
+timeout result. No deadline fact enters `Observation.History`.
 
-1. latches which deadline expired;
-2. cancels the active app interaction or viewport exploration;
-3. waits for cancellation cleanup and captures the final visible state;
-4. derives evidence from the leaf's protected history boundary; and
-5. returns a typed leaf- or heist-timeout outcome to the machine.
+## Failure and Cancellation
 
-A leaf timeout may select an authored wait `else` branch while the heist still
-has time. A heist timeout permits no further authored effect. The machine admits
-the final cancellation outcome, returns success only if that crank completed
-the heist, and otherwise aborts the remaining continuation stack into one
-structurally complete timed-out result.
+Failure screenshots are reducer finalization. If the failed result needs one,
+the reducer returns `captureFailureScreenshot`, admits the matching capture
+fact, and then completes.
 
-## Failure Evidence
+Cancellation has one typed path:
 
-Failure screenshots belong to machine finalization, not deadline handling.
-Whenever executed root children contain an `abortedAtPath` and screenshot
-evidence is enabled:
+1. The host returns `cancellationRequested`.
+2. The reducer returns `cancelObservation` once.
+3. The host releases the keyed observation resource and returns the matching
+   cleanup fact.
+4. The reducer completes with `.cancelled`.
+5. The host throws `CancellationError` and releases heist lifetime resources.
 
-1. the machine returns `perform([captureFailureScreenshot])`;
-2. the host captures the visible screen;
-3. the host returns `failureScreenshotCaptured`; and
-4. the same machine returns `complete`.
-
-This path applies equally to explicit failure, leaf or control-flow failure,
-runtime and viewport failure, and timeout. Failure to capture the screenshot is
-recorded as auxiliary evidence without changing the original aborted path.
-
-## Terminal Cleanup
-
-Completion or cancellation has one host cleanup path:
-
-1. stop accepting event callbacks;
-2. stop and join viewport work;
-3. cancel the active deadline;
-4. consume or release the notification scope;
-5. release observation demand and protected history; and
-6. resume the caller exactly once.
-
-No result projection performs another capture, discovery, predicate evaluation,
-or history reconstruction.
+No result projection performs another capture, discovery, predicate
+evaluation, or history reconstruction.

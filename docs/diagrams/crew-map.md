@@ -45,7 +45,7 @@ Crew members inside `TheInsideJob` (directories under `ButtonHeist/Sources/TheIn
 
 | Crew member | Responsibility |
 |---|---|
-| `TheBrains` | One complete-heist machine and MainActor effect host for control flow, actions, waits, and result accumulation |
+| `TheBrains` | One `HeistExecution` reducer plus its MainActor effect host for control flow, actions, waits, and result accumulation |
 | `TheGetaway` | Message encoding/decoding and transport routing |
 | `TheSafecracker` | Touch injection and text input dispatch |
 | `TheVault` | Accessibility capture, current Observation Snapshot, ordered History/Stream, latest live evidence, target resolution, heistId assignment |

@@ -125,13 +125,13 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
 /// Dispatch-path diagnostics for semantic `activate`.
 ///
 /// `Activate` refreshes semantic and live geometry first, then calls
-/// `accessibilityActivate()` once. A `true` result is treated as the semantic
-/// action completing, so activation-point tap dispatch is not sent. When the
-/// accessibility action declines, the runtime dispatches at the fresh activation
-/// point if needed.
+/// `accessibilityActivate()` once. A semantic or geometry change proves that
+/// call took effect even when UIKit returns `false`. The runtime sends an
+/// activation-point tap only after consecutive stable captures prove that the
+/// declined call had no observed effect.
 public enum ActivationTracePhase: Sendable, Equatable {
     case refreshFailed
-    case accessibilityActivate
+    case accessibilityActivate(axActivateReturned: Bool)
     case activationPointFallback(
         axActivateReturned: Bool?,
         tapActivationPoint: ScreenPoint,
@@ -149,8 +149,8 @@ public struct ActivationTrace: Codable, Sendable, Equatable {
         switch phase {
         case .refreshFailed:
             return nil
-        case .accessibilityActivate:
-            return true
+        case .accessibilityActivate(let axActivateReturned):
+            return axActivateReturned
         case .activationPointFallback(let axActivateReturned, _, _):
             return axActivateReturned
         }
@@ -226,16 +226,10 @@ public struct ActivationTrace: Codable, Sendable, Equatable {
                     debugDescription: "tapActivationPoint and tapActivationSucceeded require tapActivationDispatched"
                 ))
             }
-            switch axActivateReturned {
-            case .some(true):
-                self.init(.accessibilityActivate)
-            case .some(false):
-                throw DecodingError.dataCorrupted(.init(
-                    codingPath: container.codingPath,
-                    debugDescription: "axActivateReturned=false requires activation-point fallback fields"
-                ))
-            case nil:
-                self.init(.refreshFailed)
+            self = if let axActivateReturned {
+                Self(.accessibilityActivate(axActivateReturned: axActivateReturned))
+            } else {
+                Self(.refreshFailed)
             }
         }
     }

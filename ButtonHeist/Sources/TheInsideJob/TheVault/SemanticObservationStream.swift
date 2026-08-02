@@ -36,9 +36,9 @@ internal final class Stream {
 
     private struct EventReceiver {
         let subscriptionID: UInt64
-        let receive: @MainActor (Event) -> Void
+        let receive: @MainActor (Publication.Entry) -> Void
         var delivery: EventDelivery
-        var pending: [Event]
+        var pending: [Publication.Entry]
         var nextIndex: Int
         var isDelivering: Bool
     }
@@ -46,6 +46,11 @@ internal final class Stream {
     internal struct EventInstallation {
         internal let subscription: SemanticObservationSubscription
         internal let replay: Result<[Event], History.ReadError>
+    }
+
+    internal struct PositionedEventInstallation {
+        internal let subscription: SemanticObservationSubscription
+        internal let replay: Result<[Publication.Entry], History.ReadError>
     }
 
     internal struct ExecutionAdmission {
@@ -160,12 +165,39 @@ internal final class Stream {
         delivery: EventDelivery = .all,
         receive: @escaping @MainActor (Event) -> Void
     ) -> EventInstallation {
+        let installation = subscribePositioned(
+            scope: scope,
+            replayingAfter: historyIndex,
+            delivery: delivery,
+            receive: { receive($0.event) }
+        )
+        return .init(
+            subscription: installation.subscription,
+            replay: installation.replay.map { $0.map(\.event) }
+        )
+    }
+
+    /// Raises the scope and atomically installs positioned live delivery beside
+    /// replay. History owns positions; this stream carries them to consumers.
+    internal func subscribePositioned(
+        scope: SemanticObservationScope,
+        replayingAfter historyIndex: Int,
+        delivery: EventDelivery = .all,
+        receive: @escaping @MainActor (Publication.Entry) -> Void
+    ) -> PositionedEventInstallation {
         precondition(
             eventReceiver == nil,
             "Only one observation event consumer may be active"
         )
         let subscription = subscribe(scope: scope)
-        let replay = events(after: historyIndex)
+        let replay = events(after: historyIndex).map { events in
+            events.enumerated().map { offset, event in
+                Publication.Entry(
+                    historyIndex: historyIndex + offset,
+                    event: event
+                )
+            }
+        }
         eventReceiver = EventReceiver(
             subscriptionID: subscription.id,
             receive: receive,
@@ -174,7 +206,7 @@ internal final class Stream {
             nextIndex: 0,
             isDelivering: false
         )
-        return EventInstallation(subscription: subscription, replay: replay)
+        return PositionedEventInstallation(subscription: subscription, replay: replay)
     }
 
     internal func removeSubscription(_ id: UInt64) {
@@ -187,9 +219,9 @@ internal final class Stream {
 
     func publish(_ publication: Publication) {
         guard var receiver = eventReceiver else { return }
-        receiver.pending.append(contentsOf: publication.events.filter {
+        receiver.pending.append(contentsOf: publication.entries.filter {
             if receiver.delivery == .all { return true }
-            if case .noChange = $0 { return true }
+            if case .noChange = $0.event { return true }
             return false
         })
         eventReceiver = receiver

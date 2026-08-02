@@ -7,7 +7,7 @@ import XCTest
 @testable import TheInsideJob
 @_spi(ButtonHeistInternals) @testable import TheScore
 
-final class HeistMachineControlFlowTests: XCTestCase {
+final class HeistExecutionControlFlowTests: XCTestCase {
     func testConditionalRetainsSelectionActualAndSnapshotSummary() throws {
         let snapshot = makeTestObservationSnapshot(labels: ["Home", "Login"])
         let plan = try HeistPlan(body: [
@@ -22,9 +22,9 @@ final class HeistMachineControlFlowTests: XCTestCase {
                 ),
             ])),
         ])
-        var driver = try HeistMachineTestDriver(
+        var driver = try HeistExecutionTestDriver(
             plan: plan,
-            script: MachineRunScript(snapshots: [snapshot])
+            script: ExecutionRunScript(snapshots: [snapshot])
         )
 
         let completion = try driver.run()
@@ -50,9 +50,9 @@ final class HeistMachineControlFlowTests: XCTestCase {
                 elseBody: [.warn(WarnStep(message: "fallback"))]
             )),
         ])
-        var driver = try HeistMachineTestDriver(
+        var driver = try HeistExecutionTestDriver(
             plan: plan,
-            script: MachineRunScript(snapshots: [makeTestObservationSnapshot(labels: ["Settings"])])
+            script: ExecutionRunScript(snapshots: [makeTestObservationSnapshot(labels: ["Settings"])])
         )
 
         let completion = try driver.run()
@@ -67,9 +67,9 @@ final class HeistMachineControlFlowTests: XCTestCase {
 
     func testWaitElseRunsOnlyForLeafTimeout() throws {
         let plan = try waitWithElsePlan()
-        var driver = try HeistMachineTestDriver(
+        var driver = try HeistExecutionTestDriver(
             plan: plan,
-            script: MachineRunScript(leafOutcomes: [.timedOut])
+            script: ExecutionRunScript(waitDispositions: [.deadlineElapsed])
         )
 
         let completion = try driver.run()
@@ -81,15 +81,18 @@ final class HeistMachineControlFlowTests: XCTestCase {
         XCTAssertEqual(completion.steps.last?.status, .passed)
     }
 
-    func testWaitElseDoesNotRunForHeistTimeoutCancellationOrUnavailableEvidence() throws {
-        for outcome in [
-            HeistExecution.LeafOutcome.heistTimedOut,
-            .cancelled,
-            .unavailable,
-        ] {
-            var driver = try HeistMachineTestDriver(
+    func testWaitElseDoesNotRunForHeistTimeoutOrUnavailableEvidence() throws {
+        let scripts = [
+            ExecutionRunScript(
+                executionTimeout: try .milliseconds(0.5),
+                waitDispositions: [.deadlineElapsed]
+            ),
+            ExecutionRunScript(waitDispositions: [.captureUnavailable]),
+        ]
+        for script in scripts {
+            var driver = try HeistExecutionTestDriver(
                 plan: waitWithElsePlan(),
-                script: MachineRunScript(leafOutcomes: [outcome])
+                script: script
             )
 
             let completion = try driver.run()
@@ -100,6 +103,18 @@ final class HeistMachineControlFlowTests: XCTestCase {
             XCTAssertEqual(completion.steps.last?.kind, .warn)
             XCTAssertEqual(completion.steps.last?.status, .skipped)
         }
+    }
+
+    func testWaitElseDoesNotRunAfterCancellation() throws {
+        var driver = try HeistExecutionTestDriver(
+            plan: waitWithElsePlan(),
+            script: ExecutionRunScript(waitDispositions: [.cancellationRequested])
+        )
+
+        let completion = try driver.run()
+
+        XCTAssertEqual(completion.outcome, .cancelled)
+        XCTAssertTrue(completion.steps.isEmpty)
     }
 
     func testFailedChildSkipsEveryLaterSibling() throws {
@@ -115,9 +130,9 @@ final class HeistMachineControlFlowTests: XCTestCase {
             ])),
             .warn(WarnStep(message: "root later")),
         ])
-        var driver = try HeistMachineTestDriver(
+        var driver = try HeistExecutionTestDriver(
             plan: plan,
-            script: MachineRunScript(snapshots: [makeTestObservationSnapshot(labels: ["Home"])])
+            script: ExecutionRunScript(snapshots: [makeTestObservationSnapshot(labels: ["Home"])])
         )
 
         let completion = try driver.run()
@@ -137,9 +152,9 @@ final class HeistMachineControlFlowTests: XCTestCase {
                 body: [.warn(WarnStep(message: "attempt"))]
             )),
         ])
-        var driver = try HeistMachineTestDriver(
+        var driver = try HeistExecutionTestDriver(
             plan: plan,
-            script: MachineRunScript(
+            script: ExecutionRunScript(
                 snapshots: [makeTestObservationSnapshot(labels: ["Done"])],
                 events: [.noChange]
             )
@@ -163,9 +178,9 @@ final class HeistMachineControlFlowTests: XCTestCase {
                 body: [.action(ActionStep(command: .dismiss))]
             )),
         ])
-        var driver = try HeistMachineTestDriver(
+        var driver = try HeistExecutionTestDriver(
             plan: plan,
-            script: MachineRunScript(
+            script: ExecutionRunScript(
                 snapshots: [
                     makeTestObservationSnapshot(labels: []),
                     makeTestObservationSnapshot(labels: ["Done"]),
@@ -192,9 +207,9 @@ final class HeistMachineControlFlowTests: XCTestCase {
                 body: [.warn(WarnStep(message: "attempt"))]
             )),
         ])
-        var driver = try HeistMachineTestDriver(
+        var driver = try HeistExecutionTestDriver(
             plan: plan,
-            script: MachineRunScript(
+            script: ExecutionRunScript(
                 snapshots: [makeTestObservationSnapshot(labels: [])],
                 events: [
                     .elementsChanged(makeTestObservationSnapshot(labels: ["Done"])),
@@ -212,7 +227,7 @@ final class HeistMachineControlFlowTests: XCTestCase {
     }
 }
 
-private extension HeistMachineControlFlowTests {
+private extension HeistExecutionControlFlowTests {
     func waitWithElsePlan() throws -> HeistPlan {
         try HeistPlan(body: [
             .wait(WaitStep(

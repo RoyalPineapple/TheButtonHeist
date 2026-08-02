@@ -303,7 +303,7 @@ extension TheVault {
             } catch {
                 return .failure(.liveCaptureReattachmentFailed)
             }
-            _ = next.history.record(
+            let historyRange = next.history.record(
                 events,
                 protectedBy: next.protectedHistoryIndex
             )
@@ -330,7 +330,8 @@ extension TheVault {
             self = next
             return .success(Observation.Publication(
                 current: current,
-                events: events
+                events: events,
+                historyRange: historyRange
             ))
         }
 

@@ -234,7 +234,7 @@ extension HeistExecution.ResultProjector {
                 timing: timing
             )
         } catch {
-            preconditionFailure("Machine retained invalid predicate bindings: \(error)")
+            preconditionFailure("Reducer retained invalid predicate bindings: \(error)")
         }
     }
 
@@ -255,7 +255,7 @@ extension HeistExecution.ResultProjector {
                 timing: .init(budgetMs: 0, elapsedMs: 0, lastTreeChangeElapsedMs: nil)
             )
         } catch {
-            preconditionFailure("Machine retained invalid predicate bindings: \(error)")
+            preconditionFailure("Reducer retained invalid predicate bindings: \(error)")
         }
     }
 

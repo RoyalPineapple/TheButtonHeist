@@ -250,9 +250,10 @@ replacement emits departure `elementsChanged`, `screenChanged`, then arrival
 no semantic or geometry change within the comparison tolerance.
 
 `WaitFor`, `.expect(...)`, and `.until(...)` consume those events in order
-through the same heist machine. The host gives each active leaf one absolute
+through the same heist reducer. The reducer gives each active leaf one absolute
 deadline covering baseline acquisition, reveal or dispatch, predicate
-evaluation, and trailing `noChange`; there is no separate readiness allowance.
+evaluation, and trailing `noChange`. It projects the earlier leaf or whole-heist
+target to the host; there is no separate readiness allowance.
 See [Execution and Predicate Pipeline](ARCHITECTURE.md#execution-and-predicate-pipeline).
 
 Actions can refresh off-screen state by exploring scroll views before or after

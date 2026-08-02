@@ -8,6 +8,29 @@ import ThePlans
 @MainActor
 final class DogfoodRuntimeContractTests: XCTestCase {
 
+    func testBackActivationCompletesWithoutDoubleDispatch() async throws {
+        let heist = try await runHeist("DogfoodRefusedBackActivation") {
+            try DogfoodHome.openScreen("Controls Demo")
+            try ControlsDemoScreen.openScreen("Text Input")
+            try DemoNavigation.backTo("Controls Demo")
+        }
+        let backAction = try XCTUnwrap(
+            heist.result.outputNodes
+                .compactMap { $0.actionEvidence?.result }
+                .last {
+                    $0.subjectEvidence?.element.semantics.assertable.label == "Controls Demo"
+                }
+        )
+        let trace = try XCTUnwrap(backAction.activationTrace)
+
+        let axActivateReturned = try XCTUnwrap(trace.axActivateReturned)
+        XCTAssertFalse(axActivateReturned && trace.tapActivationDispatched)
+        if trace.tapActivationDispatched {
+            XCTAssertFalse(axActivateReturned)
+            XCTAssertEqual(trace.tapActivationSucceeded, true)
+        }
+    }
+
     func testPublicRootArgumentAndPrebuiltPlanDriveDemoApp() async throws {
         try await runHeist("DogfoodFillProfileName", argument: "Grace Hopper") { name in
             try DogfoodHome.openScreen("Controls Demo")

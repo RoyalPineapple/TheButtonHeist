@@ -7,14 +7,14 @@ import XCTest
 @testable import TheInsideJob
 @_spi(ButtonHeistInternals) @testable import TheScore
 
-final class HeistMachineForEachTests: XCTestCase {
+final class HeistExecutionForEachTests: XCTestCase {
     func testForEachElementWithNoMatchesCompletesWithoutIterations() throws {
         let plan = try elementLoopPlan(body: [
             .warn(WarnStep(message: "unreachable")),
         ])
-        var driver = try HeistMachineTestDriver(
+        var driver = try HeistExecutionTestDriver(
             plan: plan,
-            script: MachineRunScript(snapshots: [makeTestObservationSnapshot(labels: ["Keep"])])
+            script: ExecutionRunScript(snapshots: [makeTestObservationSnapshot(labels: ["Keep"])])
         )
 
         let completion = try driver.run()
@@ -32,25 +32,28 @@ final class HeistMachineForEachTests: XCTestCase {
         let plan = try elementLoopPlan(body: [
             .warn(WarnStep(message: "iteration")),
         ])
-        var machine = try HeistExecution.Machine(plan: plan)
-        let firstRequest = try XCTUnwrap(machine.start().singleSnapshotRequest)
+        var execution = try HeistExecution(plan: plan)
+        let now = ContinuousClock.now
+        let firstRequest = try XCTUnwrap(execution.start(at: now, timeout: .default).singleSnapshotRequest)
 
-        guard case .wait = machine.advance(.currentSnapshot(
+        guard case .perform(.currentSnapshot(let retainedID, _, _)) = execution.reduce(.currentSnapshot(
             HeistExecution.RequestID(rawValue: 0),
-            snapshot
-        )) else {
+            snapshot,
+            at: now
+        )), retainedID == firstRequest.id else {
             return XCTFail("Target ordinal zero must not satisfy a snapshot request")
         }
 
         let secondRequest = try XCTUnwrap(
-            machine.advance(.currentSnapshot(firstRequest.id, snapshot))
+            execution.reduce(.currentSnapshot(firstRequest.id, snapshot, at: now))
                 .singleSnapshotRequest
         )
         XCTAssertNotEqual(secondRequest.id, firstRequest.id)
 
-        guard case .complete(let completion) = machine.advance(.currentSnapshot(
+        guard case .complete(let completion) = execution.reduce(.currentSnapshot(
             secondRequest.id,
-            snapshot
+            snapshot,
+            at: now
         )) else {
             return XCTFail("The second typed snapshot request must complete the loop")
         }
@@ -71,9 +74,9 @@ final class HeistMachineForEachTests: XCTestCase {
             )),
             .warn(WarnStep(message: "later")),
         ])
-        var driver = try HeistMachineTestDriver(
+        var driver = try HeistExecutionTestDriver(
             plan: plan,
-            script: MachineRunScript(snapshots: [
+            script: ExecutionRunScript(snapshots: [
                 makeTestObservationSnapshot(labels: ["Delete", "Delete"]),
             ])
         )
@@ -96,7 +99,7 @@ final class HeistMachineForEachTests: XCTestCase {
                 body: [.warn(WarnStep(message: "visited"))]
             )),
         ])
-        var driver = try HeistMachineTestDriver(plan: plan)
+        var driver = try HeistExecutionTestDriver(plan: plan)
 
         let completion = try driver.run()
         let loop = try XCTUnwrap(completion.steps.first)
@@ -126,7 +129,7 @@ final class HeistMachineForEachTests: XCTestCase {
             )),
             .warn(WarnStep(message: "root later")),
         ])
-        var driver = try HeistMachineTestDriver(plan: plan)
+        var driver = try HeistExecutionTestDriver(plan: plan)
 
         let completion = try driver.run()
         let loop = try XCTUnwrap(completion.steps.first)
@@ -138,7 +141,7 @@ final class HeistMachineForEachTests: XCTestCase {
     }
 }
 
-private extension HeistMachineForEachTests {
+private extension HeistExecutionForEachTests {
     func elementLoopPlan(body: [HeistStep]) throws -> HeistPlan {
         try HeistPlan(body: [
             .forEachElement(try ForEachElementStep(
@@ -151,9 +154,9 @@ private extension HeistMachineForEachTests {
     }
 }
 
-private extension HeistExecution.MainActorRequest {
+private extension HeistExecution.Effect {
     var snapshotScope: SemanticObservationScope? {
-        guard case .currentSnapshot(_, let scope) = self else { return nil }
+        guard case .currentSnapshot(_, let scope, _) = self else { return nil }
         return scope
     }
 }
