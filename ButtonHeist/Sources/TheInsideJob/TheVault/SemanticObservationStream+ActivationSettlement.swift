@@ -7,7 +7,7 @@ import TheScore
 @MainActor
 extension Observation.Stream {
     internal struct RefusedActivationBoundary: Sendable, Equatable {
-        internal let snapshot: Observation.Snapshot?
+        internal let snapshot: Observation.Snapshot
         internal let historyIndex: Int
     }
 
@@ -25,49 +25,55 @@ extension Observation.Stream {
         }
 
         private static let requiredStableCaptures = 2
-        private var previous: Observation.Snapshot?
+        private let boundary: Observation.Snapshot
+        private var candidate: Observation.Snapshot?
         private var stableCaptureCount = 0
 
         internal init(boundary: RefusedActivationBoundary) {
-            previous = boundary.snapshot
+            self.boundary = boundary.snapshot
         }
 
         @MainActor
         internal mutating func reduce(snapshot: Observation.Snapshot) -> Reduction {
-            guard let previous,
-                  previous.hasSameObservedState(
-                      as: snapshot,
-                      geometryTolerance: CoarseFrameComparison.currentGeometryTolerance
-                  )
-            else {
-                return .effectObserved
+            if let candidate,
+               candidate.hasSameObservedState(
+                   as: snapshot,
+                   geometryTolerance: CoarseFrameComparison.currentGeometryTolerance
+               ) {
+                stableCaptureCount += 1
+            } else {
+                candidate = snapshot
+                stableCaptureCount = 1
             }
-            self.previous = snapshot
-            stableCaptureCount += 1
-            return stableCaptureCount >= Self.requiredStableCaptures
+            guard stableCaptureCount >= Self.requiredStableCaptures else { return .awaiting }
+            return boundary.hasSameObservedState(
+                as: snapshot,
+                geometryTolerance: CoarseFrameComparison.currentGeometryTolerance
+            )
                 ? .quiescent
-                : .awaiting
+                : .effectObserved
         }
     }
 
     /// Captures the last admitted state immediately before accessibility
-    /// activation. Later samples are judged only against this boundary.
-    internal func refusedActivationBoundary() -> RefusedActivationBoundary {
-        RefusedActivationBoundary(
-            snapshot: vault.state.currentSnapshot,
+    /// activation. Later samples need two post-action captures before being
+    /// compared with this boundary.
+    internal func refusedActivationBoundary() -> RefusedActivationBoundary? {
+        guard let snapshot = vault.state.currentSnapshot else { return nil }
+        return RefusedActivationBoundary(
+            snapshot: snapshot,
             historyIndex: vault.state.history.endIndex
         )
     }
 
-    /// Waits for observed evidence after a refused accessibility activation. A
-    /// semantic or geometry change suppresses activation-point dispatch. A
-    /// notification alone does not. Dispatch is allowed only after the named
-    /// two consecutive captures observe the same state.
+    /// Waits for observed evidence after a refused accessibility activation.
+    /// Two post-action captures must agree before their state is compared with
+    /// the boundary: a stable semantic or geometry change suppresses
+    /// activation-point dispatch, while a notification alone does not.
     internal func settleRefusedActivation(
         after boundary: RefusedActivationBoundary,
         deadline: SemanticObservationDeadline
     ) async -> RefusedActivationSettlement {
-        guard boundary.snapshot != nil else { return .unavailable }
         var historyIndex = boundary.historyIndex
         var quiescence = RefusedActivationQuiescence(boundary: boundary)
 

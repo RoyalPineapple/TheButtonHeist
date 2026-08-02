@@ -37,9 +37,7 @@ package enum DemoNavigation {
         let destinationTitle = ElementPredicate(label: .exact(title), traits: [.header])
 
         Activate(.predicate(ElementPredicate(label: .exact(title), traits: [.backButton])))
-            .withoutExpectation("Back navigation is proven by the destination title wait")
-
-        WaitFor(.exists(.predicate(destinationTitle)), timeout: 8)
+            .expect(.exists(.predicate(destinationTitle)), timeout: 8)
     }
 
     private static let backOneLevelIfNeeded = HeistDef<Void>("DemoNavigation.backOneLevelIfNeeded") {

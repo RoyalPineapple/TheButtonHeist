@@ -7,34 +7,12 @@ import XCTest
 
 @MainActor
 final class RefusedActivationSettlementTests: SemanticObservationStreamTestCase {
-    func testOneStableCaptureCannotHideLaterSemanticReplacement() async {
-        let stream = vault.semanticObservationStream
-        _ = await stream.commitVisibleObservationForTesting(
-            observation(label: "Before", heistId: "screen")
-        )
-        let boundary = stream.refusedActivationBoundary()
-        var quiescence = Observation.Stream.RefusedActivationQuiescence(boundary: boundary)
-
-        let firstStable = await stream.commitVisibleObservationForTesting(
-            observation(label: "Before", heistId: "screen")
-        )
-        let firstReduction = quiescence.reduce(snapshot: firstStable.current.snapshot)
-        let replacement = await stream.commitVisibleObservationForTesting(
-            observation(label: "After", heistId: "screen")
-        )
-        let replacementReduction = quiescence.reduce(snapshot: replacement.current.snapshot)
-
-        XCTAssertEqual(firstStable.events, [.noChange])
-        XCTAssertEqual(firstReduction, .awaiting)
-        XCTAssertEqual(replacementReduction, .effectObserved)
-    }
-
-    func testRequiredStableCapturesProveActivationQuiescence() async {
+    func testTwoUnchangedPostActionCapturesSettleQuiescent() async throws {
         let stream = vault.semanticObservationStream
         _ = await stream.commitVisibleObservationForTesting(
             observation(label: "Still", heistId: "screen")
         )
-        let boundary = stream.refusedActivationBoundary()
+        let boundary = try XCTUnwrap(stream.refusedActivationBoundary())
         var quiescence = Observation.Stream.RefusedActivationQuiescence(boundary: boundary)
 
         let first = await stream.commitVisibleObservationForTesting(
@@ -48,12 +26,54 @@ final class RefusedActivationSettlementTests: SemanticObservationStreamTestCase 
         XCTAssertEqual(quiescence.reduce(snapshot: second.current.snapshot), .quiescent)
     }
 
-    func testAmbientNotificationsDoNotProveAnActivationEffect() async {
+    func testChangedCandidateRequiresTwoPostActionCapturesToObserveEffect() async throws {
+        let stream = vault.semanticObservationStream
+        _ = await stream.commitVisibleObservationForTesting(
+            observation(label: "Before", heistId: "screen")
+        )
+        let boundary = try XCTUnwrap(stream.refusedActivationBoundary())
+        var quiescence = Observation.Stream.RefusedActivationQuiescence(boundary: boundary)
+
+        let first = await stream.commitVisibleObservationForTesting(
+            observation(label: "After", heistId: "screen")
+        )
+        let second = await stream.commitVisibleObservationForTesting(
+            observation(label: "After", heistId: "screen")
+        )
+
+        XCTAssertEqual(quiescence.reduce(snapshot: first.current.snapshot), .awaiting)
+        XCTAssertEqual(quiescence.reduce(snapshot: second.current.snapshot), .effectObserved)
+    }
+
+    func testTransientChangedSnapshotFollowedByOriginalStateSettlesQuiescent() async throws {
+        let stream = vault.semanticObservationStream
+        _ = await stream.commitVisibleObservationForTesting(
+            observation(label: "Before", heistId: "screen")
+        )
+        let boundary = try XCTUnwrap(stream.refusedActivationBoundary())
+        var quiescence = Observation.Stream.RefusedActivationQuiescence(boundary: boundary)
+
+        let transient = await stream.commitVisibleObservationForTesting(
+            observation(label: "After", heistId: "screen")
+        )
+        let firstOriginal = await stream.commitVisibleObservationForTesting(
+            observation(label: "Before", heistId: "screen")
+        )
+        let secondOriginal = await stream.commitVisibleObservationForTesting(
+            observation(label: "Before", heistId: "screen")
+        )
+
+        XCTAssertEqual(quiescence.reduce(snapshot: transient.current.snapshot), .awaiting)
+        XCTAssertEqual(quiescence.reduce(snapshot: firstOriginal.current.snapshot), .awaiting)
+        XCTAssertEqual(quiescence.reduce(snapshot: secondOriginal.current.snapshot), .quiescent)
+    }
+
+    func testAmbientNotificationSnapshotsSettleQuiescentWhenStateIsUnchanged() async throws {
         let stream = vault.semanticObservationStream
         _ = await stream.commitVisibleObservationForTesting(
             observation(label: "Still", heistId: "screen")
         )
-        let boundary = stream.refusedActivationBoundary()
+        let boundary = try XCTUnwrap(stream.refusedActivationBoundary())
         var quiescence = Observation.Stream.RefusedActivationQuiescence(boundary: boundary)
         let firstStable = await stream.commitVisibleObservationForTesting(
             observation(label: "Still", heistId: "screen"),
