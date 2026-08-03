@@ -20,6 +20,10 @@ extension TheBrainsActionTests {
         textField.accessibilityLabel = "Message"
         textField.accessibilityIdentifier = "message_field"
         rootView.addSubview(textField)
+        let touchReceiver = DeterministicTouchReceiver(frame: textField.frame) {
+            _ = textField.becomeFirstResponder()
+        }
+        rootView.addSubview(touchReceiver)
 
         let window = try installModalWindow(rootView: rootView)
         defer {
@@ -51,6 +55,7 @@ extension TheBrainsActionTests {
 
         XCTAssertTrue(result.outcome.isSuccess, result.message ?? "type_text failed")
         XCTAssertEqual(textField.accessibilityActivationCount, 1)
+        XCTAssertEqual(touchReceiver.completedTouchCount, 1)
         XCTAssertEqual(textField.text, "hello")
         XCTAssertLessThan(
             try XCTUnwrap(bridgeReadCountAtFocus),

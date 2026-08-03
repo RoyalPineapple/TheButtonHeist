@@ -314,6 +314,7 @@ extension ElementInflationProductTests {
             ActionSubjectResolution(origin: .visible)
         )
         XCTAssertTrue(fixture.target.isFirstResponder)
+        XCTAssertEqual(fixture.touchReceiver.completedTouchCount, 1)
         XCTAssertEqual(fixture.scrollView.revealRequestCount, 0)
         XCTAssertEqual(result.activationTrace?.axActivateReturned, false)
         XCTAssertEqual(result.activationTrace?.tapActivationDispatched, true)
@@ -493,7 +494,7 @@ extension ElementInflationProductTests {
     private func installVisibleTextInputFixture(
         identifier: String,
         label: String
-    ) throws -> TextInputRevealFixture {
+    ) throws -> VisibleTextInputFixture {
         let viewController = UIViewController()
         viewController.view.backgroundColor = .white
         viewController.view.accessibilityViewIsModal = true
@@ -511,15 +512,20 @@ extension ElementInflationProductTests {
         target.accessibilityTraits = target.accessibilityTraits.union(.textEntry)
         target.isAccessibilityElement = true
         scrollView.addSubview(target)
+        let touchReceiver = DeterministicTouchReceiver(frame: target.frame) {
+            _ = target.becomeFirstResponder()
+        }
+        scrollView.addSubview(touchReceiver)
 
         viewController.view.addSubview(scrollView)
 
         present(viewController, above: true)
 
-        return TextInputRevealFixture(
+        return VisibleTextInputFixture(
             viewController: viewController,
             scrollView: scrollView,
             target: target,
+            touchReceiver: touchReceiver,
             identifier: identifier,
             label: label,
             knownHeistId: HeistId(rawValue: identifier),
@@ -779,6 +785,22 @@ private struct TextInputRevealFixture {
     ///
     /// Focus is the app's, not the window's, so closing the window is not what
     /// releases it.
+    @MainActor
+    func cleanup() {
+        _ = target.resignFirstResponder()
+    }
+}
+
+private struct VisibleTextInputFixture {
+    let viewController: UIViewController
+    let scrollView: RevealingScrollView
+    let target: RefusingActivationTextField
+    let touchReceiver: DeterministicTouchReceiver
+    let identifier: String
+    let label: String
+    let knownHeistId: HeistId
+    let frameOrigin: CGPoint
+
     @MainActor
     func cleanup() {
         _ = target.resignFirstResponder()
