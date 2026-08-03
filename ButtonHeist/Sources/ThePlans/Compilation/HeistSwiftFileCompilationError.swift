@@ -22,9 +22,10 @@ enum HeistSwiftFileCompilationError: Error, Sendable, Equatable, CustomStringCon
             return "Swift heist source file not found: \(path)"
         case .packageRootNotFound:
             return """
-            could not locate built ThePlans artifacts or a local ButtonHeist package root containing Sources/ThePlans. \
-            Install Button Heist with its heist-plan compiler artifacts, run the compiler from inside \
-            a ButtonHeist checkout, or set HEIST_THEPLANS_BUILD_DIR to a directory holding built ThePlans artifacts \
+            Swift plan compilation has no admitted ThePlans artifact context. \
+            Supply HeistSwiftCompiler.Configuration(packageRoot:) with one ButtonHeist package root, \
+            run an installed Button Heist executable with its lib/ThePlans artifacts, or set \
+            HEIST_THEPLANS_BUILD_DIR to one exact build directory holding ThePlans artifacts \
             (Modules/ThePlans.swiftmodule or Modules/ThePlans.swiftinterface, plus ThePlans.build/*.swift.o).
             """
         case .buildArtifactsNotFound(let searched, let hint):

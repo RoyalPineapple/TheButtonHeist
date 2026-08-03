@@ -3,19 +3,9 @@ import Foundation
 #if os(macOS) || os(Linux)
 private enum HeistSwiftFileCompilationEnvironmentKey: String, Sendable, CustomStringConvertible {
     case thePlansBuildDirectory = "HEIST_THEPLANS_BUILD_DIR"
-    case path = "PATH"
-    case builtProductsDirectory = "BUILT_PRODUCTS_DIR"
-    case targetBuildDirectory = "TARGET_BUILD_DIR"
-    case configurationBuildDirectory = "CONFIGURATION_BUILD_DIR"
     case sourceCompilerTrace = "HEIST_SOURCE_COMPILER_TRACE"
 
     var description: String { rawValue }
-
-    static let xcodeProductsDirectories: [HeistSwiftFileCompilationEnvironmentKey] = [
-        .builtProductsDirectory,
-        .targetBuildDirectory,
-        .configurationBuildDirectory,
-    ]
 }
 
 private extension Dictionary where Key == String, Value == String {
@@ -222,75 +212,32 @@ struct HeistSwiftFileCompilation: Sendable {
     }
 }
 
-private enum LocalThePlansPackage {
-    static func resolve() throws -> URL {
-        guard let packageRoot = resolveCandidates().first else {
-            throw HeistSwiftFileCompilationError.packageRootNotFound
-        }
-        return packageRoot
-    }
-
-    static func resolveCandidates() -> [URL] {
-        let currentDirectory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
-        let executableURL = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
-        let sourceURL = URL(fileURLWithPath: #filePath).standardizedFileURL
-        let candidates = candidateRoots(from: currentDirectory)
-            + candidateRoots(from: executableURL)
-            + candidateRoots(from: sourceURL)
-
-        var packageRoots: [URL] = []
-        for candidate in candidates {
-            if isButtonHeistPackageRoot(candidate) {
-                appendUnique(candidate, to: &packageRoots)
-            }
-            let nested = candidate.appendingPathComponent("ButtonHeist", isDirectory: true)
-            if isButtonHeistPackageRoot(nested) {
-                appendUnique(nested, to: &packageRoots)
-            }
-            let sibling = candidate
-                .deletingLastPathComponent()
-                .appendingPathComponent("ButtonHeist", isDirectory: true)
-            if isButtonHeistPackageRoot(sibling) {
-                appendUnique(sibling, to: &packageRoots)
-            }
-        }
-
-        return packageRoots
-    }
-
-    private static func appendUnique(_ url: URL, to urls: inout [URL]) {
-        let standardized = url.standardizedFileURL
-        guard !urls.contains(standardized) else { return }
-        urls.append(standardized)
-    }
-
-    private static func candidateRoots(from url: URL) -> [URL] {
-        var roots: [URL] = []
-        var current = url.hasDirectoryPath ? url : url.deletingLastPathComponent()
-        while current.path != current.deletingLastPathComponent().path {
-            roots.append(current)
-            current = current.deletingLastPathComponent()
-        }
-        roots.append(current)
-        return roots
-    }
-
-    private static func isButtonHeistPackageRoot(_ url: URL) -> Bool {
-        let manifest = url.appendingPathComponent("Package.swift")
-        guard FileManager.default.fileExists(atPath: manifest.path) else { return false }
-        let nestedSources = url.appendingPathComponent("Sources/ThePlans")
-        let rootSources = url.appendingPathComponent("ButtonHeist/Sources/ThePlans")
-        return FileManager.default.fileExists(atPath: nestedSources.path)
-            || FileManager.default.fileExists(atPath: rootSources.path)
-    }
-}
-
-private extension HeistSwiftFileCompilation {
-    static let environmentOverrideKey = HeistSwiftFileCompilationEnvironmentKey.thePlansBuildDirectory
+extension HeistSwiftFileCompilation {
+    private static let environmentOverrideKey = HeistSwiftFileCompilationEnvironmentKey.thePlansBuildDirectory
 
     static func resolveThePlansSwiftcArguments(explicitPackageRoot: URL?) throws -> [String] {
-        if let override = environmentOverridePath() {
+        try resolveThePlansSwiftcArguments(
+            explicitPackageRoot: explicitPackageRoot,
+            environment: ProcessInfo.processInfo.environment,
+            executableURL: currentExecutableURL()
+        )
+    }
+
+    static func resolveThePlansSwiftcArguments(
+        explicitPackageRoot: URL?,
+        environment: [String: String],
+        executableURL: URL?
+    ) throws -> [String] {
+        // The override is an explicit boundary contract for Xcode and release
+        // automation. It deliberately wins over every other context.
+        if let override = environmentOverridePath(in: environment) {
             HeistSwiftFileCompilationTrace.write("resolving \(environmentOverrideKey) override at \(override)")
+            guard (override as NSString).isAbsolutePath else {
+                throw HeistSwiftFileCompilationError.buildArtifactsNotFound(
+                    searched: [override],
+                    hint: "\(environmentOverrideKey) must name one absolute build directory."
+                )
+            }
             let buildDirectory = URL(fileURLWithPath: override, isDirectory: true)
             if let arguments = try resolveSwiftPMBuildDirectory(buildDirectory) {
                 HeistSwiftFileCompilationTrace.write("using built ThePlans artifacts at \(buildDirectory.path)")
@@ -307,37 +254,15 @@ private extension HeistSwiftFileCompilation {
                 (expected Modules/ThePlans.swiftmodule or Modules/ThePlans.swiftinterface and ThePlans.build/*.swift.o, or \
                 ThePlans.framework in an Xcode products directory). \
                 Build them with `swift build --product heist-plan` \
-                and point \(environmentOverrideKey) at .build/debug.
+                and point \(environmentOverrideKey) at the absolute path of `.build/debug`.
                 """
             )
         }
 
-        var searched: [String] = []
-        let installedCandidates = candidateInstalledBuildDirectories()
-        searched.append(contentsOf: installedCandidates.map(\.path))
-        for buildDirectory in installedCandidates {
-            HeistSwiftFileCompilationTrace.write("checking installed ThePlans artifacts: \(buildDirectory.path)")
-            if let arguments = try resolveSwiftPMBuildDirectory(buildDirectory) {
-                HeistSwiftFileCompilationTrace.write("using built ThePlans artifacts at \(buildDirectory.path)")
-                return arguments
-            }
-        }
-
-        let packageRoots: [URL]
         if let explicitPackageRoot {
-            packageRoots = [explicitPackageRoot.standardizedFileURL]
-        } else {
-            HeistSwiftFileCompilationTrace.write("resolving ButtonHeist package roots")
-            packageRoots = LocalThePlansPackage.resolveCandidates()
-        }
-        guard !packageRoots.isEmpty || !installedCandidates.isEmpty else {
-            throw HeistSwiftFileCompilationError.packageRootNotFound
-        }
-
-        for packageRoot in packageRoots {
+            let packageRoot = try admittedPackageRoot(explicitPackageRoot)
             HeistSwiftFileCompilationTrace.write("checking ButtonHeist package root: \(packageRoot.path)")
-            let swiftPMCandidates = try candidateBuildDirectories(in: packageRoot)
-            searched.append(contentsOf: swiftPMCandidates.map(\.path))
+            let swiftPMCandidates = candidateBuildDirectories(in: packageRoot)
             for buildDirectory in swiftPMCandidates {
                 if let arguments = try resolveSwiftPMBuildDirectory(buildDirectory) {
                     HeistSwiftFileCompilationTrace.write("using built ThePlans artifacts at \(buildDirectory.path)")
@@ -345,98 +270,87 @@ private extension HeistSwiftFileCompilation {
                 }
             }
 
-            let xcodeCandidates = candidateXcodeProductsDirectories(packageRoot: packageRoot)
-            searched.append(contentsOf: xcodeCandidates.map(\.path))
-            for productsDirectory in xcodeCandidates {
-                if let arguments = resolveXcodeProductsDirectory(productsDirectory) {
-                    HeistSwiftFileCompilationTrace.write(
-                        "using built ThePlans artifacts at \(productsDirectory.path)"
-                    )
-                    return arguments
-                }
-            }
+            throw HeistSwiftFileCompilationError.buildArtifactsNotFound(
+                searched: swiftPMCandidates.map(\.path),
+                hint: """
+                The explicitly configured ButtonHeist package root \(packageRoot.path) contains no built ThePlans artifacts. \
+                Build that package with `swift build --product heist-plan`, or set \
+                \(environmentOverrideKey) to the absolute path of one exact SwiftPM build directory \
+                or Xcode products directory.
+                """
+            )
         }
 
-        let localBuildSummary = packageRoots.isEmpty
-            ? "local ButtonHeist package .build directories"
-            : packageRoots.map { $0.appendingPathComponent(".build").path }.joined(separator: " or ")
+        guard let installedBuildDirectory = installedBuildDirectory(for: executableURL) else {
+            throw HeistSwiftFileCompilationError.packageRootNotFound
+        }
+        HeistSwiftFileCompilationTrace.write("checking installed ThePlans artifacts: \(installedBuildDirectory.path)")
+        if let arguments = try resolveSwiftPMBuildDirectory(installedBuildDirectory) {
+            HeistSwiftFileCompilationTrace.write("using built ThePlans artifacts at \(installedBuildDirectory.path)")
+            return arguments
+        }
 
         throw HeistSwiftFileCompilationError.buildArtifactsNotFound(
-            searched: searched,
+            searched: [installedBuildDirectory.path],
             hint: """
-            No built ThePlans artifacts found in the installed lib/ThePlans directory or under \
-            \(localBuildSummary). \
-            Install Button Heist with heist-plan compiler artifacts, build them with \
-            `swift build --product heist-plan`, or set \
-            \(environmentOverrideKey) to a directory containing \
-            Modules/ThePlans.swiftmodule or Modules/ThePlans.swiftinterface and ThePlans.build/*.swift.o. \
-            Xcode test runs can also provide a products directory containing ThePlans.framework.
+            The installed executable's prefix does not contain its required ThePlans artifacts. \
+            Reinstall Button Heist, supply Configuration(packageRoot:), or set \
+            \(environmentOverrideKey) to one exact SwiftPM build directory or Xcode products directory.
             """
         )
     }
+}
 
-    private static func environmentOverridePath() -> String? {
-        guard let override = ProcessInfo.processInfo.environment[environmentOverrideKey],
+private extension HeistSwiftFileCompilation {
+
+    private static func environmentOverridePath(in environment: [String: String]) -> String? {
+        guard let override = environment[environmentOverrideKey],
               !override.isEmpty else {
             return nil
         }
         return override
     }
 
-    private static func candidateInstalledBuildDirectories() -> [URL] {
-        var candidates: [URL] = []
-        for executable in executableCandidates() {
-            let binDirectory = executable.deletingLastPathComponent()
-            let prefix = binDirectory.deletingLastPathComponent()
-            let artifactRoot = prefix
-                .appendingPathComponent("lib", isDirectory: true)
-                .appendingPathComponent("ThePlans", isDirectory: true)
-            appendInstalledBuildDirectories(in: artifactRoot, to: &candidates)
+    private static func admittedPackageRoot(_ url: URL) throws -> URL {
+        let packageRoot = url.standardizedFileURL
+        let manifest = packageRoot.appendingPathComponent("Package.swift")
+        let directSources = packageRoot.appendingPathComponent("Sources/ThePlans", isDirectory: true)
+        let repositorySources = packageRoot.appendingPathComponent("ButtonHeist/Sources/ThePlans", isDirectory: true)
+        let containsThePlans = FileManager.default.fileExists(atPath: directSources.path)
+            || FileManager.default.fileExists(atPath: repositorySources.path)
+        guard FileManager.default.fileExists(atPath: manifest.path),
+              containsThePlans else {
+            throw HeistSwiftFileCompilationError.packageRootNotFound
         }
-        return unique(candidates)
+        return packageRoot
     }
 
-    private static func appendInstalledBuildDirectories(in artifactRoot: URL, to candidates: inout [URL]) {
-        let currentArch = currentArchitectureBuildDirectoryName()
-        if let currentArch {
-            candidates.append(artifactRoot.appendingPathComponent(currentArch, isDirectory: true)
-                .appendingPathComponent("release", isDirectory: true))
-            candidates.append(artifactRoot.appendingPathComponent(currentArch, isDirectory: true)
-                .appendingPathComponent("debug", isDirectory: true))
-        }
-        candidates.append(artifactRoot.appendingPathComponent("release", isDirectory: true))
-        candidates.append(artifactRoot.appendingPathComponent("debug", isDirectory: true))
-        candidates.append(artifactRoot)
-    }
-
-    private static func executableCandidates() -> [URL] {
-        var candidates: [URL] = []
+    private static func currentExecutableURL() -> URL? {
         if let executableURL = Bundle.main.executableURL {
-            candidates.append(executableURL.standardizedFileURL)
-            candidates.append(executableURL.resolvingSymlinksInPath().standardizedFileURL)
+            return executableURL
         }
-
-        if let rawExecutable = CommandLine.arguments.first, !rawExecutable.isEmpty {
-            if rawExecutable.contains("/") {
-                let executable = URL(fileURLWithPath: rawExecutable).standardizedFileURL
-                candidates.append(executable)
-                candidates.append(executable.resolvingSymlinksInPath().standardizedFileURL)
-            } else {
-                for directory in pathDirectories() {
-                    let executable = directory.appendingPathComponent(rawExecutable)
-                    candidates.append(executable.standardizedFileURL)
-                    candidates.append(executable.resolvingSymlinksInPath().standardizedFileURL)
-                }
-            }
+        guard let rawExecutable = CommandLine.arguments.first,
+              rawExecutable.contains("/") else {
+            return nil
         }
-        return unique(candidates)
+        return URL(fileURLWithPath: rawExecutable)
     }
 
-    private static func pathDirectories() -> [URL] {
-        let path = ProcessInfo.processInfo.environment[.path] ?? ""
-        return path
-            .split(separator: ":", omittingEmptySubsequences: true)
-            .map { URL(fileURLWithPath: String($0), isDirectory: true).standardizedFileURL }
+    private static func installedBuildDirectory(for executableURL: URL?) -> URL? {
+        guard let executableURL else { return nil }
+        let executable = executableURL
+            .resolvingSymlinksInPath()
+            .standardizedFileURL
+        let binDirectory = executable.deletingLastPathComponent()
+        guard binDirectory.lastPathComponent == "bin" else { return nil }
+        let prefix = binDirectory.deletingLastPathComponent()
+        guard let architecture = currentArchitectureBuildDirectoryName() else {
+            return nil
+        }
+        return prefix
+            .appendingPathComponent("lib/ThePlans", isDirectory: true)
+            .appendingPathComponent(architecture, isDirectory: true)
+            .appendingPathComponent("release", isDirectory: true)
     }
 
     private static func currentArchitectureBuildDirectoryName() -> String? {
@@ -447,17 +361,6 @@ private extension HeistSwiftFileCompilation {
         #else
         return nil
         #endif
-    }
-
-    private static func unique(_ urls: [URL]) -> [URL] {
-        var seen = Set<String>()
-        var result: [URL] = []
-        for url in urls {
-            let standardized = url.standardizedFileURL
-            guard seen.insert(standardized.path).inserted else { continue }
-            result.append(standardized)
-        }
-        return result
     }
 
     private static func resolveSwiftPMBuildDirectory(_ buildDirectory: URL) throws -> [String]? {
@@ -504,63 +407,25 @@ private extension HeistSwiftFileCompilation {
         ]
     }
 
-    private static func candidateBuildDirectories(in packageRoot: URL) throws -> [URL] {
+    private static func candidateBuildDirectories(in packageRoot: URL) -> [URL] {
         let buildRoot = packageRoot.appendingPathComponent(".build", isDirectory: true)
-        var candidates = [
+        // A package root is one admitted source identity. Its build layout is
+        // ordered deterministically: host-triple debug, host-triple release,
+        // then SwiftPM's legacy debug and release directories.
+        guard let architecture = currentArchitectureBuildDirectoryName() else {
+            return [
+                buildRoot.appendingPathComponent("debug", isDirectory: true),
+                buildRoot.appendingPathComponent("release", isDirectory: true),
+            ]
+        }
+        return [
+            buildRoot.appendingPathComponent(architecture, isDirectory: true)
+                .appendingPathComponent("debug", isDirectory: true),
+            buildRoot.appendingPathComponent(architecture, isDirectory: true)
+                .appendingPathComponent("release", isDirectory: true),
             buildRoot.appendingPathComponent("debug", isDirectory: true),
             buildRoot.appendingPathComponent("release", isDirectory: true),
         ]
-
-        if let entries = try? FileManager.default.contentsOfDirectory(
-            at: buildRoot,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) {
-            for entry in entries {
-                let values = try entry.resourceValues(forKeys: [.isDirectoryKey])
-                guard values.isDirectory == true else { continue }
-                candidates.append(entry.appendingPathComponent("debug", isDirectory: true))
-                candidates.append(entry.appendingPathComponent("release", isDirectory: true))
-            }
-        }
-
-        return candidates
-    }
-
-    private static func candidateXcodeProductsDirectories(packageRoot: URL) -> [URL] {
-        let environmentDirectories = HeistSwiftFileCompilationEnvironmentKey.xcodeProductsDirectories.compactMap { key -> URL? in
-            guard let value = ProcessInfo.processInfo.environment[key], !value.isEmpty else {
-                return nil
-            }
-            return URL(fileURLWithPath: value, isDirectory: true).standardizedFileURL
-        }
-        let seedURLs = environmentDirectories + [
-            URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true),
-            URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL,
-            URL(fileURLWithPath: #filePath).standardizedFileURL,
-            packageRoot,
-        ]
-
-        var seen = Set<String>()
-        var candidates: [URL] = []
-        for seedURL in seedURLs {
-            for candidate in ancestorDirectories(from: seedURL, maxDepth: 8) {
-                let path = candidate.path
-                guard seen.insert(path).inserted else { continue }
-                candidates.append(candidate)
-            }
-        }
-        return candidates
-    }
-
-    private static func ancestorDirectories(from url: URL, maxDepth: Int) -> [URL] {
-        var directories: [URL] = []
-        var current = url.hasDirectoryPath ? url : url.deletingLastPathComponent()
-        while directories.count < maxDepth && current.path != current.deletingLastPathComponent().path {
-            directories.append(current)
-            current = current.deletingLastPathComponent()
-        }
-        return directories
     }
 
     private static func swiftObjectFiles(in directory: URL) throws -> [URL] {
@@ -578,6 +443,7 @@ private extension HeistSwiftFileCompilation {
                 let values = try $0.resourceValues(forKeys: [.isRegularFileKey])
                 return values.isRegularFile == true
             }
+            .map { directory.appendingPathComponent($0.lastPathComponent) }
             .sorted { $0.path < $1.path }
     }
 
@@ -617,15 +483,15 @@ struct SwiftPMBuildDescription: Decodable {
             let objectFiles = try objectPaths.compactMap { path -> URL? in
                 let originalURL = URL(fileURLWithPath: path)
                 guard originalURL.lastPathComponent.hasSuffix(".swift.o") else { return nil }
-                let relocatedURL = buildDirectory
+                // description.json may retain the path from the build that was
+                // staged. The admitted build directory, not that stale path,
+                // owns the object identity used for this compilation.
+                let admittedURL = buildDirectory
                     .appendingPathComponent("ThePlans.build", isDirectory: true)
                     .appendingPathComponent(originalURL.lastPathComponent)
-                let url = FileManager.default.fileExists(atPath: originalURL.path)
-                    ? originalURL
-                    : relocatedURL
-                let values = try url.resourceValues(forKeys: [.isRegularFileKey])
+                let values = try admittedURL.resourceValues(forKeys: [.isRegularFileKey])
                 guard values.isRegularFile == true else { return nil }
-                return url
+                return admittedURL
             }
             return objectFiles.sorted { $0.path < $1.path }
         }

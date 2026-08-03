@@ -254,7 +254,7 @@ step:
 
 ```bash
 swift build --product heist-plan
-HEIST_THEPLANS_BUILD_DIR=.build/debug \
+HEIST_THEPLANS_BUILD_DIR="$PWD/.build/debug" \
   heist-plan compile Heists/Checkout.swift --entry makeCheckoutHeist --output Checkout.heist
 ```
 
