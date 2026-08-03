@@ -43,22 +43,22 @@ run_gate() {
     set -e
 }
 
-run_gate v0.6.32 strict 1
-[[ "$STATUS" -eq 0 ]] || fail "scoped watchdog baseline waiver failed: $OUTPUT"
-[[ "$OUTPUT" == *"watchdog correction and removal of redundant evidence/error/response-presentation facades"* ]] \
-    || fail "waiver did not name the intentional source compression: $OUTPUT"
+run_gate v0.6.33 strict 1
+[[ "$STATUS" -eq 0 ]] || fail "scoped v0.6.33 baseline waiver failed: $OUTPUT"
+[[ "$OUTPUT" == *"typed EnvironmentConfig.sessionTimeout, explicit Bool on ActivationTracePhase.accessibilityActivate, and the expanded adversarial scenario catalog"* ]] \
+    || fail "waiver did not name the intentional source changes: $OUTPUT"
 [[ "$OUTPUT" == *"exemption expires"* ]] || fail "waiver did not explain its scope: $OUTPUT"
 
-run_gate v0.6.31 strict 1
+run_gate v0.6.32 strict 1
 [[ "$STATUS" -eq 1 ]] || fail "expired baseline waiver accepted native breakage: $OUTPUT"
 
-run_gate v0.6.32 report 1
+run_gate v0.6.33 report 1
 [[ "$STATUS" -eq 0 ]] || fail "report mode rejected native diagnostics: $OUTPUT"
 
-run_gate v0.6.32 strict 0
+run_gate v0.6.33 strict 0
 [[ "$STATUS" -eq 0 ]] || fail "clean native API result failed: $OUTPUT"
 
-grep -Fq 'package diagnose-api-breaking-changes v0.6.32 --products' \
+grep -Fq 'package diagnose-api-breaking-changes v0.6.33 --products' \
     "$FIXTURE_ROOT/swift-arguments.txt" \
     || fail "gate did not invoke Swift's native API diagnosis"
 
