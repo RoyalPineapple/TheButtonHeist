@@ -145,12 +145,11 @@ final class SafecrackerTouchInjection {
             return nil
         }
 
-        guard let event = TheSafecracker.TouchEvent(touches: [touch]) else {
+        guard TheSafecracker.TouchEvent.dispatch(touches: [touch]) else {
             insideJobLogger.error("Failed to create began event")
             return nil
         }
 
-        event.send()
         fingerprints.beginTracking(at: [point])
         return ActiveTouch(touch: touch, window: window)
     }
@@ -162,8 +161,7 @@ final class SafecrackerTouchInjection {
         let windowPoint = window.convert(point, from: nil)
         touch.update(phase: .moved, location: windowPoint)
 
-        guard let event = TheSafecracker.TouchEvent(touches: [touch]) else { return false }
-        event.send()
+        guard TheSafecracker.TouchEvent.dispatch(touches: [touch]) else { return false }
         fingerprints.updateTracking(to: [point])
         return true
     }
@@ -172,9 +170,7 @@ final class SafecrackerTouchInjection {
     private func sendStationary(_ touch: inout TheSafecracker.SyntheticTouch) -> Bool {
         touch.update(phase: .stationary)
 
-        guard let event = TheSafecracker.TouchEvent(touches: [touch]) else { return false }
-        event.send()
-        return true
+        return TheSafecracker.TouchEvent.dispatch(touches: [touch])
     }
 
     private func terminate(
@@ -184,12 +180,11 @@ final class SafecrackerTouchInjection {
         defer { fingerprints.endTracking() }
         touch.update(phase: phase)
 
-        guard let event = TheSafecracker.TouchEvent(touches: [touch]) else {
+        guard TheSafecracker.TouchEvent.dispatch(touches: [touch]) else {
             insideJobLogger.error("Failed to create terminal touch event")
             return false
         }
 
-        event.send()
         return true
     }
 

@@ -2,7 +2,7 @@ import BumperBowlingCore
 import BumperBowlingTestSupport
 import Testing
 
-@Suite("Any normalization boundary")
+@Suite("Any bridge boundary")
 struct AnyBoundaryRuleTests {
     @Test
     func arbitraryProductionAPIsCannotExposeAny() throws {
@@ -18,26 +18,31 @@ struct AnyBoundaryRuleTests {
     }
 
     @Test
-    func namedSystemBoundariesNormalizeAnyImmediately() throws {
+    func exactSystemBoundaryDeclarationsPermitAny() throws {
         let fixtures = [
             (
-                RelativeFilePath("ButtonHeist/Sources/TheInsideJob/Boundary0.swift"),
+                RelativeFilePath("ButtonHeist/Sources/TheButtonHeist/Storage/PrivateStorage.swift"),
+                ButtonHeistComponent.client,
                 "private typealias FoundationFileAttributeDictionary = [String: Any]"
             ),
             (
-                RelativeFilePath("ButtonHeist/Sources/TheInsideJob/Boundary1.swift"),
+                RelativeFilePath(
+                    "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandArguments.swift"
+                ),
+                ButtonHeistComponent.client,
                 "enum HeistValuePayloadDecoder { static func expectedDescription(for type: Any.Type) {} }"
             ),
             (
                 RelativeFilePath("ButtonHeist/Sources/TheInsideJob/Lifecycle/StartupConfiguration.swift"),
+                ButtonHeistComponent.embeddedRuntime,
                 "func decodeFoundationInfoPlistValue(_ object: Any) {}"
             ),
         ]
 
-        for (path, source) in fixtures {
+        for (path, component, source) in fixtures {
             let report = try evaluateButtonHeistRules(
                 path: path,
-                component: .embeddedRuntime,
+                component: component,
                 source: source
             )
             #expect(report.violations.isEmpty)
@@ -45,14 +50,22 @@ struct AnyBoundaryRuleTests {
     }
 
     @Test
-    func nonBoundaryFunctionNamesDoNotExemptAny() throws {
-        let path: RelativeFilePath = "ButtonHeist/Sources/TheInsideJob/OtherDecoder.swift"
-        let report = try evaluateButtonHeistRules(
-            path: path,
-            component: .embeddedRuntime,
-            source: "func decodeOtherFoundationValue(_ object: Any) {}"
-        )
+    func lookalikeBoundaryNamesDoNotExemptAny() throws {
+        let fixtures = [
+            "private typealias FoundationFileAttributeDictionary = [String: Any]",
+            "enum HeistValuePayloadDecoder { static func expectedDescription(for type: Any.Type) {} }",
+            "func decodeFoundationInfoPlistValue(_ object: Any) {}",
+        ]
 
-        #expect(report.contains(ViolationMatcher(id: "buttonheist.any_boundary", path: path)))
+        for (index, source) in fixtures.enumerated() {
+            let path = try RelativeFilePath("ButtonHeist/Sources/TheInsideJob/Impostor\(index).swift")
+            let report = try evaluateButtonHeistRules(
+                path: path,
+                component: .embeddedRuntime,
+                source: source
+            )
+
+            #expect(report.contains(ViolationMatcher(id: "buttonheist.any_boundary", path: path)))
+        }
     }
 }

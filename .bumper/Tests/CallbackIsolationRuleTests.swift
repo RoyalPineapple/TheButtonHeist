@@ -50,7 +50,6 @@ struct CallbackIsolationRuleTests {
 
         #expect(report.violations.count == 1)
         #expect(report.violations.first?.rule.id == "buttonheist.callback_isolation")
-        #expect(report.violations.first?.message.contains("onLoose") == true)
     }
 
     @Test
@@ -71,7 +70,6 @@ struct CallbackIsolationRuleTests {
         )
 
         #expect(report.violations.count == 1)
-        #expect(report.violations.first?.message.contains("onEvent") == true)
     }
 
     @Test

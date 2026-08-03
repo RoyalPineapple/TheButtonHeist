@@ -31,7 +31,7 @@ extension TheSafecracker {
         let event: UIEvent
 
         /// Package touches into a UIEvent with matching IOHIDEvent data.
-        init?(touches: [SyntheticTouch]) {
+        private init?(touches: [SyntheticTouch]) {
             guard let event: UIEvent = ObjCRuntime.get(.applicationTouchesEvent, from: UIApplication.shared) else {
                 insideJobLogger.error("UIApplication doesn't respond to _touchesEvent")
                 return nil
@@ -65,9 +65,11 @@ extension TheSafecracker {
             self.event = event
         }
 
-        /// Deliver to UIApplication.
-        func send() {
-            UIApplication.shared.sendEvent(event)
+        /// Package the touches and dispatch the resulting event to UIKit.
+        static func dispatch(touches: [SyntheticTouch]) -> Bool {
+            guard let touchEvent = Self(touches: touches) else { return false }
+            UIApplication.shared.sendEvent(touchEvent.event)
+            return true
         }
     }
 }

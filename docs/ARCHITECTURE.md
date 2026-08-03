@@ -215,23 +215,24 @@ throws `CancellationError` to the caller.
 
 ### Canonical pipeline boundaries
 
-Four source checks preserve pipeline ownership that Swift access control cannot
-express by itself:
+Swift access control preserves four construction boundaries:
 
-- `SafecrackerTouchInjection` constructs every `TouchEvent`. One async gesture
-  owns `began` through exactly one terminal `ended` or `cancelled` event. A task
-  cancelled before `began` sends no touch event.
-- `HeistSwiftCompiler` constructs `HeistSwiftFileCompilation`. The compiler
-  resolves `ThePlans` only from an absolute override, an explicit package root,
-  or the exact installed executable prefix.
-- TheFence constructs one `HeistExecutionBudget` before transport dispatch. It
-  projects the server deadline once and adds transport headroom only to the
-  client wait.
-- `HeistResult+Report` constructs `HeistReport`. Execution returns result truth,
-  and presentation derives from that result through one projector.
+- `TouchEvent` has a private initializer. Its `dispatch(touches:)` operation
+  constructs each event. `SafecrackerTouchInjection` owns the complete gesture
+  from `began` through one terminal `ended` or `cancelled` event. Cancellation
+  before `began` sends no touch event.
+- `HeistSwiftFileCompilation` has a private initializer. Its static `compile`
+  operation owns construction. The compiler resolves `ThePlans` only from an
+  absolute override, an explicit package root, or the exact installed prefix.
+- `HeistExecutionBudget` has a private initializer. Its `project` operation
+  creates one budget before transport dispatch. It adds transport headroom only
+  to the client wait.
+- `HeistReport` has a private initializer. `project(result:)` derives the one
+  presentation model from execution truth.
 
-The Bumper checks include owner and rogue-construction fixtures. Behavioral
-tests remain responsible for each currency's meaning.
+The compiler rejects direct construction outside these declarations. Bumper
+does not repeat that check. Behavioral tests remain responsible for each
+currency's meaning.
 
 Lifecycle effects follow the same ownership rule. The reducer returns an
 ordered effect list, one host executor performs that list, and notification
@@ -585,7 +586,7 @@ pipelines are explicit:
 | Execution deadlines | `HeistExecution` stores the original leaf and whole-heist deadlines and projects the earlier boundary target | The host reads the clock, waits for that target, and returns a stable-ID deadline fact |
 | Testing request construction | `ButtonHeistTesting.swift` | Synchronous helpers and joined sessions live in their named extension files |
 | Fence action JSON | `FenceJSON+Action.swift` and `FenceJSON+HeistExecution.swift`, one result family each | Fence response formatting |
-| Exported tuple contract enforcement | The single `buttonheist.exported_tuple_return` Bumper rule | One effective-access projection covers functions, properties, subscripts, protocol requirements, and inherited public or package visibility; private and local tuple scratch values never enter the exported-contract projection |
+| Exported tuple contract enforcement | The single `buttonheist.exported_tuple_contract` Bumper rule | One effective-access projection covers functions, properties, subscripts, protocol requirements, and inherited public or package visibility; private and local tuple scratch values never enter the exported-contract projection |
 | Test scheme, destination, and artifact topology | `scripts/test-runner.py` | CI and local invocations |
 
 ### Report and Action Evidence Have One Owner

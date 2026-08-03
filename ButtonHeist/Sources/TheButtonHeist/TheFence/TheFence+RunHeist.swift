@@ -128,6 +128,16 @@ extension TheFence {
         let transportTimeout: TimeInterval
         let actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy
 
+        private init(
+            serverTimeout: HeistTimeout,
+            transportTimeout: TimeInterval,
+            actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy
+        ) {
+            self.serverTimeout = serverTimeout
+            self.transportTimeout = transportTimeout
+            self.actionExpectationTimeoutPolicy = actionExpectationTimeoutPolicy
+        }
+
         static func project(
             plan: HeistPlan,
             timeoutSource: TimeoutSource,
