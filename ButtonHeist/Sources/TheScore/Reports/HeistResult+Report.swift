@@ -267,6 +267,22 @@ public struct HeistReport: Sendable, Equatable {
         return output
     }
 
+    private init(
+        summary: Summary,
+        metrics: Metrics,
+        nodes: [Node],
+        failure: Failure?,
+        warnings: [HeistExecutionWarning],
+        diagnostics: Diagnostics
+    ) {
+        self.summary = summary
+        self.metrics = metrics
+        self.nodes = nodes
+        self.failure = failure
+        self.warnings = warnings
+        self.diagnostics = diagnostics
+    }
+
     /// Interprets the result tree once and produces every semantic report fact.
     ///
     /// Incomplete observation evidence remains a node fact instead of making

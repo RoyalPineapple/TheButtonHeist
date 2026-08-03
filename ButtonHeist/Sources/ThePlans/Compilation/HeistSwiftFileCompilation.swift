@@ -19,14 +19,28 @@ struct HeistSwiftFileCompilation: Sendable {
     let processLimits: HeistCompilerProcess.Limits
     let temporaryDirectory: URL
 
-    init(
-        packageRoot: URL? = nil,
-        processLimits: HeistCompilerProcess.Limits = .default,
-        temporaryDirectory: URL = FileManager.default.temporaryDirectory
+    private init(
+        packageRoot: URL?,
+        processLimits: HeistCompilerProcess.Limits,
+        temporaryDirectory: URL
     ) {
         self.packageRoot = packageRoot
         self.processLimits = processLimits
         self.temporaryDirectory = temporaryDirectory
+    }
+
+    static func compile(
+        _ source: URL,
+        entry: HeistEntrySymbol,
+        packageRoot: URL?,
+        processLimits: HeistCompilerProcess.Limits,
+        temporaryDirectory: URL
+    ) async throws -> HeistPlan {
+        try await Self(
+            packageRoot: packageRoot,
+            processLimits: processLimits,
+            temporaryDirectory: temporaryDirectory
+        ).compile(source, entry: entry)
     }
 
     /// Persistent, shared swiftc module cache for plan compilation. Reused

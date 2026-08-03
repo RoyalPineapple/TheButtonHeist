@@ -12,9 +12,7 @@ import UIKit
 //        ↓
 //   .makeTouch(phase:)           → SyntheticTouch
 //        ↓
-//   TouchEvent(touches:)         → TouchEvent
-//        ↓
-//   .send()                      → delivers to UIApplication
+//   TouchEvent.dispatch(touches:) → delivers to UIApplication
 //        ↓
 //   touch.update(phase:)         → next TouchEvent cycle
 

@@ -104,7 +104,7 @@ class ChangeScopeSelectionTests(unittest.TestCase):
         for path in (
             "BumperBowling.swift",
             ".bumper/Sources/ButtonHeistCustomRules.swift",
-            ".bumper/Tests/FrameworkImportOwnershipTests.swift",
+            ".bumper/Tests/AnyBoundaryRuleTests.swift",
             "docs/BUMPER-RULES.md",
         ):
             with self.subTest(path=path):

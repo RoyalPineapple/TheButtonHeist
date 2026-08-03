@@ -2,88 +2,25 @@ import BumperBowlingCore
 import SwiftSyntax
 
 let buttonHeistRules = RuleSet {
-    Rules.importOwnership(
-        ["UIKit", "SwiftUI"],
-        allowed: embeddedRuntimeScope.union(demoScope),
-        id: "buttonheist.ui_framework_ownership"
-    )
-    Rules.importOwnership(
-        ["Network"],
-        allowed: embeddedRuntimeScope
-            .union(clientScope)
-            .union(supportScope)
-            .union(scoreScope),
-        id: "buttonheist.network_framework_ownership"
-    )
-    Rules.importOwnership(
-        ["Security"],
-        allowed: scoreScope,
-        id: "buttonheist.security_framework_ownership"
-    )
-    Rules.importOwnership(
-        ["ObjectiveC", "ObjectiveC.runtime"],
-        allowed: embeddedRuntimeScope,
-        id: "buttonheist.objective_c_framework_ownership"
-    )
-    Rules.importOwnership(
-        ["AccessibilitySnapshotCore", "AccessibilitySnapshotParser", "AccessibilitySnapshotPreviews"],
-        allowed: embeddedRuntimeScope,
-        id: "buttonheist.accessibility_parser_ownership"
-    )
-
     anyBoundaryRule
     callbackIsolationRule
-    checkedConcurrencyRule
     heistContentOpacityRule
     planElseOwnershipRule
     exportedTupleContractRule
-    canonicalPipelineOwnershipRules
 }
 
-private let canonicalPipelineOwnershipRules = RuleSet {
-    Rules.canonicalConstruction(
-        "TouchEvent",
-        owners: .files([
-            "ButtonHeist/Sources/TheInsideJob/TheSafecracker/SafecrackerTouchInjection.swift",
-        ]),
-        id: "buttonheist.touch_event_construction"
-    )
-    Rules.canonicalConstruction(
-        "HeistSwiftFileCompilation",
-        owners: .files([
-            "ButtonHeist/Sources/ThePlans/Compilation/HeistSwiftCompiler.swift",
-        ]),
-        id: "buttonheist.swift_plan_compilation_construction"
-    )
-    Rules.canonicalConstruction(
-        "HeistExecutionBudget",
-        owners: .files([
-            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+RunHeist.swift",
-        ]),
-        id: "buttonheist.heist_execution_budget_construction"
-    )
-    Rules.canonicalConstruction(
-        "HeistReport",
-        owners: .files([
-            "ButtonHeist/Sources/TheScore/Reports/HeistResult+Report.swift",
-        ]),
-        id: "buttonheist.heist_report_construction"
-    )
-}
-
-private let embeddedRuntimeScope = RuleScope.component(ButtonHeistComponent.embeddedRuntime)
-private let clientScope = RuleScope.component(ButtonHeistComponent.client)
-private let supportScope = RuleScope.component(ButtonHeistComponent.support)
-private let scoreScope = RuleScope.component(ButtonHeistComponent.score)
-private let demoScope = RuleScope.component(ButtonHeistComponent.demo)
 private let plansScope = RuleScope.component(ButtonHeistComponent.plans)
+private let privateStoragePath: RelativeFilePath =
+    "ButtonHeist/Sources/TheButtonHeist/Storage/PrivateStorage.swift"
+private let commandArgumentsPath: RelativeFilePath =
+    "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+CommandArguments.swift"
 private let startupConfigurationPath: RelativeFilePath =
     "ButtonHeist/Sources/TheInsideJob/Lifecycle/StartupConfiguration.swift"
 
 private let anyBoundaryRule = Rules.files(
     "buttonheist.any_boundary",
     severity: .error,
-    summary: "Untyped Foundation and Objective-C values are normalized at named boundaries."
+    summary: "Production Any is limited to exact Foundation and Objective-C bridges."
 ) { file in
     SyntaxQuery<IdentifierTypeSyntax>()
         .filter { match in
@@ -145,67 +82,30 @@ private let callbackIsolationRule = Rules.files(
         }
 }
 
-private let checkedConcurrencyRule = Rules.files(
-    "buttonheist.checked_concurrency",
-    severity: .error,
-    summary: "Production code uses checked Swift concurrency without broad escape hatches."
-) { file in
-    let preconcurrencyFailures = SyntaxQuery<AttributeSyntax>()
-        .filter { match in
-            match.node.attributeName.trimmedDescription == "preconcurrency"
-        }
-        .matches(in: file)
-        .map { match in
-            match.failure(
-                message: "production @preconcurrency escape hatch",
-                evidence: ViolationEvidence(
-                    observed: match.node.trimmedDescription,
-                    expectation: "production imports and conformances use checked concurrency"
-                )
-            )
-        }
-
-    let unsafeNonisolatedFailures = SyntaxQuery<DeclModifierSyntax>()
-        .filter { match in
-            match.node.name.text == "nonisolated"
-                && match.node.tokens(viewMode: .sourceAccurate).contains { $0.text == "unsafe" }
-        }
-        .matches(in: file)
-        .map { match in
-            match.failure(
-                message: "production nonisolated(unsafe) escape hatch",
-                evidence: ViolationEvidence(
-                    observed: match.node.trimmedDescription,
-                    expectation: "production state remains checked by Swift concurrency"
-                )
-            )
-        }
-
-    return preconcurrencyFailures + unsafeNonisolatedFailures
-}
-
-private let heistContentOpacityRule = Rules.repository(
+private let heistContentOpacityRule = Rules.files(
     "buttonheist.heist_content_opacity",
     severity: .error,
-    summary: "HeistContent remains an opaque public authoring fragment.",
-    scope: plansScope
-) { context in
-    try context.facts(BuiltInFacts.storedProperties)
-        .filter { occurrence in
-            plansScope.includes(SourceFileDescriptor(path: occurrence.path, component: occurrence.component))
-                && occurrence.property.owner?.rawValue == "HeistContent"
-                && [.public, .open].contains(occurrence.property.access)
+    summary: "HeistContent remains an opaque public authoring fragment."
+) { file in
+    variables()
+        .within(plansScope)
+        .lexically(within: contractDeclarationScope)
+        .filter { match in
+            match.node.bumper.lexicalContext.enclosingNominalNames.first == "HeistContent"
+                && effectiveAccess(of: match.node, modifiers: match.node.modifiers).isPublic
         }
-        .map { occurrence in
-            RuleFailure(
-                path: occurrence.path,
-                location: occurrence.property.location,
-                message: "HeistContent exposes stored builder bookkeeping.",
-                evidence: ViolationEvidence(
-                    observed: occurrence.property.name.rawValue,
-                    expectation: "HeistContent has no public stored properties"
+        .matches(in: file)
+        .flatMap { match in
+            match.node.bindings.map { binding in
+                file.failure(
+                    at: binding,
+                    message: "HeistContent exposes public builder state.",
+                    evidence: ViolationEvidence(
+                        observed: binding.bumper.identifierName ?? binding.trimmedDescription,
+                        expectation: "keep HeistContent properties below public access"
+                    )
                 )
-            )
+            }
         }
 }
 
@@ -233,7 +133,7 @@ private let planElseOwnershipRule = Rules.files(
 }
 
 private let exportedTupleContractRule = Rules.files(
-    "buttonheist.exported_tuple_return",
+    "buttonheist.exported_tuple_contract",
     severity: .error,
     summary: "Exported declarations use named contract types, not multi-value tuples."
 ) { file in
@@ -292,6 +192,10 @@ private enum ContractAccess: Int, Comparable {
 
     var isExported: Bool {
         self >= .package
+    }
+
+    var isPublic: Bool {
+        self >= .public
     }
 }
 
@@ -421,14 +325,16 @@ private func isAllowedAnyBoundary(
     _ node: IdentifierTypeSyntax,
     path: RelativeFilePath
 ) -> Bool {
-    if node.ancestors.contains(where: { ancestor in
-        ancestor.as(TypeAliasDeclSyntax.self)?.name.text == "FoundationFileAttributeDictionary"
-    }) {
+    if path == privateStoragePath,
+       node.ancestors.contains(where: { ancestor in
+           ancestor.as(TypeAliasDeclSyntax.self)?.name.text == "FoundationFileAttributeDictionary"
+       }) {
         return true
     }
 
     let context = node.bumper.lexicalContext
-    if context.enclosingFunctionName == "expectedDescription" {
+    if path == commandArgumentsPath,
+       context.enclosingFunctionName == "expectedDescription" {
         return context.enclosingNominalNames.contains("HeistValuePayloadDecoder")
     }
     return path == startupConfigurationPath

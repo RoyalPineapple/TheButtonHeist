@@ -80,11 +80,13 @@ public actor HeistSwiftCompiler {
         do {
             try Task.checkCancellation()
 #if os(macOS) || os(Linux)
-            let plan = try await HeistSwiftFileCompilation(
+            let plan = try await HeistSwiftFileCompilation.compile(
+                source,
+                entry: entry,
                 packageRoot: configuration.packageRoot,
                 processLimits: configuration.processLimits,
                 temporaryDirectory: configuration.temporaryDirectory
-            ).compile(source, entry: entry)
+            )
             try Task.checkCancellation()
             return plan
 #else

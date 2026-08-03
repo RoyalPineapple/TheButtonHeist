@@ -5,7 +5,7 @@ import Testing
 @Suite("Plan language boundaries")
 struct PlanLanguageBoundaryRuleTests {
     @Test
-    func heistContentDoesNotExposeStoredBookkeeping() throws {
+    func heistContentDoesNotExposePublicProperties() throws {
         let valid = try evaluateButtonHeistRules(
             path: "ButtonHeist/Sources/ThePlans/HeistContent.swift",
             component: .plans,
@@ -21,6 +21,16 @@ struct PlanLanguageBoundaryRuleTests {
         #expect(invalid.contains(ViolationMatcher(
             id: "buttonheist.heist_content_opacity",
             path: "ButtonHeist/Sources/ThePlans/PublicHeistContent.swift"
+        )))
+
+        let computed = try evaluateButtonHeistRules(
+            path: "ButtonHeist/Sources/ThePlans/ComputedHeistContent.swift",
+            component: .plans,
+            source: "public extension HeistContent { var stepCount: Int { 0 } }"
+        )
+        #expect(computed.contains(ViolationMatcher(
+            id: "buttonheist.heist_content_opacity",
+            path: "ButtonHeist/Sources/ThePlans/ComputedHeistContent.swift"
         )))
     }
 
@@ -56,32 +66,6 @@ struct PlanLanguageBoundaryRuleTests {
     }
 
     @Test
-    func exportedFunctionsReturnNamedContractsInsteadOfTuples() throws {
-        let valid = try evaluateButtonHeistRules(
-            path: "ButtonHeist/Sources/TheScore/NamedResult.swift",
-            component: .score,
-            source: """
-            public struct NamedResult {}
-            public func admit() -> NamedResult { NamedResult() }
-            func scratch() -> (left: Int, right: Int) { (1, 2) }
-            """
-        )
-        let invalid = try evaluateButtonHeistRules(
-            path: "ButtonHeist/Sources/TheScore/TupleResult.swift",
-            component: .score,
-            source: """
-            package func admit() -> (path: String, ordinal: Int) { ("$", 0) }
-            """
-        )
-
-        #expect(valid.violations.isEmpty)
-        #expect(invalid.contains(ViolationMatcher(
-            id: "buttonheist.exported_tuple_return",
-            path: "ButtonHeist/Sources/TheScore/TupleResult.swift"
-        )))
-    }
-
-    @Test
     func exportedTupleContractsCoverEveryAuditedDeclarationForm() throws {
         let valid = try evaluateButtonHeistRules(
             path: "ButtonHeist/Sources/TheScore/TupleScratch.swift",
@@ -90,6 +74,9 @@ struct PlanLanguageBoundaryRuleTests {
             public struct ExportedContainer {
                 var internalByDefault: (left: Int, right: Int) { (1, 2) }
             }
+
+            public struct NamedResult {}
+            public func admit() -> NamedResult { NamedResult() }
 
             private func privateScratch(
                 _ input: (left: Int, right: Int)
@@ -208,12 +195,9 @@ struct PlanLanguageBoundaryRuleTests {
 
             #expect(invalid.violations.count == 1, "Expected one violation for \(invalidCase.name)")
             #expect(invalid.contains(ViolationMatcher(
-                id: "buttonheist.exported_tuple_return",
+                id: "buttonheist.exported_tuple_contract",
                 path: path
             )))
-            #expect(invalid.violations.allSatisfy { violation in
-                violation.location != nil && violation.evidence?.observed.contains("(") == true
-            })
         }
     }
 }
