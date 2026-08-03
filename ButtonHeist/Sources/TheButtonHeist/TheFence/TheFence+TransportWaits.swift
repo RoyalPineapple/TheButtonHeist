@@ -39,20 +39,18 @@ extension TheFence {
     func sendAndAwaitHeistExecution(
         _ plan: HeistPlan,
         argument: HeistArgument = .none,
-        timeout: HeistTimeout,
-        actionExpectationTimeoutPolicy: ActionExpectationTimeoutPolicy,
-        transportHeadroom: TimeInterval
+        budget: HeistExecutionBudget
     ) async throws -> HeistResult {
         let message = ClientMessage.heistPlan(HeistPlanRun(
             plan: plan,
             argument: argument,
-            timeout: timeout,
-            actionExpectationTimeoutPolicy: actionExpectationTimeoutPolicy
+            timeout: budget.serverTimeout,
+            actionExpectationTimeoutPolicy: budget.actionExpectationTimeoutPolicy
         ))
         return try await sendAndAwait(
             message,
             expecting: .heistExecution,
-            timeout: timeout.seconds + transportHeadroom
+            timeout: budget.transportTimeout
         )
     }
 

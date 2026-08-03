@@ -25,8 +25,7 @@ extension TheFence {
     enum SingleStepHeistExecution: Sendable {
         case action(
             DurableHeistActionCommand,
-            expectation: ExpectationPayload,
-            actionTimeout: TimeInterval
+            expectation: ExpectationPayload
         )
         case wait(WaitStep)
     }
@@ -169,7 +168,6 @@ extension TheFence {
     static func directActionExecution(
         _ command: Command,
         _ action: HeistActionCommand,
-        timeout: TimeInterval,
         expectationPayload: ExpectationPayload
     ) throws -> CommandExecution {
         guard expectationPayload.expectation == nil else {
@@ -177,7 +175,10 @@ extension TheFence {
                 "command \"\(command.rawValue)\" direct dispatch does not support expect"
             )
         }
-        guard let execution = DirectActionExecution(action, timeout: timeout) else {
+        guard let execution = DirectActionExecution(
+            action,
+            timeout: HeistExecutionBudget.requiredFixedActionTimeoutClass(for: command).seconds
+        ) else {
             preconditionFailure("\(command.rawValue) contract classified a durable action as direct execution")
         }
         return .directAction(execution)
@@ -186,20 +187,17 @@ extension TheFence {
     static func appInteractionExecution(
         _ command: Command,
         _ action: HeistActionCommand,
-        actionTimeout: TimeInterval,
         expectationPayload: ExpectationPayload
     ) throws -> CommandExecution {
         if let durableAction = DurableHeistActionCommand(action) {
             return .singleStepHeist(.action(
                 durableAction,
-                expectation: expectationPayload,
-                actionTimeout: actionTimeout
+                expectation: expectationPayload
             ))
         }
         return try directActionExecution(
             command,
             action,
-            timeout: actionTimeout,
             expectationPayload: expectationPayload
         )
     }

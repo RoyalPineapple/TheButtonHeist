@@ -118,32 +118,36 @@ final class WireCommandParityTests: XCTestCase {
     }
 
     @ButtonHeistActor
-    func testEveryActionCommandTypeHasOnePerformTimeoutClass() async {
-        let expectedTimeouts: [HeistActionCommandType: FenceCommandFixedTimeout] = [
-            .activate: .standardAction,
-            .increment: .standardAction,
-            .decrement: .standardAction,
-            .performCustomAction: .standardAction,
-            .rotor: .standardAction,
-            .dismiss: .standardAction,
-            .magicTap: .standardAction,
-            .oneFingerTap: .standardAction,
-            .longPress: .standardAction,
-            .swipe: .standardAction,
-            .drag: .standardAction,
-            .typeText: .longAction,
-            .editAction: .standardAction,
-            .setPasteboard: .standardAction,
-            .takeScreenshot: .standardAction,
-            .scroll: .standardAction,
-            .scrollToVisible: .standardAction,
-            .scrollToEdge: .standardAction,
-            .dismissKeyboard: .standardAction,
+    func testActionCommandDescriptorsUseCanonicalFixedTimeoutPolicy() async {
+        let actionFamilies: Set<FenceCommandFamily> = [
+            .semanticAction,
+            .spatialAction,
+            .viewportDebug,
         ]
-
-        XCTAssertEqual(Set(expectedTimeouts.keys), Set(HeistActionCommandType.allCases))
-        for type in HeistActionCommandType.allCases {
-            XCTAssertEqual(TheFence.performActionTimeoutClass(for: type), expectedTimeouts[type])
+        for descriptor in TheFence.Command.descriptors {
+            let expected = TheFence.HeistExecutionBudget.fixedActionTimeoutClass(
+                for: descriptor.command
+            )
+            guard actionFamilies.contains(descriptor.family) else {
+                XCTAssertNil(expected, descriptor.command.rawValue)
+                continue
+            }
+            guard let expected else {
+                XCTFail("Missing action timeout policy for \(descriptor.command.rawValue)")
+                continue
+            }
+            let actual: FenceCommandFixedTimeout?
+            switch descriptor.timeout {
+            case .fixed(let timeout), .singleStepAction(let timeout):
+                actual = timeout
+            case .none, .wait, .performStep, .heist:
+                actual = nil
+            }
+            guard let actual else {
+                XCTFail("Expected action timeout for \(descriptor.command.rawValue)")
+                continue
+            }
+            XCTAssertEqual(actual, expected, descriptor.command.rawValue)
         }
     }
 
@@ -284,7 +288,7 @@ final class WireCommandParityTests: XCTestCase {
         for (command, arguments) in cases {
             let request = try fence.parseRequest(command: command, values: arguments)
             guard case .singleStepHeist(let heistRequest) = request.execution,
-                  case .action(let action, _, _) = heistRequest else {
+                  case .action(let action, _) = heistRequest else {
                 return XCTFail("\(command.rawValue) should decode as single-step action command")
             }
             let plan = try fence.singleStepHeistPlan(for: heistRequest)

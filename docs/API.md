@@ -481,7 +481,7 @@ Environment variables:
 | `BUTTONHEIST_DEVICE` | Default device filter or named target |
 | `BUTTONHEIST_TOKEN` | Auth token |
 | `BUTTONHEIST_DRIVER_ID` | Driver identity for session locking |
-| `BUTTONHEIST_SESSION_TIMEOUT` | MCP idle disconnect timeout |
+| `BUTTONHEIST_SESSION_TIMEOUT` | MCP idle disconnect timeout (`0` disables it) |
 
 ## CLI
 
@@ -499,9 +499,13 @@ Common environment variables:
 | `BUTTONHEIST_DEVICE` | Default device filter or named target |
 | `BUTTONHEIST_TOKEN` | Auth token |
 | `BUTTONHEIST_DRIVER_ID` | Driver identity for session locking |
-| `BUTTONHEIST_SESSION_TIMEOUT` | Default idle timeout for `buttonheist json_lines` |
+| `BUTTONHEIST_SESSION_TIMEOUT` | Default idle timeout for `buttonheist json_lines` (`0` disables it) |
 
 Flags take precedence over environment variables.
+Session idle timeout accepts `0` as the explicit disabled state. Positive
+session and connection timeouts must be finite. A present malformed, negative,
+or non-finite value fails configuration instead of silently selecting a
+default.
 
 ### Notifications
 

@@ -8,7 +8,7 @@ extension TheFence {
     struct RunHeistRequest {
         let plan: HeistPlan
         let argument: HeistArgument
-        let timeout: HeistTimeout
+        let timeout: HeistTimeout?
     }
 
     struct PerformRequest {
@@ -92,10 +92,7 @@ extension TheFence {
         return RunHeistRequest(
             plan: plan,
             argument: argument,
-            timeout: try arguments.value(
-                FenceParameters.heistTimeout,
-                defaultFrom: Command.runHeist.descriptor
-            )
+            timeout: try arguments.value(FenceParameters.heistTimeout)
         )
     }
 

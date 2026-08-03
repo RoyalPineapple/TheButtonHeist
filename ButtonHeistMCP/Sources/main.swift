@@ -31,8 +31,10 @@ struct ButtonHeistMCPServer {
     private static func setUp() throws -> MCPServerContext {
         let config = try EnvironmentConfig.resolve()
         let fence = TheFence(configuration: config.fenceConfiguration)
-        let idleMonitor = IdleMonitor(timeout: config.sessionTimeout) { [fence] in
-            fence.stop()
+        let idleMonitor = config.sessionTimeout.seconds.map { timeout in
+            IdleMonitor(timeout: timeout) { [fence] in
+                fence.stop()
+            }
         }
         return MCPServerContext(fence: fence, idleMonitor: idleMonitor)
     }
@@ -42,7 +44,7 @@ struct ButtonHeistMCPServer {
         _ params: CallTool.Parameters,
         context: MCPServerContext
     ) async -> CallTool.Result {
-        defer { context.idleMonitor.resetTimer() }
+        defer { context.idleMonitor?.resetTimer() }
         do {
             let arguments = try MCPValueBridge.commandEnvelope(from: params.arguments)
             switch TheFence.Command.routeToolRequest(named: params.name, arguments: arguments) {
@@ -103,5 +105,5 @@ struct ButtonHeistMCPServer {
 
 private struct MCPServerContext {
     let fence: TheFence
-    let idleMonitor: IdleMonitor
+    let idleMonitor: IdleMonitor?
 }
