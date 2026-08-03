@@ -27,7 +27,7 @@ final class RefusingActivationView: UIView {
     }
 }
 
-final class ActionActivatingTextField: UITextField {
+final class ActionActivatingTextField: DeterministicTextField {
     private(set) var activationCount = 0
 
     override func accessibilityActivate() -> Bool {
@@ -36,7 +36,7 @@ final class ActionActivatingTextField: UITextField {
     }
 }
 
-final class TouchFallbackTextField: UITextField {
+final class TouchFallbackTextField: DeterministicTextField {
     private(set) var accessibilityActivationCount = 0
     var onBecomeFirstResponder: (@MainActor () -> Void)?
 
@@ -48,15 +48,6 @@ final class TouchFallbackTextField: UITextField {
     override func becomeFirstResponder() -> Bool {
         onBecomeFirstResponder?()
         return super.becomeFirstResponder()
-    }
-}
-
-final class ResignationTrackingTextField: UITextField {
-    private(set) var resignationCount = 0
-
-    override func resignFirstResponder() -> Bool {
-        resignationCount += 1
-        return super.resignFirstResponder()
     }
 }
 

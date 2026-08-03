@@ -202,7 +202,9 @@ extension TheBrainsActionTests {
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
 
-        let textField = UITextField(frame: CGRect(x: 48, y: 180, width: 240, height: 44))
+        let textField = DeterministicTextField(
+            frame: CGRect(x: 48, y: 180, width: 240, height: 44)
+        )
         textField.borderStyle = .roundedRect
         textField.isAccessibilityElement = true
         textField.accessibilityLabel = "Message"
@@ -250,7 +252,9 @@ extension TheBrainsActionTests {
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
 
-        let textField = UITextField(frame: CGRect(x: 48, y: 180, width: 240, height: 44))
+        let textField = DeterministicTextField(
+            frame: CGRect(x: 48, y: 180, width: 240, height: 44)
+        )
         textField.borderStyle = .roundedRect
         textField.text = "a"
         textField.isAccessibilityElement = true
@@ -297,7 +301,9 @@ extension TheBrainsActionTests {
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
 
-        let textField = UITextField(frame: CGRect(x: 48, y: 180, width: 240, height: 44))
+        let textField = DeterministicTextField(
+            frame: CGRect(x: 48, y: 180, width: 240, height: 44)
+        )
         textField.borderStyle = .roundedRect
         textField.text = "abc"
         textField.isAccessibilityElement = true
@@ -447,7 +453,7 @@ extension TheBrainsActionTests {
     func testExecuteResignFirstResponderUsesReplacementObjectForCommittedHeistId() async throws {
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
-        let replacementTextField = ResignationTrackingTextField(
+        let replacementTextField = DeterministicTextField(
             frame: CGRect(x: 48, y: 180, width: 240, height: 44)
         )
         replacementTextField.isAccessibilityElement = true
@@ -469,7 +475,7 @@ extension TheBrainsActionTests {
             traits: .textEntry,
             frame: replacementTextField.frame
         )
-        let staleTextField = ResignationTrackingTextField(frame: replacementTextField.frame)
+        let staleTextField = DeterministicTextField(frame: replacementTextField.frame)
         await installSyntheticObservation(.makeForTests(
             elements: [(element, heistId)],
             objects: [heistId: staleTextField],
