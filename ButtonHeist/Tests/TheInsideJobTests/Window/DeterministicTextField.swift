@@ -21,4 +21,29 @@ class DeterministicTextField: UITextField {
         return true
     }
 }
+
+@MainActor
+final class DeterministicTouchReceiver: UIView {
+    private let onTouchEnded: @MainActor () -> Void
+    private(set) var completedTouchCount = 0
+
+    init(
+        frame: CGRect,
+        onTouchEnded: @escaping @MainActor () -> Void
+    ) {
+        self.onTouchEnded = onTouchEnded
+        super.init(frame: frame)
+        isAccessibilityElement = false
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        completedTouchCount += touches.count
+        onTouchEnded()
+    }
+}
 #endif
