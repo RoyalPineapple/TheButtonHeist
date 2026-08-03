@@ -23,9 +23,7 @@ extension TheGetaway {
             return await rejectTransportWiring(attempt)
         }
 
-        if let pauseBeforeTransportCallbackBeginForTesting {
-            await pauseBeforeTransportCallbackBeginForTesting()
-        }
+        await transportWiringBoundary.beforeCallbackBegin(attempt)
         let beginOutcome = await muscle.beginCallbackWiring(attempt.deliveryGeneration)
         guard beginOutcome == .admitted,
               transportWiring.admits(attempt)
@@ -60,9 +58,7 @@ extension TheGetaway {
         ) async -> Void = { [weak self] _, respond in
             await self?.sendServerInfo(respond: respond, generation: generation)
         }
-        if let pauseBeforeTransportCallbackInstallationForTesting {
-            await pauseBeforeTransportCallbackInstallationForTesting()
-        }
+        await transportWiringBoundary.beforeCallbackInstallation(attempt)
         return await muscle.installCallbacks(
             sendToClient: sendToClient,
             disconnectClient: disconnect,

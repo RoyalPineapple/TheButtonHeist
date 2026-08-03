@@ -34,6 +34,16 @@ final class TheGetaway {
         let deliveryGeneration: ClientDelivery.Generation
     }
 
+    struct TransportWiringBoundary {
+        let beforeCallbackBegin: @MainActor @Sendable (TransportWiringAttempt) async -> Void
+        let beforeCallbackInstallation: @MainActor @Sendable (TransportWiringAttempt) async -> Void
+
+        static let immediate = TransportWiringBoundary(
+            beforeCallbackBegin: { _ in },
+            beforeCallbackInstallation: { _ in }
+        )
+    }
+
     enum TransportWiringOutcome {
         case admitted(TransportWiringAttempt)
         case rejected
@@ -101,9 +111,8 @@ final class TheGetaway {
     /// stale transport or consumer behind while callback installation is suspended.
     var transportWiring: TransportWiringState = .unwired
     private var latestIssuedDeliveryGenerationRawValue: UInt64 = 0
+    let transportWiringBoundary: TransportWiringBoundary
 
-    var pauseBeforeTransportCallbackBeginForTesting: (@MainActor @Sendable () async -> Void)?
-    var pauseBeforeTransportCallbackInstallationForTesting: (@MainActor @Sendable () async -> Void)?
     var transport: ServerTransport? {
         transportWiring.transport
     }
@@ -123,6 +132,7 @@ final class TheGetaway {
         muscle: TheMuscle,
         brains: TheBrains,
         identity: ServerIdentity,
+        transportWiringBoundary: TransportWiringBoundary = .immediate,
         mainThreadProbe: @escaping TransportControlPlane.Probe = {
             try await MainThreadProbe.execute($0)
         }
@@ -131,6 +141,7 @@ final class TheGetaway {
         self.brains = brains
         self.identity = identity
         self.pongPayload = Self.capturePongPayload(identity: identity)
+        self.transportWiringBoundary = transportWiringBoundary
         self.mainThreadProbe = mainThreadProbe
     }
 

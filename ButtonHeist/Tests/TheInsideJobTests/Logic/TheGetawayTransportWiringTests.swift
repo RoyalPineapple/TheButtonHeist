@@ -322,6 +322,11 @@ final class TheGetawayTransportWiringTests: XCTestCase {
     func testOlderWiringPausedBeforeBeginCannotReplaceCurrentWiring() async {
         let muscle = TheMuscle(sessionToken: "transport-wiring-token", sessionReleaseTimeout: 1)
         let brains = TheBrains(tripwire: TheTripwire())
+        let staleTransport = ServerTransport(token: "transport-wiring-token")
+        let currentTransport = ServerTransport(token: "transport-wiring-token")
+        let enteredStaleBegin = CompletionSignal()
+        let releaseStaleBegin = CompletionSignal()
+        let staleReachedInstallation = CompletionSignal()
         let getaway = TheGetaway(
             muscle: muscle,
             brains: brains,
@@ -329,16 +334,20 @@ final class TheGetawayTransportWiringTests: XCTestCase {
                 launchId: "transport-wiring-launch",
                 effectiveInstanceId: "transport-wiring-instance",
                 tlsActive: false
+            ),
+            transportWiringBoundary: .init(
+                beforeCallbackBegin: { attempt in
+                    guard attempt.transport === staleTransport else { return }
+                    enteredStaleBegin.finish()
+                    await releaseStaleBegin.wait()
+                },
+                beforeCallbackInstallation: { attempt in
+                    if attempt.transport === staleTransport {
+                        staleReachedInstallation.finish()
+                    }
+                }
             )
         )
-        let staleTransport = ServerTransport(token: "transport-wiring-token")
-        let currentTransport = ServerTransport(token: "transport-wiring-token")
-        let enteredStaleBegin = CompletionSignal()
-        let releaseStaleBegin = CompletionSignal()
-        getaway.pauseBeforeTransportCallbackBeginForTesting = {
-            enteredStaleBegin.finish()
-            await releaseStaleBegin.wait()
-        }
 
         let staleWiringTask = Task { @MainActor in
             let outcome = await getaway.wireTransport(staleTransport) { _ in }
@@ -346,22 +355,16 @@ final class TheGetawayTransportWiringTests: XCTestCase {
             return true
         }
         await enteredStaleBegin.wait()
-        getaway.pauseBeforeTransportCallbackBeginForTesting = nil
 
         let currentOutcome = await getaway.wireTransport(currentTransport) { _ in }
         guard case .admitted(let currentAdmission) = currentOutcome else {
             return XCTFail("Expected current wiring to be admitted")
         }
-        var staleReachedInstallation = false
-        getaway.pauseBeforeTransportCallbackInstallationForTesting = {
-            staleReachedInstallation = true
-        }
-
         releaseStaleBegin.finish()
         let staleRejectedWiring = await staleWiringTask.value
 
         XCTAssertTrue(staleRejectedWiring, "Expected stale begin to reject its wiring attempt")
-        XCTAssertFalse(staleReachedInstallation, "Rejected begin must not continue to callback installation")
+        XCTAssertFalse(staleReachedInstallation.isFinished, "Rejected begin must not continue to callback installation")
         let finalGeneration = await muscle.callbackDeliveryGenerationForTesting
         XCTAssertEqual(finalGeneration, currentAdmission.deliveryGeneration)
         guard case .wired(let wiredTransport) = getaway.transportWiring else {
@@ -375,6 +378,9 @@ final class TheGetawayTransportWiringTests: XCTestCase {
     func testTearDownDuringTransportWiringPreventsStaleConsumerCommit() async {
         let muscle = TheMuscle(sessionToken: "transport-wiring-token", sessionReleaseTimeout: 1)
         let brains = TheBrains(tripwire: TheTripwire())
+        let transport = ServerTransport(token: "transport-wiring-token")
+        let enteredInstallation = CompletionSignal()
+        let releaseInstallation = CompletionSignal()
         let getaway = TheGetaway(
             muscle: muscle,
             brains: brains,
@@ -382,15 +388,16 @@ final class TheGetawayTransportWiringTests: XCTestCase {
                 launchId: "transport-wiring-launch",
                 effectiveInstanceId: "transport-wiring-instance",
                 tlsActive: false
+            ),
+            transportWiringBoundary: .init(
+                beforeCallbackBegin: { _ in },
+                beforeCallbackInstallation: { attempt in
+                    guard attempt.transport === transport else { return }
+                    enteredInstallation.finish()
+                    await releaseInstallation.wait()
+                }
             )
         )
-        let transport = ServerTransport(token: "transport-wiring-token")
-        let enteredInstallation = CompletionSignal()
-        let releaseInstallation = CompletionSignal()
-        getaway.pauseBeforeTransportCallbackInstallationForTesting = {
-            enteredInstallation.finish()
-            await releaseInstallation.wait()
-        }
 
         let wiringTask = Task { @MainActor in
             let outcome = await getaway.wireTransport(transport) { _ in }
@@ -416,6 +423,10 @@ final class TheGetawayTransportWiringTests: XCTestCase {
     func testStaleTransportWiringCannotOverwriteNewerCallbacks() async {
         let muscle = TheMuscle(sessionToken: "transport-wiring-token", sessionReleaseTimeout: 1)
         let brains = TheBrains(tripwire: TheTripwire())
+        let staleTransport = ServerTransport(token: "transport-wiring-token")
+        let currentTransport = ServerTransport(token: "transport-wiring-token")
+        let enteredStaleInstallation = CompletionSignal()
+        let releaseStaleInstallation = CompletionSignal()
         let getaway = TheGetaway(
             muscle: muscle,
             brains: brains,
@@ -423,16 +434,16 @@ final class TheGetawayTransportWiringTests: XCTestCase {
                 launchId: "transport-wiring-launch",
                 effectiveInstanceId: "transport-wiring-instance",
                 tlsActive: false
+            ),
+            transportWiringBoundary: .init(
+                beforeCallbackBegin: { _ in },
+                beforeCallbackInstallation: { attempt in
+                    guard attempt.transport === staleTransport else { return }
+                    enteredStaleInstallation.finish()
+                    await releaseStaleInstallation.wait()
+                }
             )
         )
-        let staleTransport = ServerTransport(token: "transport-wiring-token")
-        let currentTransport = ServerTransport(token: "transport-wiring-token")
-        let enteredStaleInstallation = CompletionSignal()
-        let releaseStaleInstallation = CompletionSignal()
-        getaway.pauseBeforeTransportCallbackInstallationForTesting = {
-            enteredStaleInstallation.finish()
-            await releaseStaleInstallation.wait()
-        }
 
         let staleWiringTask = Task { @MainActor in
             let outcome = await getaway.wireTransport(staleTransport) { _ in }
@@ -440,7 +451,6 @@ final class TheGetawayTransportWiringTests: XCTestCase {
             return true
         }
         await enteredStaleInstallation.wait()
-        getaway.pauseBeforeTransportCallbackInstallationForTesting = nil
 
         let currentOutcome = await getaway.wireTransport(currentTransport) { _ in }
         guard case .admitted(let currentAdmission) = currentOutcome else {
@@ -470,17 +480,21 @@ final class TheGetawayTransportWiringTests: XCTestCase {
             token: token,
             serverDependencies: .init(listenerProvider: listeners.listenerProvider)
         )
+        let enteredInstallation = CompletionSignal()
+        let releaseInstallation = CompletionSignal()
         let job = try TheInsideJob(
             token: token.description,
             addressFamily: .ipv4,
+            transportWiringBoundary: .init(
+                beforeCallbackBegin: { _ in },
+                beforeCallbackInstallation: { attempt in
+                    guard attempt.transport === transport else { return }
+                    enteredInstallation.finish()
+                    await releaseInstallation.wait()
+                }
+            ),
             transportProvider: { _, _ in transport }
         )
-        let enteredInstallation = CompletionSignal()
-        let releaseInstallation = CompletionSignal()
-        job.getaway.pauseBeforeTransportCallbackInstallationForTesting = {
-            enteredInstallation.finish()
-            await releaseInstallation.wait()
-        }
         let request = TheInsideJob.InsideJobTransportStartRequest(
             id: UUID(),
             transport: transport,

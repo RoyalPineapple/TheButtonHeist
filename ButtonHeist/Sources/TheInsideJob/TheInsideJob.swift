@@ -208,6 +208,7 @@ public final class TheInsideJob {
         fingerprintsEnabled: Bool? = nil,
         authenticationPolicy: InsideJobAuthenticationPolicy = .default,
         visibleObservationSource: @escaping TheVault.VisibleObservationSource = TheVault.captureVisibleObservation,
+        transportWiringBoundary: TheGetaway.TransportWiringBoundary = .immediate,
         transportProvider: @escaping @MainActor (SessionAuthToken, Set<ConnectionScope>) -> ServerTransport = {
             ServerTransport(token: $0, allowedScopes: $1)
         }
@@ -224,6 +225,7 @@ public final class TheInsideJob {
                 authenticationPolicy: authenticationPolicy
             ),
             visibleObservationSource: visibleObservationSource,
+            transportWiringBoundary: transportWiringBoundary,
             transportProvider: transportProvider
         )
     }
@@ -237,6 +239,7 @@ public final class TheInsideJob {
     init(
         runtimeConfiguration: InsideJobRuntimeConfiguration,
         visibleObservationSource: @escaping TheVault.VisibleObservationSource = TheVault.captureVisibleObservation,
+        transportWiringBoundary: TheGetaway.TransportWiringBoundary = .immediate,
         transportProvider: @escaping @MainActor (SessionAuthToken, Set<ConnectionScope>) -> ServerTransport = {
             ServerTransport(token: $0, allowedScopes: $1)
         }
@@ -261,7 +264,8 @@ public final class TheInsideJob {
                 launchId: runtimeConfiguration.sessionIdentity.launchId,
                 effectiveInstanceId: runtimeConfiguration.sessionIdentity.effectiveInstanceId.value,
                 tlsActive: false
-            )
+            ),
+            transportWiringBoundary: transportWiringBoundary
         )
     }
 

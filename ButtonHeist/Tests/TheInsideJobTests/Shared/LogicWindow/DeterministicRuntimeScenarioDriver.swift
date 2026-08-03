@@ -584,10 +584,8 @@ final class DeterministicRuntimeScenarioDriver {
     func run() async throws -> DeterministicRuntimeScenarioResult {
         let session = makeSession()
         let stream = session.brains.vault.semanticObservationStream
-        stream.observationWaiterDidRegister = { session.inputProbe.recordRequest() }
         stream.start()
         defer {
-            stream.observationWaiterDidRegister = nil
             stream.stop()
         }
 
@@ -630,7 +628,10 @@ final class DeterministicRuntimeScenarioDriver {
             failureEvidencePolicy: failureEvidencePolicy,
             visibleObservationSource: source.capture,
             notificationIngress: .injected,
-            pulseIngress: .injected
+            pulseIngress: .injected,
+            observationSchedulingBoundary: .init(
+                waiterRegistered: { inputProbe.recordRequest() }
+            )
         )
         let effects = ScriptedActionEffects(
             inputProbe: inputProbe,

@@ -24,6 +24,12 @@ enum AccessibilityNotificationIngress {
 extension Observation {
 @MainActor
 internal final class Stream {
+    struct SchedulingBoundary {
+        let waiterRegistered: @MainActor () -> Void
+
+        static let immediate = SchedulingBoundary(waiterRegistered: {})
+    }
+
     enum PulseIngress {
         case displayLink
         case injected
@@ -84,7 +90,7 @@ internal final class Stream {
         activeViewportMovementCount == 0 ? .resting : .viewportMovement
     }
     var observationWaiters = WaiterStore<UInt64, SemanticObservationWaiter>()
-    var observationWaiterDidRegister: (@MainActor () -> Void)?
+    let schedulingBoundary: SchedulingBoundary
     private var eventReceiver: EventReceiver?
     private let notificationIngress: AccessibilityNotificationIngress
     let pulseIngress: PulseIngress
@@ -115,12 +121,14 @@ internal final class Stream {
         vault: TheVault,
         tripwire: TheTripwire,
         notificationIngress: AccessibilityNotificationIngress,
-        pulseIngress: PulseIngress
+        pulseIngress: PulseIngress,
+        schedulingBoundary: SchedulingBoundary
     ) {
         self.vault = vault
         self.tripwire = tripwire
         self.notificationIngress = notificationIngress
         self.pulseIngress = pulseIngress
+        self.schedulingBoundary = schedulingBoundary
         self.readTripwireSignal = { tripwire.tripwireSignal() }
     }
 

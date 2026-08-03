@@ -185,9 +185,6 @@ actor TheMuscle {
         await sendResponse(.serverHello, to: .client(clientId), generation: generation)
     }
 
-    /// Pings do not affect session ownership; release timers are tied to disconnect/rejoin transitions.
-    func noteClientActivity(_: Int) {}
-
     /// Send an already-encoded envelope to a single client.
     @discardableResult
     func sendData(_ data: Data, toClient clientId: Int) async -> ServerSendOutcome {

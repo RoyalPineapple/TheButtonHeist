@@ -90,53 +90,23 @@ extension TheInsideJob {
     }
 
     func performLifecycleSchedulingEffects(_ effects: [InsideJobLifecycleReducer.Effect]) {
-        for effect in effects {
-            switch effect {
-            case .scheduleSuspend:
-                spawnLifecycleTask { [weak self] in
-                    await self?.suspend()
-                }
-            case .scheduleResume(let attempt):
-                spawnLifecycleTask { [weak self] in
-                    if let attempt {
-                        await self?.performLifecycleEffect(.cancelResume(attempt))
-                    }
-                    await self?.resumeAfterLifecycleBoundary()
-                }
-            case .scheduleStop:
-                spawnLifecycleTask { [weak self] in
-                    await self?.stop()
-                }
-            case .stopTransport,
-                 .cleanupTransport,
-                 .releaseResources,
-                 .cancelResume,
-                 .activateRuntime,
-                 .tearDownRuntimeServices:
-                spawnLifecycleTask { [weak self] in
-                    await self?.performLifecycleEffect(effect)
-                }
-            }
+        guard !effects.isEmpty else { return }
+        spawnLifecycleTask { [weak self] in
+            await self?.performLifecycleEffects(effects)
         }
     }
 
     func performLifecycleEffect(_ effect: InsideJobLifecycleReducer.Effect) async {
         switch effect {
         case .scheduleSuspend:
-            spawnLifecycleTask { [weak self] in
-                await self?.suspend()
-            }
+            await suspend()
         case .scheduleResume(let attempt):
-            spawnLifecycleTask { [weak self] in
-                if let attempt {
-                    await self?.performLifecycleEffect(.cancelResume(attempt))
-                }
-                await self?.resumeAfterLifecycleBoundary()
+            if let attempt {
+                await performLifecycleEffect(.cancelResume(attempt))
             }
+            await resumeAfterLifecycleBoundary()
         case .scheduleStop:
-            spawnLifecycleTask { [weak self] in
-                await self?.stop()
-            }
+            await stop()
         case .stopTransport(let transport):
             await transport.stop()
         case .cleanupTransport(let transport):

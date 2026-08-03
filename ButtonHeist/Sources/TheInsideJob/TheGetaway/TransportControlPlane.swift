@@ -242,7 +242,6 @@ actor TransportControlPlane {
         let envelope = message.envelope
         switch envelope.message {
         case .ping:
-            await muscle.noteClientActivity(message.clientId)
             await respond(
                 .pong(pongPayload.withServerTimestamp()),
                 to: envelope,
