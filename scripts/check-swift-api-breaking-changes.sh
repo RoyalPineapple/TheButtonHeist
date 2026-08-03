@@ -55,12 +55,12 @@ if [[ "$MODE" == "report" ]]; then
     exit 0
 fi
 
-# v0.6.32 exposed the automatic main-thread watchdog and redundant
-# evidence/error/response-presentation facades as public API. Their correction
-# and removal are intentional source compression; this waiver is bound to that
-# baseline, so it expires automatically with the next tag.
-if [[ "$BASELINE_TAG" == "v0.6.32" ]]; then
-    echo "Intentional source-breaking watchdog correction and removal of redundant evidence/error/response-presentation facades against $BASELINE_TAG."
+# v0.6.33 includes intentional source changes: a typed session timeout, an
+# explicit accessibility-activation Boolean, and an expanded adversarial
+# scenario catalog. This waiver is bound to that baseline and expires when
+# v0.6.34 becomes the API baseline.
+if [[ "$BASELINE_TAG" == "v0.6.33" ]]; then
+    echo "Intentional source changes against $BASELINE_TAG: typed EnvironmentConfig.sessionTimeout, explicit Bool on ActivationTracePhase.accessibilityActivate, and the expanded adversarial scenario catalog."
     echo "The exemption expires when the next release tag becomes the API baseline."
     exit 0
 fi
