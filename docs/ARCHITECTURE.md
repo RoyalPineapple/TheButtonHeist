@@ -207,8 +207,11 @@ Cancellation remains inside the reducer. During active work, the host sends
 effect, admits its matching completion fact, and completes with `.cancelled`.
 During failure capture, cancellation skips the optional evidence and completes
 with `.cancelled`. A capture admitted first completes the failed result. A
-cancellation admitted first absorbs a late capture. The host then throws
-`CancellationError` to the caller.
+cancellation admitted first absorbs a late capture. The host uses a
+cancellation-aware one-shot for failure capture. Thus, the host does not wait
+for the capture operation to return after cancellation. The live boundary
+completes one observation cycle and honors task cancellation. The host then
+throws `CancellationError` to the caller.
 
 Failure evidence is finalized by the same reducer. Whenever executed root
 children contain an `abortedAtPath` and screenshot evidence is enabled, the
@@ -725,11 +728,11 @@ queued work. Per-client `ClientRequestPipeline` instances preserve frame and
 admission order only; control traffic remains outside the interaction executor.
 
 `drain()` cancels active and queued work, then waits for active cleanup. Its
-cleanup deadline bounds that wait. At expiry, the executor abandons the active
-request identity and releases every drain caller. A late completion from that
-request cannot change the current phase or advance a replacement request. An
-owner cancellation that expires without a drain rejects new work until a drain
-resets the executor.
+cleanup deadline bounds only that wait. At expiry, the executor releases every
+drain caller but keeps the active request in the cancelling phase. The executor
+rejects new UI work with `cleanupTimedOut` until the active operation returns.
+Thus, the old operation cannot overlap replacement UI work. Its completion
+returns the executor to the idle phase.
 
 Plan identity follows the same boundary rule. `HeistPlanName` and
 `HeistReferenceName` are distinct roles backed by one exact identifier grammar.

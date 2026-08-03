@@ -5,8 +5,18 @@ import TheScore
 
 internal enum SemanticObservationWaitBoundary: Sendable, Equatable {
     case cancellation
+    case cancellableObservationCycle
     case observationCycle
     case externalDeadline(SemanticObservationDeadline)
+
+    var completesObservationCycle: Bool {
+        switch self {
+        case .cancellableObservationCycle, .observationCycle:
+            true
+        case .cancellation, .externalDeadline:
+            false
+        }
+    }
 }
 
 @MainActor
@@ -55,8 +65,9 @@ extension Observation.Stream {
         let subscription = subscribe(scope: scope)
         defer { subscription.cancel() }
 
+        let result: SemanticObservationWaitResult
         if case .observationCycle = boundary {
-            let result = await withCheckedContinuation { continuation in
+            result = await withCheckedContinuation { continuation in
                 guard oneShot.register(continuation) else {
                     continuation.resume(returning: .cancelled)
                     return
@@ -69,26 +80,29 @@ extension Observation.Stream {
                     boundary: boundary
                 )
             }
-            if result != .cancelled, result != .deadlineReached {
-                SemanticObservationCycleContext.receipt?.completed = true
-            }
-            return result
+        } else {
+            result = await oneShot.wait(
+                cancellationValue: .cancelled,
+                onRegistered: { oneShot in
+                    registerObservationWaiter(
+                        oneShot,
+                        id: waiterID,
+                        historyIndex: historyIndex,
+                        scope: scope,
+                        boundary: boundary
+                    )
+                },
+                onFinished: {
+                    observationWaiters.remove(id: waiterID)?.oneShot.cancelTimeout()
+                }
+            )
         }
-        return await oneShot.wait(
-            cancellationValue: .cancelled,
-            onRegistered: { oneShot in
-                registerObservationWaiter(
-                    oneShot,
-                    id: waiterID,
-                    historyIndex: historyIndex,
-                    scope: scope,
-                    boundary: boundary
-                )
-            },
-            onFinished: {
-                observationWaiters.remove(id: waiterID)?.oneShot.cancelTimeout()
-            }
-        )
+        if boundary.completesObservationCycle,
+           result != .cancelled,
+           result != .deadlineReached {
+            SemanticObservationCycleContext.receipt?.completed = true
+        }
+        return result
     }
 
     private func registerObservationWaiter(
@@ -116,7 +130,7 @@ extension Observation.Stream {
         after historyIndex: Int?,
         boundary: SemanticObservationWaitBoundary
     ) async -> TheVault.State.Current? {
-        if case .observationCycle = boundary {
+        if boundary.completesObservationCycle {
             guard isActive else { return nil }
             if scope != .discovery {
                 return admittedObservation(
@@ -206,7 +220,7 @@ extension Observation.Stream {
         case .failure(let error):
             return .unavailable(error)
         case .success(nil):
-            if case .observationCycle = waiter.boundary,
+            if waiter.boundary.completesObservationCycle,
                let completedScope,
                observationCommitted == false,
                completedScope >= waiter.scope {

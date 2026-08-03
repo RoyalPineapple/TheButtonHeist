@@ -127,7 +127,7 @@ final class TheBrainsInteractionRequestTests: XCTestCase {
     }
 
     @MainActor
-    func testDrainDeadlineInvalidatesLateRequestCompletion() async {
+    func testDrainDeadlineReleasesWaitersAndRejectsAdmissionUntilLateOperationReturns() async {
         let deadline = ManualInteractionCleanupDeadline()
         let executor = InteractionRequestExecutor(
             cleanupDeadlineScheduler: deadline.schedule
@@ -136,12 +136,14 @@ final class TheBrainsInteractionRequestTests: XCTestCase {
         let drainCompleted = CompletionSignal()
         let joinedDrainCompleted = CompletionSignal()
         let lateReturn = CompletionSignal()
-        let replacementGate = PipelineTestGate()
-        let followingCompleted = CompletionSignal()
+        let replacementCompleted = CompletionSignal()
         var activeCancellationCount = 0
+        var rejectedReplacementCount = 0
+        var trace = ["active-start"]
 
         XCTAssertEqual(executor.submit(owner: .inApp, operation: {
             await activeGate.suspendIgnoringCancellation()
+            trace.append("active-effect")
             lateReturn.finish()
         }, completion: { outcome in
             if case .cancelled = outcome {
@@ -169,28 +171,30 @@ final class TheBrainsInteractionRequestTests: XCTestCase {
         XCTAssertTrue(drainCompleted.isFinished)
         XCTAssertTrue(joinedDrainCompleted.isFinished)
         XCTAssertEqual(executor.submit(owner: .inApp, operation: {
-            await replacementGate.suspend()
-        }, completion: { _ in }), .accepted)
-        await replacementGate.entered.wait()
-        XCTAssertEqual(executor.submit(owner: .inApp, operation: {
-            followingCompleted.finish()
-        }, completion: { _ in }), .accepted)
+            trace.append("rejected-replacement")
+        }, completion: { outcome in
+            if case .rejected(.cleanupTimedOut) = outcome {
+                rejectedReplacementCount += 1
+            }
+        }), .rejected(.cleanupTimedOut))
+        XCTAssertEqual(rejectedReplacementCount, 1)
+        XCTAssertEqual(trace, ["active-start"])
 
-        // The abandoned task can return, but its old identity cannot change the
-        // current executor phase or advance the replacement request's queue.
         activeGate.release()
         await lateReturn.wait()
         await Task.yield()
         XCTAssertEqual(activeCancellationCount, 1)
-        XCTAssertFalse(followingCompleted.isFinished)
-
-        replacementGate.release()
-        await followingCompleted.wait()
+        XCTAssertEqual(executor.submit(owner: .inApp, operation: {
+            trace.append("replacement")
+            replacementCompleted.finish()
+        }, completion: { _ in }), .accepted)
+        await replacementCompleted.wait()
+        XCTAssertEqual(trace, ["active-start", "active-effect", "replacement"])
         await executor.drain()
     }
 
     @MainActor
-    func testCancellationDeadlineRejectsAdmissionUntilDrainAbandonsRequest() async {
+    func testDrainAfterExpiredCancellationRejectsAdmissionUntilCleanupReturns() async {
         let deadline = ManualInteractionCleanupDeadline()
         let executor = InteractionRequestExecutor(
             cleanupDeadlineScheduler: deadline.schedule
@@ -236,8 +240,26 @@ final class TheBrainsInteractionRequestTests: XCTestCase {
         await drainStarted.wait()
         await drain.value
         XCTAssertEqual(activeCancellationCount, 1)
+        XCTAssertEqual(
+            executor.submit(
+                owner: .transportClient(testLease(3)),
+                operation: {},
+                completion: { _ in }
+            ),
+            .rejected(.cleanupTimedOut)
+        )
         activeGate.release()
         await lateReturn.wait()
+        await Task.yield()
+        XCTAssertEqual(
+            executor.submit(
+                owner: .transportClient(testLease(3)),
+                operation: {},
+                completion: { _ in }
+            ),
+            .accepted
+        )
+        await executor.drain()
     }
 }
 

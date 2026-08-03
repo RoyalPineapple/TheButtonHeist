@@ -20,8 +20,6 @@ struct ActivationPolicy<PreparedDispatch: Sendable> {
     var accessibilityActivate: @MainActor (
         TheVault.LiveActionTarget
     ) -> Result<ActivationDispatchEvidence, TheVault.LiveTargetStaleness<HeistId>>
-    var settleRefusedActivation: @MainActor () async
-        -> Observation.Stream.RefusedActivationSettlement
     var refreshAndResolve: @MainActor () async -> ActivationRefreshResult
     var prepareActivationPointDispatch: @MainActor (CGPoint) -> PreparedDispatch?
     var completeActivationPointDispatch: @MainActor (PreparedDispatch) async -> Bool
@@ -60,20 +58,11 @@ struct ActivationPolicy<PreparedDispatch: Sendable> {
         switch activateOutcome {
         case .success:
             return await accessibilityActivationResult(
-                returned: true,
                 treeElement: treeElement,
                 subjectEvidence: subjectEvidence,
                 activationPoint: activationPoint
             )
-        case .refused:
-            if let result = await refusedActivationResult(
-                treeElement: treeElement,
-                subjectEvidence: subjectEvidence,
-                activationPoint: activationPoint
-            ) {
-                return result
-            }
-        case .objectDeallocated:
+        case .refused, .objectDeallocated:
             break
         }
 
@@ -122,44 +111,14 @@ struct ActivationPolicy<PreparedDispatch: Sendable> {
     }
 
     @MainActor
-    private func refusedActivationResult(
-        treeElement: InterfaceTree.Element,
-        subjectEvidence: ActionSubjectEvidence,
-        activationPoint: CGPoint
-    ) async -> TheSafecracker.ActionDispatchResult? {
-        switch await settleRefusedActivation() {
-        case .effectObserved:
-            return await accessibilityActivationResult(
-                returned: false,
-                treeElement: treeElement,
-                subjectEvidence: subjectEvidence,
-                activationPoint: activationPoint
-            )
-        case .quiescent:
-            return nil
-        case .unavailable:
-            return .failure(
-                .activate,
-                message: "activate failed: accessibilityActivate() declined and action quiescence "
-                    + "was not proven before the action deadline; activation-point dispatch was not attempted",
-                subjectEvidence: subjectEvidence,
-                activationTrace: ActivationTrace(.accessibilityActivate(
-                    axActivateReturned: false
-                ))
-            )
-        }
-    }
-
-    @MainActor
     private func accessibilityActivationResult(
-        returned: Bool,
         treeElement: InterfaceTree.Element,
         subjectEvidence: ActionSubjectEvidence,
         activationPoint: CGPoint
     ) async -> TheSafecracker.ActionDispatchResult {
         showFingerprint(activationPoint)
         let trace = ActivationTrace(.accessibilityActivate(
-            axActivateReturned: returned
+            axActivateReturned: true
         ))
         if let failure = await textEntryActivationFailure(treeElement, trace) {
             return failure.withSubjectEvidence(subjectEvidence)

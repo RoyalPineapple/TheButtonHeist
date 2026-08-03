@@ -99,26 +99,16 @@ extension Actions {
             deadline: deadline,
             timing: &timing
         ) { context in
-            var refusedActivationBoundary: Observation.Stream.RefusedActivationBoundary?
             return await ActivationPolicy(
                 accessibilityActivate: { liveTarget in
                     self.vault.dispatchOnFreshLiveActionTarget(
                         liveTarget,
                     ) { currentTarget in
-                        refusedActivationBoundary = self.vault.semanticObservationStream
-                            .refusedActivationBoundary()
                         return ActivationDispatchEvidence(
                             outcome: self.accessibilityActions.activate(currentTarget),
                             activationPoint: currentTarget.activationPoint
                         )
                     }
-                },
-                settleRefusedActivation: {
-                    guard let refusedActivationBoundary else { return .unavailable }
-                    return await self.vault.semanticObservationStream.settleRefusedActivation(
-                        after: refusedActivationBoundary,
-                        deadline: deadline
-                    )
                 },
                 refreshAndResolve: {
                     switch await self.navigation.elementInflation.refreshCommittedTarget(

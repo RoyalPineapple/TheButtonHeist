@@ -116,8 +116,9 @@ timeout result. No deadline fact enters `Observation.History`.
 Failure screenshots are reducer finalization. If the failed result needs one,
 the reducer returns `captureFailureScreenshot`, admits the matching capture
 fact, and then completes. Cancellation skips a pending failure screenshot and
-completes with `.cancelled`. The first admitted terminal event wins, and the
-complete state absorbs every later event.
+completes with `.cancelled`. The host does not wait for a blocked capture after
+cancellation. The first admitted terminal event wins. The complete state
+absorbs every later event.
 
 Cancellation has one typed path:
 
@@ -128,8 +129,10 @@ Cancellation has one typed path:
 4. The reducer completes with `.cancelled`.
 5. The host throws `CancellationError` and releases heist lifetime resources.
 
-Cancellation during failure capture starts at step 4 because no observation
-resource remains open.
+During failure capture, the host cancels the capture task and returns
+`cancellationRequested`. The reducer completes because no observation resource
+remains open. The live capture boundary completes one observation cycle and
+honors task cancellation. A late capture result cannot enter the reducer.
 
 No result projection performs another capture, discovery, predicate
 evaluation, or history reconstruction.

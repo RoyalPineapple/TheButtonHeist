@@ -24,6 +24,7 @@ final class DogfoodRuntimeContractTests: XCTestCase {
         let trace = try XCTUnwrap(backAction.activationTrace)
 
         let axActivateReturned = try XCTUnwrap(trace.axActivateReturned)
+        XCTAssertTrue(axActivateReturned || trace.tapActivationDispatched)
         XCTAssertFalse(axActivateReturned && trace.tapActivationDispatched)
         if trace.tapActivationDispatched {
             XCTAssertFalse(axActivateReturned)

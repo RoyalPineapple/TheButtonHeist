@@ -139,9 +139,10 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertNil(result.subjectEvidence)
     }
 
-    func testActivationPointDispatchCanCompleteActivate() async throws {
+    func testRefusedActivationDispatchesExactlyOneActivationPointFallback() async throws {
         let refreshedTarget = await makeLiveTarget(heistId: "refreshed", activationPoint: CGPoint(x: 30, y: 40))
         var activateCount = 0
+        var activationPointDispatches = 0
         var dispatchedPoints: [CGPoint] = []
         let inflatedTarget = try makeInflatedTarget(refreshedTarget)
 
@@ -154,6 +155,7 @@ final class ActivationPolicyTests: XCTestCase {
                 .resolved(inflatedTarget)
             },
             prepareActivationPointDispatch: { point in
+                activationPointDispatches += 1
                 dispatchedPoints.append(point)
                 return TestPreparedDispatch(result: true)
             }
@@ -162,99 +164,13 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .activate)
         XCTAssertEqual(activateCount, 1)
+        XCTAssertEqual(activationPointDispatches, 1)
         XCTAssertEqual(dispatchedPoints, [CGPoint(x: 30, y: 40)])
         XCTAssertEqual(result.activationTrace, ActivationTrace(.activationPointFallback(
             axActivateReturned: false,
             tapActivationPoint: ScreenPoint(x: 30, y: 40),
             tapActivationSucceeded: true
         ), implementsAccessibilityActivation: false))
-    }
-
-    func testRefusedActivationWithSemanticChangeSkipsActivationPointFallback() async throws {
-        let refreshedTarget = await makeLiveTarget(heistId: "refreshed", activationPoint: CGPoint(x: 30, y: 40))
-        var activationPointDispatches = 0
-        var semanticChangeChecks = 0
-        let inflatedTarget = try makeInflatedTarget(refreshedTarget)
-
-        let result = await makePolicy(
-            accessibilityActivate: { _ in .refused },
-            settleRefusedActivation: {
-                semanticChangeChecks += 1
-                return .effectObserved
-            },
-            refreshAndResolve: { .resolved(inflatedTarget) },
-            prepareActivationPointDispatch: { _ in
-                activationPointDispatches += 1
-                return TestPreparedDispatch(result: true)
-            }
-        ).apply()
-
-        XCTAssertTrue(result.success)
-        XCTAssertEqual(semanticChangeChecks, 1)
-        XCTAssertEqual(activationPointDispatches, 0)
-        XCTAssertEqual(
-            result.activationTrace,
-            ActivationTrace(.accessibilityActivate(axActivateReturned: false))
-        )
-    }
-
-    func testRefusedActivationWithoutSemanticChangeRetainsActivationPointFallback() async throws {
-        let refreshedTarget = await makeLiveTarget(heistId: "refreshed", activationPoint: CGPoint(x: 30, y: 40))
-        var activationPointDispatches = 0
-        var semanticChangeChecks = 0
-        let inflatedTarget = try makeInflatedTarget(refreshedTarget)
-
-        let result = await makePolicy(
-            accessibilityActivate: { _ in .refused },
-            settleRefusedActivation: {
-                semanticChangeChecks += 1
-                return .quiescent
-            },
-            refreshAndResolve: { .resolved(inflatedTarget) },
-            prepareActivationPointDispatch: { _ in
-                activationPointDispatches += 1
-                return TestPreparedDispatch(result: true)
-            }
-        ).apply()
-
-        XCTAssertTrue(result.success)
-        XCTAssertEqual(semanticChangeChecks, 1)
-        XCTAssertEqual(activationPointDispatches, 1)
-        XCTAssertEqual(result.activationTrace, ActivationTrace(.activationPointFallback(
-            axActivateReturned: false,
-            tapActivationPoint: ScreenPoint(x: 30, y: 40),
-            tapActivationSucceeded: true
-        ), implementsAccessibilityActivation: false))
-    }
-
-    func testRefusedActivationWithoutQuiescenceProofDoesNotDispatchActivationPoint() async throws {
-        let refreshedTarget = await makeLiveTarget(
-            heistId: "refreshed",
-            activationPoint: CGPoint(x: 30, y: 40)
-        )
-        var activationPointDispatches = 0
-        let inflatedTarget = try makeInflatedTarget(refreshedTarget)
-
-        let result = await makePolicy(
-            accessibilityActivate: { _ in .refused },
-            settleRefusedActivation: { .unavailable },
-            refreshAndResolve: { .resolved(inflatedTarget) },
-            prepareActivationPointDispatch: { _ in
-                activationPointDispatches += 1
-                return TestPreparedDispatch(result: true)
-            }
-        ).apply()
-
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(activationPointDispatches, 0)
-        XCTAssertEqual(
-            result.activationTrace,
-            ActivationTrace(.accessibilityActivate(axActivateReturned: false))
-        )
-        XCTAssertDiagnostic(result.message, contains: [
-            "action quiescence was not proven before the action deadline",
-            "activation-point dispatch was not attempted",
-        ])
     }
 
     func testNonFiniteActivationPointStopsBeforeMechanicalDispatch() async throws {
@@ -272,7 +188,6 @@ final class ActivationPolicyTests: XCTestCase {
                     activationPoint: CGPoint(x: CGFloat.infinity, y: 40)
                 ))
             },
-            settleRefusedActivation: { .quiescent },
             refreshAndResolve: { .resolved(inflatedTarget) },
             prepareActivationPointDispatch: { point in
                 dispatchedPoints.append(point)
@@ -422,8 +337,6 @@ final class ActivationPolicyTests: XCTestCase {
 
     private func makePolicy(
         accessibilityActivate: @escaping @MainActor (TheVault.LiveActionTarget) -> AccessibilityActionDispatcher.ActivateOutcome,
-        settleRefusedActivation: @escaping @MainActor () async
-            -> Observation.Stream.RefusedActivationSettlement = { .quiescent },
         refreshAndResolve: @escaping @MainActor () async -> ActivationRefreshResult,
         prepareActivationPointDispatch: @escaping @MainActor (
             CGPoint
@@ -441,7 +354,6 @@ final class ActivationPolicyTests: XCTestCase {
                     activationPoint: target.activationPoint
                 ))
             },
-            settleRefusedActivation: settleRefusedActivation,
             refreshAndResolve: refreshAndResolve,
             prepareActivationPointDispatch: prepareActivationPointDispatch,
             completeActivationPointDispatch: { $0.result },

@@ -48,8 +48,9 @@ and coalesces them behind one pending control wake-up, so connection churn
 cannot grow the stream or lose cancellation facts. UI work still has one
 interaction executor. The same lease gates admission and execution.
 Response handlers reserve delivery against their originating socket
-incarnation. Replacement wiring drains prior interaction work before its
-generation is admitted.
+incarnation. Replacement wiring uses a bounded drain before it admits its
+generation. If old UI cleanup remains, the interaction executor rejects new UI
+work until that cleanup returns.
 
 ## Failure taxonomy
 
