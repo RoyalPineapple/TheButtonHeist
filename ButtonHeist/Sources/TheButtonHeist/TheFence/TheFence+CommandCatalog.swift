@@ -263,16 +263,16 @@ extension TheFence.Command {
     private func singleStepActionContract(
         family: FenceCommandFamily,
         parameters: FenceCommandParameters,
-        baseTimeout: FenceCommandFixedTimeout,
         description: String,
         admission: @escaping FenceActionAdmission
     ) -> Contract {
-        Contract(
+        let timeout = TheFence.HeistExecutionBudget.requiredFixedActionTimeoutClass(for: self)
+        return Contract(
             command: self,
             family: family,
             requiresConnectionBeforeDispatch: true,
             parameters: parameters,
-            timeout: .singleStepAction(base: baseTimeout),
+            timeout: .singleStepAction(base: timeout),
             description: description,
             cliExposure: .directCommand,
             mcpExposure: .notExposed,
@@ -281,7 +281,6 @@ extension TheFence.Command {
                 try TheFence.appInteractionExecution(
                     command,
                     try admission(fence, arguments),
-                    actionTimeout: baseTimeout.seconds,
                     expectationPayload: try TheFence.ExpectationPayload(arguments: arguments)
                 )
             }
@@ -291,11 +290,11 @@ extension TheFence.Command {
     private func directActionContract(
         family: FenceCommandFamily,
         parameters: FenceCommandParameters,
-        timeout: FenceCommandFixedTimeout,
         description: String,
         admission: @escaping FenceActionAdmission
     ) -> Contract {
-        Contract(
+        let timeout = TheFence.HeistExecutionBudget.requiredFixedActionTimeoutClass(for: self)
+        return Contract(
             command: self,
             family: family,
             requiresConnectionBeforeDispatch: true,
@@ -309,7 +308,6 @@ extension TheFence.Command {
                 try TheFence.directActionExecution(
                     command,
                     try admission(fence, arguments),
-                    timeout: timeout.seconds,
                     expectationPayload: try TheFence.ExpectationPayload(arguments: arguments)
                 )
             }
@@ -407,7 +405,6 @@ extension TheFence.Command {
                 parameters: FenceCommandParameters(
                     FenceParameterBlocks.gesturePointSelection + FenceParameterBlocks.expectation
                 ),
-                baseTimeout: .standardAction,
                 description: "Explicit spatial oneFingerTap action. Element targets dispatch at their activation point "
                     + "unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate. "
                     + "Use activate for ordinary accessible controls."
@@ -421,7 +418,6 @@ extension TheFence.Command {
                     FenceParameterBlocks.gesturePointSelection
                         + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation
                 ),
-                baseTimeout: .standardAction,
                 description: "Explicit spatial longPress action. Element targets dispatch at their activation point "
                     + "unless unitPoint supplies an element-frame override; point supplies a raw screen coordinate."
             ) { fence, arguments in
@@ -434,7 +430,6 @@ extension TheFence.Command {
                     FenceParameterBlocks.swipeIntents
                         + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation
                 ),
-                baseTimeout: .standardAction,
                 description: "Explicit spatial swipe action using exactly one typed intent: "
                     + "elementDirection, elementUnitPoints, pointToPoint, or pointDirection."
             ) { fence, arguments in
@@ -447,7 +442,6 @@ extension TheFence.Command {
                     FenceParameterBlocks.dragIntents
                         + [FenceParameterBlocks.gestureDuration] + FenceParameterBlocks.expectation
                 ),
-                baseTimeout: .standardAction,
                 description: "Explicit spatial drag action using exactly one typed intent: "
                     + "elementToPoint (activation point or unit start override) or pointToPoint."
             ) { fence, arguments in
@@ -462,7 +456,6 @@ extension TheFence.Command {
                         FenceParameters.scrollDirection.spec,
                     ] + FenceParameterBlocks.expectation
                 ),
-                timeout: .standardAction,
                 description: "Explicit viewport/debug operation: scroll one page in the visible viewport, "
                     + "within a semantic target's owning scroll ancestor, or for direct debug requests, "
                     + "within a current containerName."
@@ -473,7 +466,6 @@ extension TheFence.Command {
             return directActionContract(
                 family: .viewportDebug,
                 parameters: FenceCommandParameters(FenceParameterBlocks.target + FenceParameterBlocks.expectation),
-                timeout: .standardAction,
                 description: "Explicit viewport/debug operation: move the viewport until a "
                     + "semantic target is visible and report its fresh geometry."
             ) { _, arguments in
@@ -488,7 +480,6 @@ extension TheFence.Command {
                         FenceParameters.scrollEdge.spec,
                     ] + FenceParameterBlocks.expectation
                 ),
-                timeout: .standardAction,
                 description: "Explicit viewport/debug operation: scroll the visible viewport, "
                     + "a semantic target's owning scroll ancestor, or for direct debug requests, "
                     + "a current containerName, to a requested edge."
@@ -502,7 +493,6 @@ extension TheFence.Command {
                     FenceParameterBlocks.target
                         + [FenceParameters.actionName.spec] + FenceParameterBlocks.expectation
                 ),
-                baseTimeout: .standardAction,
                 description: "Perform primary accessibility activation on a semantic UI element, "
                     + "or one of its named accessibility actions."
             ) { fence, arguments in
@@ -518,7 +508,6 @@ extension TheFence.Command {
                         FenceParameters.rotorDirection.spec,
                     ] + FenceParameterBlocks.expectation
                 ),
-                baseTimeout: .standardAction,
                 description: "Move through an element rotor by direction. The server holds the rotor cursor "
                     + "while in rotor mode (entering at the first item); any other interaction exits rotor mode "
                     + "and drops the cursor."
@@ -534,7 +523,6 @@ extension TheFence.Command {
                         FenceParameters.textInputMode.spec,
                     ] + FenceParameterBlocks.expectation
                 ),
-                baseTimeout: .longAction,
                 description: "Type text. Replace mode clears the focused field before typing."
             ) { fence, arguments in
                 try fence.decodeTypeTextAction(arguments)
@@ -545,7 +533,6 @@ extension TheFence.Command {
                 parameters: FenceCommandParameters(
                     [FenceParameters.editAction.spec] + FenceParameterBlocks.expectation
                 ),
-                baseTimeout: .standardAction,
                 description: "Perform an edit action on the current first responder."
             ) { _, arguments in
                 .editAction(EditActionTarget(
@@ -558,7 +545,6 @@ extension TheFence.Command {
                 parameters: FenceCommandParameters(
                     [FenceParameters.pasteboardText.spec] + FenceParameterBlocks.expectation
                 ),
-                baseTimeout: .standardAction,
                 description: "Write text to the general pasteboard from within the app."
             ) { _, arguments in
                 .setPasteboard(SetPasteboardTarget(
@@ -579,7 +565,6 @@ extension TheFence.Command {
             return singleStepActionContract(
                 family: .semanticAction,
                 parameters: FenceCommandParameters(FenceParameterBlocks.expectation),
-                baseTimeout: .standardAction,
                 description: "Dismiss the on-screen keyboard through the current first responder or keyboard action path."
             ) { _, _ in
                 .dismissKeyboard

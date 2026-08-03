@@ -5,10 +5,6 @@ import ThePlans
 @testable import TheInsideJob
 @testable import TheScore
 
-private struct TestPreparedDispatch: Sendable {
-    let result: Bool
-}
-
 @MainActor
 final class ActivationPolicyTests: XCTestCase {
 
@@ -81,9 +77,9 @@ final class ActivationPolicyTests: XCTestCase {
                 events.append("refresh")
                 return .resolved(inflatedTarget)
             },
-            prepareActivationPointDispatch: { point in
+            tapActivationPoint: { point in
                 dispatchedPoints.append(point)
-                return TestPreparedDispatch(result: true)
+                return true
             },
             showFingerprint: { point in
                 fingerprintPoints.append(point)
@@ -124,9 +120,9 @@ final class ActivationPolicyTests: XCTestCase {
             refreshAndResolve: {
                 .failure(.failure(.activate, message: "activation refresh failed"))
             },
-            prepareActivationPointDispatch: { point in
+            tapActivationPoint: { point in
                 dispatchedPoints.append(point)
-                return TestPreparedDispatch(result: true)
+                return true
             }
         ).apply()
 
@@ -154,10 +150,10 @@ final class ActivationPolicyTests: XCTestCase {
             refreshAndResolve: {
                 .resolved(inflatedTarget)
             },
-            prepareActivationPointDispatch: { point in
+            tapActivationPoint: { point in
                 activationPointDispatches += 1
                 dispatchedPoints.append(point)
-                return TestPreparedDispatch(result: true)
+                return true
             }
         ).apply()
 
@@ -189,11 +185,10 @@ final class ActivationPolicyTests: XCTestCase {
                 ))
             },
             refreshAndResolve: { .resolved(inflatedTarget) },
-            prepareActivationPointDispatch: { point in
+            tapActivationPoint: { point in
                 dispatchedPoints.append(point)
-                return TestPreparedDispatch(result: true)
+                return true
             },
-            completeActivationPointDispatch: { $0.result },
             showFingerprint: { _ in },
             textEntryActivationFailure: { _, _ in nil }
         )
@@ -222,7 +217,7 @@ final class ActivationPolicyTests: XCTestCase {
             refreshAndResolve: {
                 .resolved(inflatedTarget)
             },
-            prepareActivationPointDispatch: { _ in TestPreparedDispatch(result: true) },
+            tapActivationPoint: { _ in true },
             textEntryActivationFailure: { _, trace in
                 focusConfirmationTrace = trace
                 return .failure(.activate, message: "text entry did not focus", activationTrace: trace)
@@ -254,7 +249,7 @@ final class ActivationPolicyTests: XCTestCase {
             refreshAndResolve: {
                 .resolved(inflatedTarget)
             },
-            prepareActivationPointDispatch: { _ in TestPreparedDispatch(result: true) },
+            tapActivationPoint: { _ in true },
             textEntryActivationFailure: { _, _ in
                 focusConfirmationCount += 1
                 return .failure(.activate, message: "unexpected focus confirmation")
@@ -292,9 +287,9 @@ final class ActivationPolicyTests: XCTestCase {
             refreshAndResolve: {
                 .resolved(inflatedTarget)
             },
-            prepareActivationPointDispatch: { point in
+            tapActivationPoint: { point in
                 dispatchedPoints.append(point)
-                return TestPreparedDispatch(result: false)
+                return false
             }
         ).apply()
 
@@ -338,15 +333,13 @@ final class ActivationPolicyTests: XCTestCase {
     private func makePolicy(
         accessibilityActivate: @escaping @MainActor (TheVault.LiveActionTarget) -> AccessibilityActionDispatcher.ActivateOutcome,
         refreshAndResolve: @escaping @MainActor () async -> ActivationRefreshResult,
-        prepareActivationPointDispatch: @escaping @MainActor (
-            CGPoint
-        ) -> TestPreparedDispatch?,
+        tapActivationPoint: @escaping @MainActor (CGPoint) async -> Bool,
         showFingerprint: @escaping @MainActor (CGPoint) -> Void = { _ in },
         textEntryActivationFailure: @escaping @MainActor (
             InterfaceTree.Element,
             ActivationTrace
         ) async -> TheSafecracker.ActionDispatchResult? = { _, _ in nil }
-    ) -> ActivationPolicy<TestPreparedDispatch> {
+    ) -> ActivationPolicy {
         ActivationPolicy(
             accessibilityActivate: { target in
                 .success(ActivationDispatchEvidence(
@@ -355,8 +348,7 @@ final class ActivationPolicyTests: XCTestCase {
                 ))
             },
             refreshAndResolve: refreshAndResolve,
-            prepareActivationPointDispatch: prepareActivationPointDispatch,
-            completeActivationPointDispatch: { $0.result },
+            tapActivationPoint: tapActivationPoint,
             showFingerprint: showFingerprint,
             textEntryActivationFailure: { treeElement, trace in
                 guard treeElement.element.traits.contains(.textEntry) else { return nil }

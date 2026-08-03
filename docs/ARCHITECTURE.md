@@ -213,6 +213,33 @@ for the capture operation to return after cancellation. The live boundary
 completes one observation cycle and honors task cancellation. The host then
 throws `CancellationError` to the caller.
 
+### Canonical pipeline boundaries
+
+Four source checks preserve pipeline ownership that Swift access control cannot
+express by itself:
+
+- `SafecrackerTouchInjection` constructs every `TouchEvent`. One async gesture
+  owns `began` through exactly one terminal `ended` or `cancelled` event. A task
+  cancelled before `began` sends no touch event.
+- `HeistSwiftCompiler` constructs `HeistSwiftFileCompilation`. The compiler
+  resolves `ThePlans` only from an absolute override, an explicit package root,
+  or the exact installed executable prefix.
+- TheFence constructs one `HeistExecutionBudget` before transport dispatch. It
+  projects the server deadline once and adds transport headroom only to the
+  client wait.
+- `HeistResult+Report` constructs `HeistReport`. Execution returns result truth,
+  and presentation derives from that result through one projector.
+
+The Bumper checks include owner and rogue-construction fixtures. Behavioral
+tests remain responsible for each currency's meaning.
+
+Lifecycle effects follow the same ownership rule. The reducer returns an
+ordered effect list, one host executor performs that list, and notification
+bridges only schedule the executor. Transport-wiring and observation race
+controls are immutable construction-time boundaries. Production uses their
+immediate values, while deterministic tests inject controlled suspension
+points.
+
 Failure evidence is finalized by the same reducer. Whenever executed root
 children contain an `abortedAtPath` and screenshot evidence is enabled, the
 reducer returns one `captureFailureScreenshot` effect before completing.

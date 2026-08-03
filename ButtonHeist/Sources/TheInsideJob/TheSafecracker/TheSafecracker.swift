@@ -16,10 +16,6 @@ import ThePlans
 @MainActor
 final class TheSafecracker {
 
-    struct PreparedTouchDispatch: Equatable, Sendable {
-        fileprivate let preparedTouchID: SafecrackerTouchInjection.PreparedTouchID
-    }
-
     private let keyboardInput: SafecrackerKeyboardInput
     private let fingerprints: TheFingerprints
     private let touchInjection: SafecrackerTouchInjection
@@ -95,41 +91,31 @@ final class TheSafecracker {
         fingerprints.show(at: point)
     }
 
-    func prepareTap(at point: CGPoint) -> PreparedTouchDispatch? {
-        preparedTouchDispatch(touchInjection.prepareTap(at: point))
+    func tap(at point: CGPoint) async -> Bool {
+        await touchInjection.tap(at: point)
     }
 
-    func prepareLongPress(
+    func longPress(
         at point: CGPoint,
         duration: GestureDuration = .longPressDefault
-    ) -> PreparedTouchDispatch? {
-        preparedTouchDispatch(touchInjection.prepareLongPress(at: point, duration: duration))
+    ) async -> Bool {
+        await touchInjection.longPress(at: point, duration: duration)
     }
 
-    func prepareSwipe(
+    func swipe(
         from start: CGPoint,
         to end: CGPoint,
         duration: GestureDuration = .swipeDefault
-    ) -> PreparedTouchDispatch? {
-        preparedTouchDispatch(touchInjection.prepareSwipe(from: start, to: end, duration: duration))
+    ) async -> Bool {
+        await touchInjection.swipe(from: start, to: end, duration: duration)
     }
 
-    func prepareDrag(
+    func drag(
         from start: CGPoint,
         to end: CGPoint,
         duration: GestureDuration = .dragDefault
-    ) -> PreparedTouchDispatch? {
-        preparedTouchDispatch(touchInjection.prepareDrag(from: start, to: end, duration: duration))
-    }
-
-    private func preparedTouchDispatch(
-        _ preparedTouchID: SafecrackerTouchInjection.PreparedTouchID?
-    ) -> PreparedTouchDispatch? {
-        preparedTouchID.map(PreparedTouchDispatch.init(preparedTouchID:))
-    }
-
-    func completePreparedTouch(_ dispatch: PreparedTouchDispatch) async -> Bool {
-        await touchInjection.complete(dispatch.preparedTouchID)
+    ) async -> Bool {
+        await touchInjection.drag(from: start, to: end, duration: duration)
     }
 }
 

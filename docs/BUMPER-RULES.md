@@ -62,11 +62,29 @@ reparses or reinterprets Swift.
 | `buttonheist.plan_else_ownership` | Only `WaitFor` and `IfContent` expose a DSL `else` branch. `RepeatUntil` timeout is failure, not an executable alternate body. | Model loop timeout behavior through wait predicates or surrounding conditionals instead of adding loop-local else bodies. | Verification: valid wait/conditional fixtures, invalid `RepeatUntil` fixture, and repository evaluation. Delete when Swift access control or separate modules make unsupported DSL `else` declarations unrepresentable. |
 | `buttonheist.exported_tuple_return` | Functions, properties, subscripts, and protocol requirements with effective public, open, or package visibility use named contract types instead of multi-value tuples. Effective access includes visibility inherited from exported protocols, extensions, and enclosing declarations; explicitly private or internal members and local tuple scratch values remain permitted. | Introduce a named Swift type whose fields state the contract meaning, or narrow the declaration when it is not an exported contract. | Verification: one canonical rule reports explicit and inherited exported violations across every audited declaration form, with private, internal, local, and parenthesized controls plus repository evaluation. Delete when Swift provides a native lint for exported tuple contracts or the build graph isolates all package API behind generated interfaces. |
 
+## Canonical Pipeline Construction
+
+These `canonicalConstruction` rules are source-shape guardrails. They keep one
+explicit constructor call at the owner of each canonical currency. They do not
+replace behavioral tests.
+
+A SwiftSyntax-only rule cannot soundly resolve inferred `.init` calls or type
+aliases. The rules inspect explicit type spellings only.
+
+| Rule ID | Shape | Repair | Verification and deletion condition |
+| --- | --- | --- | --- |
+| `buttonheist.touch_event_construction` | `SafecrackerTouchInjection` alone constructs synthetic `TouchEvent` values. | Route the complete gesture through `SafecrackerTouchInjection`. | Verification: owner and rogue-construction fixtures plus repository evaluation. Delete when the touch-event initializer is private to its owner. |
+| `buttonheist.swift_plan_compilation_construction` | `HeistSwiftCompiler` alone constructs `HeistSwiftFileCompilation`. | Enter Swift plan compilation through `HeistSwiftCompiler`. | Verification: owner and rogue-construction fixtures plus repository evaluation. Delete when the compilation helper is private to the compiler declaration. |
+| `buttonheist.heist_execution_budget_construction` | The run-heist boundary alone constructs `HeistExecutionBudget`. | Project the budget at TheFence's canonical heist dispatch boundary. | Verification: owner and rogue-construction fixtures plus repository evaluation. Delete when the budget type and initializer are private to that boundary. |
+| `buttonheist.heist_report_construction` | The canonical report projector alone constructs `HeistReport`. | Add report facts to `HeistReport.project(result:)` and keep renderers downstream. | Verification: owner and rogue-construction fixtures plus repository evaluation. Delete when report construction is private to the projector. |
+
 ## Rule Lifecycle
 
-A new blocking shaper must protect a component-wide capability or a public
-contract, never an implementation filename. It must demonstrate valid Swift
-that can construct the violation, explain why the compiler, build graph, and
-tests cannot own the boundary, and include one valid and one invalid in-memory
-fixture. When a native boundary makes that violation unconstructible, delete the
-shaper, its fixture, and its documentation in the same change.
+A new blocking shaper must protect a component-wide capability, a public
+contract, or a canonical currency with one named owner. An exact file scope is
+reserved for that last case and needs a deletion condition that moves ownership
+back to Swift. Every rule must demonstrate valid Swift that can construct the
+violation, explain why the compiler, build graph, and tests cannot own the
+boundary, and include one valid and one invalid in-memory fixture. When a native
+boundary makes that violation unconstructible, delete the shaper, its fixture,
+and its documentation in the same change.

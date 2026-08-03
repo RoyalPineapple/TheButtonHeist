@@ -336,15 +336,15 @@ extension TheSafecracker {
         abs(lhs.x - rhs.x) <= 0.5 && abs(lhs.y - rhs.y) <= 0.5
     }
 
-    func prepareScrollBySwipe(
+    func scrollBySwipe(
         frame: CGRect,
         direction: UIAccessibilityScrollDirection,
         duration: GestureDuration = .scrollSwipeDefault
-    ) -> PreparedTouchDispatch? {
+    ) async -> Bool {
         guard let path = Self.scrollFingerPath(frame: frame, direction: direction, travel: 0.75) else {
-            return nil
+            return false
         }
-        return prepareSwipe(from: path.start, to: path.end, duration: duration)
+        return await swipe(from: path.start, to: path.end, duration: duration)
     }
 
     private static func scrollFingerPath(

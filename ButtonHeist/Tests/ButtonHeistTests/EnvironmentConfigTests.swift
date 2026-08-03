@@ -1,4 +1,5 @@
 import XCTest
+import ThePlans
 import TheScore
 @_spi(ButtonHeistTooling) @testable import ButtonHeist
 
@@ -8,7 +9,7 @@ final class EnvironmentConfigTests: XCTestCase {
         let config = try resolve(env: .empty)
         XCTAssertNil(config.deviceFilter)
         XCTAssertNil(config.token)
-        XCTAssertEqual(config.sessionTimeout, 60.0)
+        XCTAssertEqual(config.sessionTimeout, .after(60))
         XCTAssertEqual(config.connectionTimeout, 30.0)
         XCTAssertTrue(config.autoReconnect)
     }
@@ -40,7 +41,7 @@ final class EnvironmentConfigTests: XCTestCase {
     func testSessionTimeoutFromEnvVar() throws {
         let env = environment([.buttonheistSessionTimeout: "120"])
         let config = try resolve(env: env)
-        XCTAssertEqual(config.sessionTimeout, 120.0)
+        XCTAssertEqual(config.sessionTimeout, .after(120))
     }
 
     func testConnectionTimeoutFromEnvVar() throws {
@@ -52,7 +53,7 @@ final class EnvironmentConfigTests: XCTestCase {
     func testExplicitSessionTimeoutOverridesEnv() throws {
         let env = environment([.buttonheistSessionTimeout: "120"])
         let config = try resolve(sessionTimeout: 300, env: env)
-        XCTAssertEqual(config.sessionTimeout, 300.0)
+        XCTAssertEqual(config.sessionTimeout, .after(300))
     }
 
     func testExplicitConnectionTimeoutOverridesEnv() throws {
@@ -61,22 +62,63 @@ final class EnvironmentConfigTests: XCTestCase {
         XCTAssertEqual(config.connectionTimeout, 2.0)
     }
 
-    func testInvalidSessionTimeoutEnvFallsBackToDefault() throws {
-        let env = environment([.buttonheistSessionTimeout: "abc"])
-        let config = try resolve(env: env)
-        XCTAssertEqual(config.sessionTimeout, 60.0)
+    func testExplicitTimeoutOverridesMalformedEnvironmentTimeout() throws {
+        let config = try resolve(
+            sessionTimeout: 300,
+            connectionTimeout: 2,
+            env: environment([
+                .buttonheistSessionTimeout: "not-a-number",
+                .buttonheistConnectionTimeout: "not-a-number",
+            ])
+        )
+        XCTAssertEqual(config.sessionTimeout, .after(300))
+        XCTAssertEqual(config.connectionTimeout, 2)
     }
 
-    func testInvalidConnectionTimeoutEnvFallsBackToDefault() throws {
-        let env = environment([.buttonheistConnectionTimeout: "abc"])
-        let config = try resolve(env: env)
-        XCTAssertEqual(config.connectionTimeout, 30.0)
+    func testMalformedSessionTimeoutEnvironmentIsRejected() {
+        assertTimeoutConfigurationError(
+            sessionTimeout: "abc",
+            expectedSource: .environment(.session),
+            expectedObserved: "abc"
+        )
     }
 
-    func testZeroSessionTimeoutEnvFallsBackToDefault() throws {
-        let env = environment([.buttonheistSessionTimeout: "0"])
-        let config = try resolve(env: env)
-        XCTAssertEqual(config.sessionTimeout, 60.0)
+    func testMalformedConnectionTimeoutEnvironmentIsRejected() {
+        assertTimeoutConfigurationError(
+            connectionTimeout: "abc",
+            expectedSource: .environment(.connection),
+            expectedObserved: "abc"
+        )
+    }
+
+    func testZeroSessionTimeoutDisablesIdleExpiration() throws {
+        XCTAssertEqual(
+            try resolve(sessionTimeout: 0, env: .empty).sessionTimeout,
+            .disabled
+        )
+        XCTAssertEqual(
+            try resolve(env: environment([.buttonheistSessionTimeout: "0"])).sessionTimeout,
+            .disabled
+        )
+    }
+
+    func testNonPositiveAndNonFiniteEnvironmentTimeoutsAreRejected() {
+        for (sessionTimeout, connectionTimeout, source, observed) in [
+            ("-5", nil, EnvironmentTimeoutConfigurationError.Source.environment(.session), "-5"),
+            ("nan", nil, .environment(.session), "nan"),
+            ("1e309", nil, .environment(.session), "1e309"),
+            (nil, "0", .environment(.connection), "0"),
+            (nil, "-5", .environment(.connection), "-5"),
+            (nil, "nan", .environment(.connection), "nan"),
+            (nil, "1e309", .environment(.connection), "1e309"),
+        ] {
+            assertTimeoutConfigurationError(
+                sessionTimeout: sessionTimeout,
+                connectionTimeout: connectionTimeout,
+                expectedSource: source,
+                expectedObserved: observed
+            )
+        }
     }
 
     func testFenceConfigurationProducesMatchingValues() throws {
@@ -94,10 +136,27 @@ final class EnvironmentConfigTests: XCTestCase {
         XCTAssertEqual(fence.autoReconnect, false)
     }
 
-    func testNegativeSessionTimeoutEnvFallsBackToDefault() throws {
-        let env = environment([.buttonheistSessionTimeout: "-5"])
-        let config = try resolve(env: env)
-        XCTAssertEqual(config.sessionTimeout, 60.0)
+    func testExplicitNonPositiveAndNonFiniteTimeoutsAreRejected() {
+        for (sessionTimeout, connectionTimeout, source) in [
+            (-5.0, nil, EnvironmentTimeoutConfigurationError.Source.explicit(.session)),
+            (.infinity, nil, .explicit(.session)),
+            (.nan, nil, .explicit(.session)),
+            (nil, 0.0, .explicit(.connection)),
+            (nil, -5.0, .explicit(.connection)),
+            (nil, .infinity, .explicit(.connection)),
+            (nil, .nan, .explicit(.connection)),
+        ] {
+            XCTAssertThrowsError(try resolve(
+                sessionTimeout: sessionTimeout,
+                connectionTimeout: connectionTimeout,
+                env: .empty
+            )) { error in
+                XCTAssertEqual(
+                    (error as? EnvironmentTimeoutConfigurationError)?.source,
+                    source
+                )
+            }
+        }
     }
 
     func testExplicitConfigPathFailurePropagatesDiagnosticError() {
@@ -140,5 +199,23 @@ final class EnvironmentConfigTests: XCTestCase {
             sessionTimeout: values[.buttonheistSessionTimeout],
             connectionTimeout: values[.buttonheistConnectionTimeout]
         )
+    }
+
+    private func assertTimeoutConfigurationError(
+        sessionTimeout: String? = nil,
+        connectionTimeout: String? = nil,
+        expectedSource: EnvironmentTimeoutConfigurationError.Source,
+        expectedObserved: String
+    ) {
+        XCTAssertThrowsError(try resolve(env: ButtonHeistEnvironment(
+            sessionTimeout: sessionTimeout,
+            connectionTimeout: connectionTimeout
+        ))) { error in
+            guard let error = error as? EnvironmentTimeoutConfigurationError else {
+                return XCTFail("Expected EnvironmentTimeoutConfigurationError, got \(type(of: error))")
+            }
+            XCTAssertEqual(error.source, expectedSource)
+            XCTAssertEqual(error.observed, expectedObserved)
+        }
     }
 }

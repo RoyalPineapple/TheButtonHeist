@@ -122,8 +122,7 @@ extension Actions {
                         return .failure(failure.actionDispatchResult(payload: .activate))
                     }
                 },
-                prepareActivationPointDispatch: safecracker.prepareTap,
-                completeActivationPointDispatch: safecracker.completePreparedTouch,
+                tapActivationPoint: safecracker.tap,
                 showFingerprint: safecracker.showFingerprint,
                 textEntryActivationFailure: textEntryActivationFailure
             ).apply()

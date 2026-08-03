@@ -602,6 +602,122 @@ struct HeistSwiftCompilerTests {
 
 #if os(macOS) || os(Linux)
     @Test
+    func `explicit package root ignores sibling and nested checkouts`() throws {
+        let temp = try CompilerTemporaryDirectory()
+        let admittedRoot = try temp.makeButtonHeistPackage(named: "admitted")
+        let admittedBuild = try temp.writeThePlansArtifacts(in: admittedRoot.appendingPathComponent(".build/debug"))
+        let siblingRoot = try temp.makeButtonHeistPackage(named: "ButtonHeist")
+        _ = try temp.writeThePlansArtifacts(in: siblingRoot.appendingPathComponent(".build/debug"))
+        let nestedRoot = try temp.makeButtonHeistPackage(named: "admitted/ButtonHeist")
+        _ = try temp.writeThePlansArtifacts(in: nestedRoot.appendingPathComponent(".build/debug"))
+
+        let arguments = try HeistSwiftFileCompilation.resolveThePlansSwiftcArguments(
+            explicitPackageRoot: admittedRoot,
+            environment: [:],
+            executableURL: nil
+        )
+
+        #expect(arguments == temp.swiftPMArguments(for: admittedBuild))
+    }
+
+    @Test
+    func `explicit package root wins over installed artifacts`() throws {
+        let temp = try CompilerTemporaryDirectory()
+        let localRoot = try temp.makeButtonHeistPackage(named: "local")
+        let localBuild = try temp.writeThePlansArtifacts(in: localRoot.appendingPathComponent(".build/debug"))
+        let installedExecutable = temp.url.appendingPathComponent("installed/bin/heist-plan")
+        let installedBuild = try temp.writeInstalledThePlansArtifacts(for: installedExecutable)
+
+        let arguments = try HeistSwiftFileCompilation.resolveThePlansSwiftcArguments(
+            explicitPackageRoot: localRoot,
+            environment: [:],
+            executableURL: installedExecutable
+        )
+
+        #expect(arguments == temp.swiftPMArguments(for: localBuild))
+        #expect(arguments != temp.swiftPMArguments(for: installedBuild))
+    }
+
+    @Test
+    func `explicit package root never selects artifacts outside that root`() throws {
+        let temp = try CompilerTemporaryDirectory()
+        let admittedRoot = try temp.makeButtonHeistPackage(named: "admitted")
+        let outsideRoot = try temp.makeButtonHeistPackage(named: "neighbor")
+        let outsideBuild = try temp.writeThePlansArtifacts(in: outsideRoot.appendingPathComponent(".build/debug"))
+
+        do {
+            _ = try HeistSwiftFileCompilation.resolveThePlansSwiftcArguments(
+                explicitPackageRoot: admittedRoot,
+                environment: [:],
+                executableURL: nil
+            )
+            Issue.record("Expected explicit package root without artifacts to fail")
+        } catch let error as HeistSwiftFileCompilationError {
+            guard case .buildArtifactsNotFound(let searched, _) = error else {
+                Issue.record("Expected build artifact diagnostic, got \(error)")
+                return
+            }
+            #expect(searched.allSatisfy { $0.hasPrefix(admittedRoot.path + "/.build/") })
+            #expect(!searched.contains(outsideBuild.path))
+        }
+    }
+
+    @Test
+    func `missing artifact context fails with typed diagnostic`() throws {
+        #expect(throws: HeistSwiftFileCompilationError.packageRootNotFound) {
+            _ = try HeistSwiftFileCompilation.resolveThePlansSwiftcArguments(
+                explicitPackageRoot: nil,
+                environment: [:],
+                executableURL: nil
+            )
+        }
+    }
+
+    @Test
+    func `installed executable prefix resolves its deterministic release artifact`() throws {
+        let temp = try CompilerTemporaryDirectory()
+        let executable = temp.url.appendingPathComponent("prefix/bin/heist-plan")
+        let installedBuild = try temp.writeInstalledThePlansArtifacts(for: executable)
+
+        let arguments = try HeistSwiftFileCompilation.resolveThePlansSwiftcArguments(
+            explicitPackageRoot: nil,
+            environment: [:],
+            executableURL: executable
+        )
+
+        #expect(arguments == temp.swiftPMArguments(for: installedBuild))
+    }
+
+    @Test
+    func `explicit environment artifact override has first precedence`() throws {
+        let temp = try CompilerTemporaryDirectory()
+        let localRoot = try temp.makeButtonHeistPackage(named: "local")
+        _ = try temp.writeThePlansArtifacts(in: localRoot.appendingPathComponent(".build/debug"))
+        let overrideBuild = try temp.writeThePlansArtifacts(in: temp.url.appendingPathComponent("override"))
+        let executable = temp.url.appendingPathComponent("prefix/bin/heist-plan")
+        _ = try temp.writeInstalledThePlansArtifacts(for: executable)
+
+        let arguments = try HeistSwiftFileCompilation.resolveThePlansSwiftcArguments(
+            explicitPackageRoot: localRoot,
+            environment: ["HEIST_THEPLANS_BUILD_DIR": overrideBuild.path],
+            executableURL: executable
+        )
+
+        #expect(arguments == temp.swiftPMArguments(for: overrideBuild))
+    }
+
+    @Test
+    func `relative environment artifact override is rejected`() throws {
+        #expect(throws: HeistSwiftFileCompilationError.self) {
+            _ = try HeistSwiftFileCompilation.resolveThePlansSwiftcArguments(
+                explicitPackageRoot: nil,
+                environment: ["HEIST_THEPLANS_BUILD_DIR": ".build/debug"],
+                executableURL: nil
+            )
+        }
+    }
+
+    @Test
     func `compiler command preserves exact argument contract`() {
         let compileDirectory = URL(fileURLWithPath: "/tmp/heist/Sources/PlanCompiler", isDirectory: true)
         let moduleCache = URL(fileURLWithPath: "/tmp/heist/module-cache", isDirectory: true)
@@ -646,8 +762,14 @@ struct HeistSwiftCompilerTests {
 
         let activeObject = objectDirectory.appendingPathComponent("Active.swift.o")
         let staleObject = objectDirectory.appendingPathComponent("Stale.swift.o")
+        let outsideObject = temp.url.appendingPathComponent("outside/Active.swift.o")
         try Data().write(to: activeObject)
         try Data().write(to: staleObject)
+        try FileManager.default.createDirectory(
+            at: outsideObject.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data().write(to: outsideObject)
 
         let descriptionJSON = """
         {
@@ -660,7 +782,7 @@ struct HeistSwiftCompilerTests {
             "theplans": {
               "moduleName": "ThePlans",
               "objects": [
-                \(try jsonStringLiteral("/missing/build/Active.swift.o")),
+                \(try jsonStringLiteral(outsideObject.path)),
                 \(try jsonStringLiteral("/missing/build/Generated.swift"))
               ]
             }
@@ -722,6 +844,57 @@ private final class CompilerTemporaryDirectory {
             """
         )
     }
+
+    func makeButtonHeistPackage(named name: String) throws -> URL {
+        let packageRoot = url.appendingPathComponent(name, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: packageRoot.appendingPathComponent("ButtonHeist/Sources/ThePlans", isDirectory: true),
+            withIntermediateDirectories: true
+        )
+        try "// swift-tools-version: 6.0\n".write(
+            to: packageRoot.appendingPathComponent("Package.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+        return packageRoot
+    }
+
+    func writeThePlansArtifacts(in buildDirectory: URL) throws -> URL {
+        let modulesDirectory = buildDirectory.appendingPathComponent("Modules", isDirectory: true)
+        let objectsDirectory = buildDirectory.appendingPathComponent("ThePlans.build", isDirectory: true)
+        try FileManager.default.createDirectory(at: modulesDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: objectsDirectory, withIntermediateDirectories: true)
+        try Data().write(to: modulesDirectory.appendingPathComponent("ThePlans.swiftinterface"))
+        try Data().write(to: objectsDirectory.appendingPathComponent("Identity.swift.o"))
+        return buildDirectory
+    }
+
+    func writeInstalledThePlansArtifacts(for executable: URL) throws -> URL {
+        let prefix = executable.deletingLastPathComponent().deletingLastPathComponent()
+        let buildDirectory = prefix
+            .appendingPathComponent("lib/ThePlans", isDirectory: true)
+            .appendingPathComponent(currentTestArchitectureBuildDirectoryName(), isDirectory: true)
+            .appendingPathComponent("release", isDirectory: true)
+        return try writeThePlansArtifacts(in: buildDirectory)
+    }
+
+    func swiftPMArguments(for buildDirectory: URL) -> [String] {
+        [
+            "-I",
+            buildDirectory.appendingPathComponent("Modules", isDirectory: true).path,
+            buildDirectory.appendingPathComponent("ThePlans.build/Identity.swift.o").path,
+        ]
+    }
+}
+
+private func currentTestArchitectureBuildDirectoryName() -> String {
+    #if arch(arm64)
+    return "arm64-apple-macosx"
+    #elseif arch(x86_64)
+    return "x86_64-apple-macosx"
+    #else
+    return "unsupported-architecture"
+    #endif
 }
 
 private func jsonStringLiteral(_ value: String) throws -> String {

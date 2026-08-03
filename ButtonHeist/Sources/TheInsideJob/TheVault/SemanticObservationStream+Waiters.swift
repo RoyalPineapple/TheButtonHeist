@@ -118,7 +118,7 @@ extension Observation.Stream {
             boundary: boundary,
             oneShot: oneShot
         ), id: id)
-        observationWaiterDidRegister?()
+        schedulingBoundary.waiterRegistered()
         Task { @MainActor in
             resolveObservationWaiterIfAvailable(id)
         }

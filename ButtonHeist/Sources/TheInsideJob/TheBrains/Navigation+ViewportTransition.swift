@@ -165,22 +165,22 @@ extension Navigation {
             guard case .swipeable(let container, _) = target else {
                 return .unavailable
             }
-            let preparation = vault.dispatchOnFreshLiveContainerTarget(
+            let frameResult = vault.dispatchOnFreshLiveContainerTarget(
                 container,
-            ) { currentContainer -> TheSafecracker.PreparedTouchDispatch? in
+            ) { currentContainer -> CGRect? in
                 guard let frame = self.safeSwipeFrame(from: currentContainer.frame) else {
                     return nil
                 }
-                return self.safecracker.prepareScrollBySwipe(
-                    frame: frame,
-                    direction: direction,
-                    duration: Self.swipeGestureDuration
-                )
+                return frame
             }
-            guard case .success(let dispatch) = preparation,
-                  let dispatch else { return .unavailable }
+            guard case .success(let frame) = frameResult,
+                  let frame else { return .unavailable }
             guard admitsEffect(intent, deadline: deadline) else { return .unavailable }
-            return await safecracker.completePreparedTouch(dispatch) ? .moved : .unavailable
+            return await safecracker.scrollBySwipe(
+                frame: frame,
+                direction: direction,
+                duration: Self.swipeGestureDuration
+            ) ? .moved : .unavailable
         case .revealPoint(let point, let target, let preferredScreenRect, let minimumScreenRect):
             return target.dispatchOnFreshScrollView(in: vault) { scrollView in
                 safecracker.scrollToMakeScreenPointVisible(

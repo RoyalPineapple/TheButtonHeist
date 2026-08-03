@@ -37,6 +37,38 @@ let buttonHeistRules = RuleSet {
     heistContentOpacityRule
     planElseOwnershipRule
     exportedTupleContractRule
+    canonicalPipelineOwnershipRules
+}
+
+private let canonicalPipelineOwnershipRules = RuleSet {
+    Rules.canonicalConstruction(
+        "TouchEvent",
+        owners: .files([
+            "ButtonHeist/Sources/TheInsideJob/TheSafecracker/SafecrackerTouchInjection.swift",
+        ]),
+        id: "buttonheist.touch_event_construction"
+    )
+    Rules.canonicalConstruction(
+        "HeistSwiftFileCompilation",
+        owners: .files([
+            "ButtonHeist/Sources/ThePlans/Compilation/HeistSwiftCompiler.swift",
+        ]),
+        id: "buttonheist.swift_plan_compilation_construction"
+    )
+    Rules.canonicalConstruction(
+        "HeistExecutionBudget",
+        owners: .files([
+            "ButtonHeist/Sources/TheButtonHeist/TheFence/TheFence+RunHeist.swift",
+        ]),
+        id: "buttonheist.heist_execution_budget_construction"
+    )
+    Rules.canonicalConstruction(
+        "HeistReport",
+        owners: .files([
+            "ButtonHeist/Sources/TheScore/Reports/HeistResult+Report.swift",
+        ]),
+        id: "buttonheist.heist_report_construction"
+    )
 }
 
 private let embeddedRuntimeScope = RuleScope.component(ButtonHeistComponent.embeddedRuntime)

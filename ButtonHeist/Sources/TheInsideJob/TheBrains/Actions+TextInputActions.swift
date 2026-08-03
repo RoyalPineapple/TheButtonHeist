@@ -290,23 +290,19 @@ extension Actions {
             return .focused(focused)
         }
 
-        let preparedDispatch: TheSafecracker.PreparedTouchDispatch?
         let point: CGPoint
         switch vault.dispatchOnFreshLiveActionTarget(
             refreshedTarget.liveTarget,
             operation: { liveTarget in
-                let point = liveTarget.activationPoint
-                return (point, safecracker.prepareTap(at: point))
+                liveTarget.activationPoint
             }
         ) {
-        case .success(let preparation):
-            point = preparation.0
-            preparedDispatch = preparation.1
+        case .success(let activationPoint):
+            point = activationPoint
         case .failure(let staleness):
             return .failed(staleLiveTargetFailure(staleness, payload: .typeText(nil)))
         }
-        guard let preparedDispatch,
-              await safecracker.completePreparedTouch(preparedDispatch) else {
+        guard await safecracker.tap(at: point) else {
             return .failed(.failure(
                 .typeText(nil),
                 message: ActionCapabilityDiagnostic.gestureDispatchFailed(

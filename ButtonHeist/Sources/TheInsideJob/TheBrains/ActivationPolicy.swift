@@ -16,13 +16,12 @@ enum ActivationRefreshResult {
     case failure(TheSafecracker.ActionDispatchResult)
 }
 
-struct ActivationPolicy<PreparedDispatch: Sendable> {
+struct ActivationPolicy {
     var accessibilityActivate: @MainActor (
         TheVault.LiveActionTarget
     ) -> Result<ActivationDispatchEvidence, TheVault.LiveTargetStaleness<HeistId>>
     var refreshAndResolve: @MainActor () async -> ActivationRefreshResult
-    var prepareActivationPointDispatch: @MainActor (CGPoint) -> PreparedDispatch?
-    var completeActivationPointDispatch: @MainActor (PreparedDispatch) async -> Bool
+    var tapActivationPoint: @MainActor (CGPoint) async -> Bool
     var showFingerprint: @MainActor (CGPoint) -> Void
     var textEntryActivationFailure: @MainActor (InterfaceTree.Element, ActivationTrace) async -> TheSafecracker.ActionDispatchResult?
 
@@ -76,12 +75,7 @@ struct ActivationPolicy<PreparedDispatch: Sendable> {
         }
         let admittedActivationPoint = ScreenPoint(x: activationX, y: activationY)
 
-        let preparedDispatch = prepareActivationPointDispatch(activationPoint)
-        let tapActivationSucceeded = if let preparedDispatch {
-            await completeActivationPointDispatch(preparedDispatch)
-        } else {
-            false
-        }
+        let tapActivationSucceeded = await tapActivationPoint(activationPoint)
         let trace = ActivationTrace(.activationPointFallback(
             axActivateReturned: activateOutcome.axActivateReturned,
             tapActivationPoint: admittedActivationPoint,

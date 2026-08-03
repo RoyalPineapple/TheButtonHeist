@@ -19,126 +19,113 @@ final class SafecrackerTouchInjection {
         case path([CGPoint])
     }
 
-    struct PreparedTouch {
-        fileprivate let activeTouch: ActiveTouch
-        fileprivate let completion: Completion
-    }
-
-    struct PreparedTouchID: RawRepresentable, Equatable, Hashable, Sendable {
-        let rawValue: UInt64
-    }
-
     private let fingerprints: TheFingerprints
-    private var preparedTouches: [PreparedTouchID: PreparedTouch] = [:]
-    private var nextPreparedTouchID = PreparedTouchID(rawValue: 1)
 
     init(fingerprints: TheFingerprints) {
         self.fingerprints = fingerprints
     }
 
-    func prepareTap(at point: CGPoint) -> PreparedTouchID? {
-        retain(prepareTouch(at: point, field: "tap point", completion: .tap))
+    func tap(at point: CGPoint) async -> Bool {
+        await perform(at: point, field: "tap point", completion: .tap)
     }
 
-    func prepareLongPress(
+    func longPress(
         at point: CGPoint,
         duration: GestureDuration = .longPressDefault
-    ) -> PreparedTouchID? {
-        retain(prepareTouch(
-            at: point,
-            field: "long press point",
-            completion: .stationary(duration)
-        ))
+    ) async -> Bool {
+        await perform(at: point, field: "long press point", completion: .stationary(duration))
     }
 
-    func prepareSwipe(
+    func swipe(
         from start: CGPoint,
         to end: CGPoint,
         duration: GestureDuration = .swipeDefault
-    ) -> PreparedTouchID? {
-        retain(prepareLineGesture(
+    ) async -> Bool {
+        await performLineGesture(
             from: start,
             to: end,
             duration: duration,
             minimumSteps: 3,
             field: "swipe point"
-        ))
+        )
     }
 
-    func prepareDrag(
+    func drag(
         from start: CGPoint,
         to end: CGPoint,
         duration: GestureDuration = .dragDefault
-    ) -> PreparedTouchID? {
-        retain(prepareLineGesture(
+    ) async -> Bool {
+        await performLineGesture(
             from: start,
             to: end,
             duration: duration,
             minimumSteps: 5,
             field: "drag point"
-        ))
+        )
     }
 
-    func complete(_ preparedTouchID: PreparedTouchID) async -> Bool {
-        guard let prepared = preparedTouches.removeValue(forKey: preparedTouchID) else {
-            return false
-        }
-        var touchState = prepared.activeTouch
-        switch prepared.completion {
+    private func perform(at point: CGPoint, field: String, completion: Completion) async -> Bool {
+        guard Self.geometryIsValid([point], field: field),
+              !Task.isCancelled,
+              var touchState = beginTouch(at: point) else { return false }
+
+        switch completion {
         case .tap:
             guard await Task.cancellableSleep(for: TheSafecracker.gestureYieldDelay) else {
-                fingerprints.endTracking()
+                _ = terminate(&touchState.touch, phase: .cancelled)
                 return false
             }
         case .stationary(let duration):
             var elapsed: TimeInterval = 0
-            while elapsed < duration.seconds && !Task.isCancelled {
+            while elapsed < duration.seconds {
+                guard !Task.isCancelled else {
+                    _ = terminate(&touchState.touch, phase: .cancelled)
+                    return false
+                }
                 guard await Task.cancellableSleep(
                     nanoseconds: UInt64(TheSafecracker.touchGestureStepDelay * 1_000_000_000)
-                ) else { break }
+                ) else {
+                    _ = terminate(&touchState.touch, phase: .cancelled)
+                    return false
+                }
                 elapsed += TheSafecracker.touchGestureStepDelay
-                sendStationary(&touchState.touch)
+                guard sendStationary(&touchState.touch) else {
+                    _ = terminate(&touchState.touch, phase: .cancelled)
+                    return false
+                }
             }
         case .path(let waypoints):
             for point in waypoints {
-                if Task.isCancelled { break }
-                moveTouch(&touchState.touch, in: touchState.window, to: point)
+                guard !Task.isCancelled,
+                      moveTouch(&touchState.touch, in: touchState.window, to: point) else {
+                    _ = terminate(&touchState.touch, phase: .cancelled)
+                    return false
+                }
                 guard await Task.cancellableSleep(
                     nanoseconds: UInt64(TheSafecracker.touchGestureStepDelay * 1_000_000_000)
-                ) else { break }
+                ) else {
+                    _ = terminate(&touchState.touch, phase: .cancelled)
+                    return false
+                }
             }
         }
-        return endTouch(&touchState.touch)
+        guard !Task.isCancelled else {
+            _ = terminate(&touchState.touch, phase: .cancelled)
+            return false
+        }
+        return terminate(&touchState.touch, phase: .ended)
     }
 
-    private func retain(_ preparedTouch: PreparedTouch?) -> PreparedTouchID? {
-        guard let preparedTouch else { return nil }
-        let preparedTouchID = nextPreparedTouchID
-        nextPreparedTouchID = PreparedTouchID(rawValue: preparedTouchID.rawValue + 1)
-        preparedTouches[preparedTouchID] = preparedTouch
-        return preparedTouchID
-    }
-
-    private func prepareTouch(
-        at point: CGPoint,
-        field: String,
-        completion: Completion
-    ) -> PreparedTouch? {
-        guard Self.geometryIsValid([point], field: field),
-              let activeTouch = beginTouch(at: point) else { return nil }
-        return PreparedTouch(activeTouch: activeTouch, completion: completion)
-    }
-
-    private func prepareLineGesture(
+    private func performLineGesture(
         from start: CGPoint,
         to end: CGPoint,
         duration: GestureDuration,
         minimumSteps: Int,
         field: String
-    ) -> PreparedTouch? {
-        guard Self.geometryIsValid([start, end], field: field) else { return nil }
+    ) async -> Bool {
+        guard Self.geometryIsValid([start, end], field: field) else { return false }
         let steps = max(Int(duration.seconds / TheSafecracker.touchGestureStepDelay), minimumSteps)
-        return prepareTouch(
+        return await perform(
             at: start,
             field: field,
             completion: .path(Self.linearPath(from: start, to: end, steps: steps))
@@ -190,12 +177,15 @@ final class SafecrackerTouchInjection {
         return true
     }
 
-    private func endTouch(_ touch: inout TheSafecracker.SyntheticTouch) -> Bool {
+    private func terminate(
+        _ touch: inout TheSafecracker.SyntheticTouch,
+        phase: UITouch.Phase
+    ) -> Bool {
         defer { fingerprints.endTracking() }
-        touch.update(phase: .ended)
+        touch.update(phase: phase)
 
         guard let event = TheSafecracker.TouchEvent(touches: [touch]) else {
-            insideJobLogger.error("Failed to create ended event")
+            insideJobLogger.error("Failed to create terminal touch event")
             return false
         }
 

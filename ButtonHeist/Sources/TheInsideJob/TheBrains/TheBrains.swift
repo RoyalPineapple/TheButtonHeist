@@ -69,7 +69,8 @@ final class TheBrains {
         keyboardInput: SafecrackerKeyboardInput = SafecrackerKeyboardInput(),
         visibleObservationSource: @escaping TheVault.VisibleObservationSource = TheVault.captureVisibleObservation,
         notificationIngress: AccessibilityNotificationIngress = .process,
-        pulseIngress: Observation.Stream.PulseIngress = .displayLink
+        pulseIngress: Observation.Stream.PulseIngress = .displayLink,
+        observationSchedulingBoundary: Observation.Stream.SchedulingBoundary = .immediate
     ) {
         self.tripwire = tripwire
         self.failureEvidencePolicy = failureEvidencePolicy
@@ -83,7 +84,8 @@ final class TheBrains {
             visibleObservationSource: visibleObservationSource,
             keyboardVisibilitySource: { safecracker.isKeyboardVisible },
             notificationIngress: notificationIngress,
-            pulseIngress: pulseIngress
+            pulseIngress: pulseIngress,
+            observationSchedulingBoundary: observationSchedulingBoundary
         )
         self.vault = vault
         self.safecracker = safecracker

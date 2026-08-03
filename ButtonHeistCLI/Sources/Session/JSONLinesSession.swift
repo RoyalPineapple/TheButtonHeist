@@ -9,7 +9,7 @@ final class JSONLinesSession {
 
     private let format: OutputFormat
     private let fence: TheFence
-    private let sessionTimeout: TimeInterval
+    private let sessionTimeout: SessionIdleTimeout
     private var idleMonitor: IdleMonitor?
 
     // MARK: - Init
@@ -28,15 +28,15 @@ final class JSONLinesSession {
     func run() async throws {
         try await fence.start()
 
-        if sessionTimeout > 0 {
-            logStatus("Idle timeout: \(Int(sessionTimeout))s")
+        if let timeout = sessionTimeout.seconds {
+            logStatus("Idle timeout: \(Int(timeout))s")
         }
 
         // SIGINT closes stdin to unstick the blocking readLine; the loop sees a
         // nil line and runs the same structured teardown as EOF/idle timeout.
         signal(SIGINT) { _ in close(STDIN_FILENO) }
 
-        idleMonitor = sessionTimeout > 0 ? makeTimeoutMonitor() : nil
+        idleMonitor = sessionTimeout.seconds.map(makeTimeoutMonitor)
 
         while true {
             guard let line = await Self.readInputLine() else {
@@ -63,14 +63,17 @@ final class JSONLinesSession {
         Swift.readLine()
     }
 
-    private func makeTimeoutMonitor() -> IdleMonitor {
-        let monitor = IdleMonitor(timeout: sessionTimeout) { [weak self] in
-            guard let self else { return }
-            logStatus("JSON-lines session idle timeout (\(Int(self.sessionTimeout))s) — exiting.")
-            close(STDIN_FILENO)
+    private func makeTimeoutMonitor(timeout: TimeInterval) -> IdleMonitor {
+        let monitor = IdleMonitor(timeout: timeout) { [weak self] in
+            self?.expireAfterIdleTimeout(timeout)
         }
         monitor.resetTimer()
         return monitor
+    }
+
+    private func expireAfterIdleTimeout(_ timeout: TimeInterval) {
+        logStatus("JSON-lines session idle timeout (\(Int(timeout))s) — exiting.")
+        close(STDIN_FILENO)
     }
 
     private func executeRequestLine(_ line: String) async {

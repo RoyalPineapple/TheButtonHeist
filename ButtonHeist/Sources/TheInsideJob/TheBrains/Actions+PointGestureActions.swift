@@ -7,12 +7,11 @@ import ThePlans
 
 extension Actions {
 
-    func performPointAction<PreparedDispatch: Sendable>(
+    func performPointAction(
         selection: ResolvedGesturePointSelection,
         payload: ActionResult.Payload,
         deadline: SemanticObservationDeadline,
-        prepare: (CGPoint) -> PreparedDispatch?,
-        complete: (PreparedDispatch) async -> Bool
+        dispatch: (CGPoint) async -> Bool
     ) async -> TheSafecracker.ActionDispatchResult {
         switch await resolveGesturePoint(
             selection: selection,
@@ -22,20 +21,16 @@ extension Actions {
         case .failure(let result):
             return result
         case .success(let resolvedPoint):
-            switch prepareGestureDispatch(
-                for: resolvedPoint,
-                payload: payload,
-                prepare: { .success(prepare($0)) }
-            ) {
+            switch admitGesturePoint(for: resolvedPoint, payload: payload) {
             case .failure(let result):
                 return result
-            case .success(let prepared):
-                return await completePreparedGesture(
-                    prepared,
+            case .success(let point):
+                let success = await dispatch(point)
+                return gestureDispatchResult(
                     payload: payload,
-                    subjectEvidence: resolvedPoint.subjectEvidence,
-                    complete: complete
-                )
+                    diagnosticPoint: point,
+                    success: success
+                ).withSubjectEvidence(resolvedPoint.subjectEvidence)
             }
         }
     }
@@ -48,8 +43,7 @@ extension Actions {
             selection: target.selection,
             payload: .oneFingerTap,
             deadline: deadline,
-            prepare: safecracker.prepareTap,
-            complete: safecracker.completePreparedTouch
+            dispatch: safecracker.tap
         )
     }
 
@@ -61,10 +55,9 @@ extension Actions {
             selection: target.selection,
             payload: .longPress,
             deadline: deadline,
-            prepare: { point in
-                self.safecracker.prepareLongPress(at: point, duration: target.duration)
-            },
-            complete: safecracker.completePreparedTouch
+            dispatch: { point in
+                await self.safecracker.longPress(at: point, duration: target.duration)
+            }
         )
     }
 
@@ -112,34 +105,28 @@ extension Actions {
         case .failure(let result):
             return result
         case .success(let resolvedPoint):
-            switch prepareGestureDispatch(
-                for: resolvedPoint,
-                payload: .swipe,
-                prepare: { startPoint -> GestureResolution<TheSafecracker.PreparedTouchDispatch?> in
-                    let endPoint = resolveEndPoint(startPoint)
-                    if let failure = self.geometryFailure(
-                        payload: .swipe,
-                        field: "swipe point",
-                        points: [startPoint, endPoint]
-                    ) {
-                        return .failure(failure)
-                    }
-                    return .success(self.safecracker.prepareSwipe(
-                        from: startPoint,
-                        to: endPoint,
-                        duration: duration
-                    ))
-                }
-            ) {
+            switch admitGesturePoint(for: resolvedPoint, payload: .swipe) {
             case .failure(let result):
                 return result
-            case .success(let prepared):
-                return await completePreparedGesture(
-                    prepared,
+            case .success(let startPoint):
+                let endPoint = resolveEndPoint(startPoint)
+                if let failure = geometryFailure(
                     payload: .swipe,
-                    subjectEvidence: resolvedPoint.subjectEvidence,
-                    complete: safecracker.completePreparedTouch
+                    field: "swipe point",
+                    points: [startPoint, endPoint]
+                ) {
+                    return failure
+                }
+                let success = await safecracker.swipe(
+                    from: startPoint,
+                    to: endPoint,
+                    duration: duration
                 )
+                return gestureDispatchResult(
+                    payload: .swipe,
+                    diagnosticPoint: startPoint,
+                    success: success
+                ).withSubjectEvidence(resolvedPoint.subjectEvidence)
             }
         }
     }
@@ -167,9 +154,7 @@ extension Actions {
         ) { liveTarget in
             let frame = liveTarget.frame
             if let message = GeometryValidation.validateRect(frame, field: "frame") {
-                return GestureResolution<
-                    PreparedGestureDispatch<TheSafecracker.PreparedTouchDispatch>
-                >.failure(.failure(
+                return GestureResolution<(CGPoint, CGPoint)>.failure(.failure(
                         .swipe,
                         message: "swipe failed: \(message)",
                         failureKind: .inputValidation
@@ -190,27 +175,24 @@ extension Actions {
             ) {
                 return .failure(failure)
             }
-            return .success(PreparedGestureDispatch(
-                point: startPoint,
-                dispatch: self.safecracker.prepareSwipe(
-                    from: startPoint,
-                    to: endPoint,
-                    duration: duration
-                )
-            ))
+            return .success((startPoint, endPoint))
         }
         switch preparation {
         case .failure(let staleness):
             return staleLiveTargetFailure(staleness, payload: .swipe)
         case .success(.failure(let result)):
             return result
-        case .success(.success(let prepared)):
-            return await completePreparedGesture(
-                prepared,
-                payload: .swipe,
-                subjectEvidence: inflatedTarget.subjectEvidence(source: .elementGestureTarget),
-                complete: safecracker.completePreparedTouch
+        case .success(.success(let points)):
+            let success = await safecracker.swipe(
+                from: points.0,
+                to: points.1,
+                duration: duration
             )
+            return gestureDispatchResult(
+                payload: .swipe,
+                diagnosticPoint: points.0,
+                success: success
+            ).withSubjectEvidence(inflatedTarget.subjectEvidence(source: .elementGestureTarget))
         }
     }
 
@@ -240,33 +222,14 @@ extension Actions {
             selection: selection,
             payload: .drag,
             deadline: deadline,
-            prepare: { startPoint in
-                self.safecracker.prepareDrag(
+            dispatch: { startPoint in
+                await self.safecracker.drag(
                     from: startPoint,
                     to: endPoint,
                     duration: target.duration ?? DragTarget.defaultDuration
                 )
-            },
-            complete: safecracker.completePreparedTouch
+            }
         )
-    }
-
-    private func completePreparedGesture<PreparedDispatch: Sendable>(
-        _ prepared: PreparedGestureDispatch<PreparedDispatch>,
-        payload: ActionResult.Payload,
-        subjectEvidence: ActionSubjectEvidence?,
-        complete: (PreparedDispatch) async -> Bool
-    ) async -> TheSafecracker.ActionDispatchResult {
-        let success = if let dispatch = prepared.dispatch {
-            await complete(dispatch)
-        } else {
-            false
-        }
-        return gestureDispatchResult(
-            payload: payload,
-            diagnosticPoint: prepared.point,
-            success: success
-        ).withSubjectEvidence(subjectEvidence)
     }
 
     private func swipeEndPoint(

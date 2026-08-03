@@ -505,9 +505,9 @@ plans, anonymity is ambiguous, so the same diagnostic is an error and
 ### Resolving built ThePlans artifacts
 
 Compiling Swift source links the user file against a **built** `ThePlans`
-module. Resolution runs in this order:
+module. The compiler accepts only these sources, in this order:
 
-1. **`HEIST_THEPLANS_BUILD_DIR`** — the deterministic override. Set it to a
+1. **`HEIST_THEPLANS_BUILD_DIR`** — the exact override. Set it to an absolute
    SwiftPM build directory containing `Modules/ThePlans.swiftmodule` or
    `Modules/ThePlans.swiftinterface`, plus `ThePlans.build/*.swift.o`; or set it
    to an Xcode products directory containing `ThePlans.framework`. This is what
@@ -515,13 +515,22 @@ module. Resolution runs in this order:
 
    ```bash
    swift build --product heist-plan
-   HEIST_THEPLANS_BUILD_DIR=.build/debug \
+   HEIST_THEPLANS_BUILD_DIR="$PWD/.build/debug" \
      heist-plan compile Flow.swift --entry makeHeist --output Flow.heist
    ```
 
-2. **Installed compiler artifacts** — The Homebrew distribution supports Apple
+2. **An explicit package root** —
+   `HeistSwiftCompiler.Configuration(packageRoot:)` admits one Button Heist
+   package. The compiler checks that package's host-triple `debug` and
+   `release` directories, then its legacy `.build/debug` and `.build/release`
+   directories. It does not leave that package root or inspect sibling
+   checkouts.
+
+3. **Installed compiler artifacts** — The Homebrew distribution supports Apple
    Silicon macOS only. It installs `heist-plan` next to `buttonheist` and
-   installs the arm64 `ThePlans` build artifacts under `lib/ThePlans`. The
+   installs the arm64 `ThePlans` build artifacts under
+   `lib/ThePlans/arm64-apple-macosx/release`. The compiler accepts this layout
+   only when its resolved executable lives in the matching `bin` directory. The
    installed artifact uses `ThePlans.swiftinterface`, not a binary
    `ThePlans.swiftmodule`, so the user's active Swift compiler rebuilds the
    importable module for its own toolchain. The artifact also includes
@@ -534,21 +543,14 @@ module. Resolution runs in this order:
    heist-plan compile Flow.swift --entry makeHeist --output Flow.heist
    ```
 
-3. **Local package discovery** — absent the override, the local ButtonHeist
-   checkout's `.build` directories are searched for the same artifacts.
-
-4. **Xcode products discovery** — Xcode/Tuist test runs can also compile
-   against a products directory containing `ThePlans.framework`. The compiler
-   checks standard Xcode build environment variables and the running test
-   executable's ancestor directories.
-
 The compiler never builds `ThePlans` from source on demand. If no built
 artifacts are found, compilation fails with a diagnostic that lists every path
-that was searched and tells you to install The Button Heist with compiler artifacts,
-run `swift build --product heist-plan`, or set
-`HEIST_THEPLANS_BUILD_DIR`. In Xcode/Tuist tests, the diagnostic also lists
-candidate products directories. Set `HEIST_SOURCE_COMPILER_TRACE=1` to trace
-which resolution branch was taken.
+that was checked and tells you to install The Button Heist with compiler
+artifacts, supply an explicit package root, or set an absolute
+`HEIST_THEPLANS_BUILD_DIR`. It never inspects the working directory, `PATH`,
+source-file location, sibling checkouts, Xcode environment variables, or test
+bundle ancestors. Set `HEIST_SOURCE_COMPILER_TRACE=1` to trace the selected
+source.
 
 ## Explicit non-goals
 

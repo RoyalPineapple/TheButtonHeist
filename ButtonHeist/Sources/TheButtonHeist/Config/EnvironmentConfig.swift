@@ -1,4 +1,5 @@
 import Foundation
+import ThePlans
 import TheScore
 
 /// Typed client environment projection used by configuration resolution.
@@ -59,6 +60,50 @@ public struct ButtonHeistEnvironment: Equatable, Sendable {
     }
 }
 
+/// Typed timeout-configuration diagnostic emitted before a transport client is created.
+public struct EnvironmentTimeoutConfigurationError: Error, Sendable, Equatable, CustomStringConvertible {
+    public enum Source: Sendable, Equatable {
+        case explicit(Timeout)
+        case environment(Timeout)
+    }
+
+    public enum Timeout: String, Sendable, Equatable {
+        case session
+        case connection
+    }
+
+    public let source: Source
+    public let observed: String
+
+    public var description: String {
+        let timeout = switch source {
+        case .explicit(let timeout), .environment(let timeout):
+            timeout
+        }
+        let expected = switch timeout {
+        case .session:
+            "0 to disable it or a finite number greater than 0"
+        case .connection:
+            "a finite number greater than 0"
+        }
+        return "\(timeout.rawValue) timeout must be \(expected) (observed \(observed))"
+    }
+}
+
+public enum SessionIdleTimeout: Sendable, Equatable {
+    case disabled
+    case after(HeistTimeout)
+
+    public var seconds: TimeInterval? {
+        switch self {
+        case .disabled:
+            nil
+        case .after(let timeout):
+            timeout.seconds
+        }
+    }
+}
+
 /// Resolved configuration from environment variables, config files, and explicit overrides.
 /// Use `resolve()` to build this from the current environment, then access `.fenceConfiguration`
 /// to create a `TheFence`.
@@ -66,7 +111,7 @@ public struct EnvironmentConfig: Sendable {
     public let deviceFilter: String?
     let token: SessionAuthToken?
     let driverID: DriverID?
-    public let sessionTimeout: TimeInterval
+    public let sessionTimeout: SessionIdleTimeout
     let connectionTimeout: TimeInterval
     let fileConfig: ButtonHeistFileConfig?
     let directDevice: DiscoveredDevice?
@@ -202,25 +247,26 @@ public struct EnvironmentConfig: Sendable {
             directDevice = nil
         }
 
-        let resolvedSessionTimeout: TimeInterval
-        if let explicit = sessionTimeout, explicit > 0 {
-            resolvedSessionTimeout = explicit
-        } else if let envStr = environment.sessionTimeout,
-                  let parsed = Double(envStr), parsed > 0 {
-            resolvedSessionTimeout = parsed
+        let resolvedSessionTimeoutSeconds = try TransportTimeout.resolve(
+            explicit: sessionTimeout,
+            environment: environment.sessionTimeout,
+            defaultValue: 60,
+            kind: .session,
+            permitsZero: true
+        )
+        let resolvedSessionTimeout: SessionIdleTimeout = if resolvedSessionTimeoutSeconds == 0 {
+            .disabled
         } else {
-            resolvedSessionTimeout = 60.0
+            .after(try HeistTimeout(validatingSeconds: resolvedSessionTimeoutSeconds))
         }
 
-        let resolvedConnectionTimeout: TimeInterval
-        if let explicit = connectionTimeout, explicit > 0 {
-            resolvedConnectionTimeout = explicit
-        } else if let envStr = environment.connectionTimeout,
-                  let parsed = Double(envStr), parsed > 0 {
-            resolvedConnectionTimeout = parsed
-        } else {
-            resolvedConnectionTimeout = 30.0
-        }
+        let resolvedConnectionTimeout = try TransportTimeout.resolve(
+            explicit: connectionTimeout,
+            environment: environment.connectionTimeout,
+            defaultValue: 30,
+            kind: .connection,
+            permitsZero: false
+        )
 
         return EnvironmentConfig(
             deviceFilter: resolvedDevice,
@@ -232,5 +278,51 @@ public struct EnvironmentConfig: Sendable {
             directDevice: directDevice,
             autoReconnect: autoReconnect
         )
+    }
+}
+
+private enum TransportTimeout {
+    static func resolve(
+        explicit: TimeInterval?,
+        environment: String?,
+        defaultValue: TimeInterval,
+        kind: EnvironmentTimeoutConfigurationError.Timeout,
+        permitsZero: Bool
+    ) throws -> TimeInterval {
+        if let explicit {
+            return try validated(
+                explicit,
+                source: .explicit(kind),
+                observed: String(explicit),
+                permitsZero: permitsZero
+            )
+        }
+        if let environment {
+            guard let parsed = Double(environment) else {
+                throw EnvironmentTimeoutConfigurationError(
+                    source: .environment(kind),
+                    observed: environment
+                )
+            }
+            return try validated(
+                parsed,
+                source: .environment(kind),
+                observed: environment,
+                permitsZero: permitsZero
+            )
+        }
+        return defaultValue
+    }
+
+    private static func validated(
+        _ value: TimeInterval,
+        source: EnvironmentTimeoutConfigurationError.Source,
+        observed: String,
+        permitsZero: Bool
+    ) throws -> TimeInterval {
+        guard value.isFinite, value > 0 || permitsZero && value == 0 else {
+            throw EnvironmentTimeoutConfigurationError(source: source, observed: observed)
+        }
+        return value
     }
 }

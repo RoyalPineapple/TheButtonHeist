@@ -76,10 +76,9 @@ extension TheFenceHandlerTests {
     @ButtonHeistActor
     func testSingleStepDefaultActionBudgetIncludesStructuralNoChangeSettlement() async throws {
         let policy = ActionExpectationTimeoutPolicy(standard: 7, screenTransition: 12)
-        let transportHeadroom: TimeInterval = 11
         let (fence, mockConn) = makeConnectedFence(configuration: .init(
             actionExpectationTimeoutPolicy: policy,
-            postActionExpectationTimeoutBuffer: transportHeadroom
+            postActionExpectationTimeoutBuffer: 11
         ))
 
         _ = try await fence.execute(command: .activate, values: [
@@ -88,18 +87,17 @@ extension TheFenceHandlerTests {
 
         XCTAssertEqual(
             mockConn.sent.sentHeistRun?.timeout.seconds,
-            FenceCommandFixedTimeout.standardAction.seconds + policy.standard.seconds + transportHeadroom
+            FenceCommandFixedTimeout.standardAction.seconds + policy.standard.seconds
         )
     }
 
     @ButtonHeistActor
     func testSingleStepAuthoredActionBudgetUsesAuthoredTimeoutWithoutExtraStandardSettlement() async throws {
         let policy = ActionExpectationTimeoutPolicy(standard: 7, screenTransition: 12)
-        let transportHeadroom: TimeInterval = 11
         let authoredTimeout: TimeInterval = 19
         let (fence, mockConn) = makeConnectedFence(configuration: .init(
             actionExpectationTimeoutPolicy: policy,
-            postActionExpectationTimeoutBuffer: transportHeadroom
+            postActionExpectationTimeoutBuffer: 11
         ))
 
         _ = try await fence.execute(command: .activate, values: [
@@ -113,17 +111,16 @@ extension TheFenceHandlerTests {
 
         XCTAssertEqual(
             mockConn.sent.sentHeistRun?.timeout.seconds,
-            FenceCommandFixedTimeout.standardAction.seconds + authoredTimeout + transportHeadroom
+            FenceCommandFixedTimeout.standardAction.seconds + authoredTimeout
         )
     }
 
     @ButtonHeistActor
     func testPerformDefaultActionBudgetIncludesStructuralNoChangeSettlement() async throws {
         let policy = ActionExpectationTimeoutPolicy(standard: 7, screenTransition: 12)
-        let transportHeadroom: TimeInterval = 11
         let (fence, mockConn) = makeConnectedFence(configuration: .init(
             actionExpectationTimeoutPolicy: policy,
-            postActionExpectationTimeoutBuffer: transportHeadroom
+            postActionExpectationTimeoutBuffer: 11
         ))
 
         _ = try await fence.execute(command: .perform, values: [
@@ -132,18 +129,17 @@ extension TheFenceHandlerTests {
 
         XCTAssertEqual(
             mockConn.sent.sentHeistRun?.timeout.seconds,
-            FenceCommandFixedTimeout.standardAction.seconds + policy.standard.seconds + transportHeadroom
+            FenceCommandFixedTimeout.standardAction.seconds + policy.standard.seconds
         )
     }
 
     @ButtonHeistActor
     func testPerformAuthoredActionBudgetUsesAuthoredTimeoutWithoutExtraStandardSettlement() async throws {
         let policy = ActionExpectationTimeoutPolicy(standard: 7, screenTransition: 12)
-        let transportHeadroom: TimeInterval = 11
         let authoredTimeout: TimeInterval = 19
         let (fence, mockConn) = makeConnectedFence(configuration: .init(
             actionExpectationTimeoutPolicy: policy,
-            postActionExpectationTimeoutBuffer: transportHeadroom
+            postActionExpectationTimeoutBuffer: 11
         ))
 
         _ = try await fence.execute(command: .perform, values: [
@@ -152,8 +148,91 @@ extension TheFenceHandlerTests {
 
         XCTAssertEqual(
             mockConn.sent.sentHeistRun?.timeout.seconds,
-            FenceCommandFixedTimeout.standardAction.seconds + authoredTimeout + transportHeadroom
+            FenceCommandFixedTimeout.standardAction.seconds + authoredTimeout
         )
+    }
+
+    @ButtonHeistActor
+    func testSingleStepTimeoutWithoutExpectationExtendsActionBudget() async throws {
+        let policy = ActionExpectationTimeoutPolicy(standard: 7, screenTransition: 12)
+        let (fence, mockConn) = makeConnectedFence(configuration: .init(
+            actionExpectationTimeoutPolicy: policy,
+            postActionExpectationTimeoutBuffer: 11
+        ))
+
+        _ = try await fence.execute(command: .activate, values: [
+            "target": targetValue(label: "Pay"),
+            "timeout": .double(19),
+        ])
+
+        XCTAssertEqual(
+            mockConn.sent.sentHeistRun?.timeout.seconds,
+            19 + policy.standard.seconds
+        )
+    }
+
+    @ButtonHeistActor
+    func testSingleStepBudgetAddsTransportHeadroomOnlyToClientDeadline() async throws {
+        let policy = ActionExpectationTimeoutPolicy(standard: 7, screenTransition: 12)
+        let plan = try HeistPlan(version: HeistPlan.currentVersion, body: [
+            .action(ActionStep(command: .activate(.predicate(.label("Pay")))))
+        ])
+
+        let budget = try TheFence.HeistExecutionBudget.project(
+            plan: plan,
+            timeoutSource: .singleStep(actionTimeoutOverride: nil),
+            configuration: .init(
+                actionExpectationTimeoutPolicy: policy,
+                postActionExpectationTimeoutBuffer: 11
+            )
+        )
+
+        XCTAssertEqual(
+            budget.serverTimeout.seconds,
+            FenceCommandFixedTimeout.standardAction.seconds + policy.standard.seconds
+        )
+        XCTAssertEqual(budget.transportTimeout, budget.serverTimeout.seconds + 11)
+    }
+
+    @ButtonHeistActor
+    func testHeistBudgetRejectsInvalidTransportHeadroom() async throws {
+        let plan = try HeistPlan(body: [
+            .warn(WarnStep(message: "budget probe")),
+        ])
+
+        for headroom in [-1, .infinity, .nan] {
+            XCTAssertThrowsError(try TheFence.HeistExecutionBudget.project(
+                plan: plan,
+                timeoutSource: .runHeist(nil),
+                configuration: .init(postActionExpectationTimeoutBuffer: headroom)
+            )) { error in
+                guard let error = error as? TheFence.HeistExecutionBudget.Error,
+                      case .invalidTransportHeadroom = error
+                else {
+                    return XCTFail("Expected invalid transport headroom, got \(error)")
+                }
+            }
+        }
+    }
+
+    @ButtonHeistActor
+    func testHeistBudgetRejectsTransportDeadlineOverflow() async throws {
+        let plan = try HeistPlan(body: [
+            .warn(WarnStep(message: "budget probe")),
+        ])
+        let timeout = try HeistTimeout(validatingSeconds: .greatestFiniteMagnitude)
+
+        XCTAssertThrowsError(try TheFence.HeistExecutionBudget.project(
+            plan: plan,
+            timeoutSource: .runHeist(timeout),
+            configuration: .init(postActionExpectationTimeoutBuffer: .greatestFiniteMagnitude)
+        )) { error in
+            guard let error = error as? TheFence.HeistExecutionBudget.Error,
+                  case .transportTimeoutOverflow = error
+            else {
+                return XCTFail("Expected transport timeout overflow, got \(error)")
+            }
+        }
     }
 
     @ButtonHeistActor
