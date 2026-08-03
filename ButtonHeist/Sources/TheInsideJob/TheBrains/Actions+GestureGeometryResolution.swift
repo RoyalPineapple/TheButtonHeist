@@ -22,11 +22,6 @@ extension Actions {
         let subjectEvidence: ActionSubjectEvidence?
     }
 
-    struct PreparedGestureDispatch<PreparedDispatch: Sendable>: Sendable {
-        let point: CGPoint
-        let dispatch: PreparedDispatch?
-    }
-
     func resolveGesturePoint(
         selection: ResolvedGesturePointSelection,
         payload: ActionResult.Payload,
@@ -89,19 +84,17 @@ extension Actions {
         }
     }
 
-    func prepareGestureDispatch<PreparedDispatch: Sendable>(
+    func admitGesturePoint(
         for resolvedPoint: ResolvedGesturePoint,
-        payload: ActionResult.Payload,
-        prepare: (CGPoint) -> GestureResolution<PreparedDispatch?>
-    ) -> GestureResolution<PreparedGestureDispatch<PreparedDispatch>> {
+        payload: ActionResult.Payload
+    ) -> GestureResolution<CGPoint> {
         switch resolvedPoint.source {
         case .coordinate(let point):
-            return prepareGestureDispatch(at: point, payload: payload, prepare: prepare)
+            return admitGesturePoint(at: point, payload: payload)
         case .liveTarget(let liveTarget, let unitPoint):
             switch vault.dispatchOnFreshLiveActionTarget(
                 liveTarget,
-                operation: { currentTarget
-                -> GestureResolution<PreparedGestureDispatch<PreparedDispatch>> in
+                operation: { currentTarget -> GestureResolution<CGPoint> in
                 let point: CGPoint
                 if let unitPoint {
                     let frame = currentTarget.frame
@@ -119,7 +112,7 @@ extension Actions {
                 } else {
                     point = currentTarget.activationPoint
                 }
-                return prepareGestureDispatch(at: point, payload: payload, prepare: prepare)
+                return admitGesturePoint(at: point, payload: payload)
                 }
             ) {
             case .success(let resolution):
@@ -130,20 +123,14 @@ extension Actions {
         }
     }
 
-    private func prepareGestureDispatch<PreparedDispatch: Sendable>(
+    private func admitGesturePoint(
         at point: CGPoint,
-        payload: ActionResult.Payload,
-        prepare: (CGPoint) -> GestureResolution<PreparedDispatch?>
-    ) -> GestureResolution<PreparedGestureDispatch<PreparedDispatch>> {
+        payload: ActionResult.Payload
+    ) -> GestureResolution<CGPoint> {
         if let failure = geometryFailure(payload: payload, field: "point", point: point) {
             return .failure(failure)
         }
-        switch prepare(point) {
-        case .success(let dispatch):
-            return .success(PreparedGestureDispatch(point: point, dispatch: dispatch))
-        case .failure(let failure):
-            return .failure(failure)
-        }
+        return .success(point)
     }
 
     func geometryFailure(

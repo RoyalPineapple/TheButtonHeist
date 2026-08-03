@@ -41,8 +41,7 @@ extension TheBrainsActionTests {
             selection: .element(try AccessibilityTarget.label("Below Fold").resolve(in: .empty)),
             payload: .oneFingerTap,
             deadline: actionDeadline(),
-            prepare: { $0 },
-            complete: { point in
+            dispatch: { point in
                 dispatchedPoint = point
                 return true
             }
@@ -72,8 +71,7 @@ extension TheBrainsActionTests {
             selection: .element(try AccessibilityTarget.label("Live").resolve(in: .empty)),
             payload: .oneFingerTap,
             deadline: actionDeadline(),
-            prepare: { $0 },
-            complete: { point in
+            dispatch: { point in
                 dispatchedPoint = point
                 return true
             }
@@ -105,8 +103,7 @@ extension TheBrainsActionTests {
             ),
             payload: .oneFingerTap,
             deadline: actionDeadline(),
-            prepare: { $0 },
-            complete: { point in
+            dispatch: { point in
                 dispatchedPoint = point
                 return true
             }
@@ -125,8 +122,7 @@ extension TheBrainsActionTests {
             selection: .coordinate(ScreenPoint(x: 222, y: 333)),
             payload: .oneFingerTap,
             deadline: actionDeadline(),
-            prepare: { $0 },
-            complete: { point in
+            dispatch: { point in
                 dispatchedPoint = point
                 return true
             }
