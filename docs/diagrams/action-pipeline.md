@@ -37,6 +37,16 @@ sequenceDiagram
     Host-->>Execution: currentSnapshot(snapshot)
     Execution-->>Host: dispatch(resolved command, deadline)
     Host->>Safecracker: dispatch exactly once
+    alt cancelled before began
+        Safecracker->>Safecracker: send no touch event
+    else touch began
+        Safecracker->>Safecracker: send began and optional movement
+        alt cancelled after began
+            Safecracker->>Safecracker: send cancelled exactly once
+        else gesture completes
+            Safecracker->>Safecracker: send ended exactly once
+        end
+    end
     Safecracker-->>Host: typed dispatch outcome
     Host-->>Execution: dispatchCompleted(outcome)
     loop until predicate and noChange
@@ -65,4 +75,6 @@ owns deadline and cancellation meaning. The
 stream owns pulse-driven capture and notification admission. The Vault owns
 current truth and history. Successful steps release history before the next
 leaf; their immutable evidence stays in the result. `ActionResult` is projected
-once from dispatch truth plus that evidence.
+once from dispatch truth plus that evidence. Synthetic touch dispatch has one
+owner and one terminal event. No caller keeps a prepared touch or completes it
+later.
