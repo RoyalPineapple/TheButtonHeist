@@ -807,20 +807,13 @@ private struct ScrollDecoyFixture {
     let viewController: UIViewController
     let scrollView: RevealingScrollView
 }
-private final class RefusingActivationTextField: UITextField {
-    private(set) var resignationCount = 0
-
+private final class RefusingActivationTextField: DeterministicTextField {
     override func accessibilityActivate() -> Bool {
         false
     }
-
-    override func resignFirstResponder() -> Bool {
-        resignationCount += 1
-        return super.resignFirstResponder()
-    }
 }
 
-private final class ActivatingTextField: UITextField {
+private final class ActivatingTextField: DeterministicTextField {
     override func accessibilityActivate() -> Bool {
         becomeFirstResponder()
     }
