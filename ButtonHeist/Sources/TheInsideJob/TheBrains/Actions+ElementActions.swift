@@ -97,7 +97,8 @@ extension Actions {
             target: target,
             payload: .activate,
             deadline: deadline,
-            timing: &timing
+            timing: &timing,
+            activationPointPolicy: .liveObjectOnly
         ) { context in
             return await ActivationPolicy(
                 accessibilityActivate: { liveTarget in
@@ -110,22 +111,42 @@ extension Actions {
                         )
                     }
                 },
-                refreshAndResolve: {
-                    switch await self.navigation.elementInflation.refreshCommittedTarget(
+                refreshSemanticTarget: {
+                    await self.resolveActivationTarget(
                         context.committedTarget,
-                        method: .activate,
+                        activationPointPolicy: .liveObjectOnly,
                         deadline: deadline
-                    ) {
-                    case .inflated(let inflatedTarget):
-                        return .resolved(inflatedTarget)
-                    case .failed(let failure):
-                        return .failure(failure.actionDispatchResult(payload: .activate))
-                    }
+                    )
+                },
+                resolveOnscreenFallbackTarget: {
+                    await self.resolveActivationTarget(
+                        context.committedTarget,
+                        activationPointPolicy: .requireOnscreen,
+                        deadline: deadline
+                    )
                 },
                 tapActivationPoint: safecracker.tap,
                 showFingerprint: safecracker.showFingerprint,
                 textEntryActivationFailure: textEntryActivationFailure
             ).apply()
+        }
+    }
+
+    private func resolveActivationTarget(
+        _ target: ElementInflation.CommittedElementTarget,
+        activationPointPolicy: ElementInflation.ActivationPointPolicy,
+        deadline: SemanticObservationDeadline
+    ) async -> ActivationRefreshResult {
+        switch await navigation.elementInflation.refreshCommittedTarget(
+            target,
+            method: .activate,
+            activationPointPolicy: activationPointPolicy,
+            deadline: deadline
+        ) {
+        case .inflated(let inflatedTarget):
+            return .resolved(inflatedTarget)
+        case .failed(let failure):
+            return .failure(failure.actionDispatchResult(payload: .activate))
         }
     }
 
@@ -295,6 +316,7 @@ extension Actions {
         switch await navigation.elementInflation.refreshCommittedTarget(
             context.committedTarget,
             method: .customAction,
+            activationPointPolicy: .requireOnscreen,
             deadline: deadline
         ) {
         case .inflated(let refreshedContext):

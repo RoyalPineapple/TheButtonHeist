@@ -254,6 +254,7 @@ extension Actions {
         switch await navigation.elementInflation.refreshCommittedTarget(
             target,
             method: .activate,
+            activationPointPolicy: .requireOnscreen,
             deadline: deadline
         ) {
         case .inflated(let target):

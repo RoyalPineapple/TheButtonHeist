@@ -124,9 +124,9 @@ public struct ActionSubjectEvidence: Codable, Sendable, Equatable {
 
 /// Dispatch-path diagnostics for semantic `activate`.
 ///
-/// `Activate` refreshes semantic and live geometry first, then calls
-/// `accessibilityActivate()` once. UIKit defines `false` as “not activated,” so
-/// the runtime then sends one tap at the refreshed activation point.
+/// `Activate` first resolves a live semantic target. It then calls
+/// `accessibilityActivate()` once. If that call returns `false`, the runtime
+/// resolves a fresh on-screen activation point and sends one tap.
 public enum ActivationTracePhase: Sendable, Equatable {
     case refreshFailed
     case accessibilityActivate(axActivateReturned: Bool)

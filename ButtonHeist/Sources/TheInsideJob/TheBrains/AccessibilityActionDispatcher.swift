@@ -14,7 +14,6 @@ struct AccessibilityActionDispatcher {
 
     enum ActivateOutcome: Sendable {
         case success
-        case objectDeallocated
         case refused
     }
 

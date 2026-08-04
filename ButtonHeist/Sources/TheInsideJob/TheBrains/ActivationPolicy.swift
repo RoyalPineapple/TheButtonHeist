@@ -20,64 +20,89 @@ struct ActivationPolicy {
     var accessibilityActivate: @MainActor (
         TheVault.LiveActionTarget
     ) -> Result<ActivationDispatchEvidence, TheVault.LiveTargetStaleness<HeistId>>
-    var refreshAndResolve: @MainActor () async -> ActivationRefreshResult
+    var refreshSemanticTarget: @MainActor () async -> ActivationRefreshResult
+    var resolveOnscreenFallbackTarget: @MainActor () async -> ActivationRefreshResult
     var tapActivationPoint: @MainActor (CGPoint) async -> Bool
     var showFingerprint: @MainActor (CGPoint) -> Void
     var textEntryActivationFailure: @MainActor (InterfaceTree.Element, ActivationTrace) async -> TheSafecracker.ActionDispatchResult?
 
     @MainActor
     func apply() async -> TheSafecracker.ActionDispatchResult {
-        let refreshedTarget: ElementInflation.InflatedElementTarget
-        switch await refreshAndResolve() {
+        let semanticTarget: ElementInflation.InflatedElementTarget
+        switch await refreshSemanticTarget() {
         case .resolved(let target):
-            refreshedTarget = target
+            semanticTarget = target
         case .failure(let result):
             return result.withActivationTrace(ActivationTrace(.refreshFailed))
         }
-        let treeElement = refreshedTarget.treeElement
-        let refreshedLiveTarget = refreshedTarget.liveTarget
-        let subjectEvidence = refreshedTarget.subjectEvidence(source: .resolvedSemanticTarget)
+        let semanticTreeElement = semanticTarget.treeElement
+        let semanticLiveTarget = semanticTarget.liveTarget
+        let semanticSubjectEvidence = semanticTarget.subjectEvidence(source: .resolvedSemanticTarget)
         let implementsAccessibilityActivation = TheVault.Interactivity
-            .implementsAccessibilityActivation(refreshedLiveTarget.object)
+            .implementsAccessibilityActivation(semanticLiveTarget.object)
 
-        let activateOutcome: AccessibilityActionDispatcher.ActivateOutcome
-        let activationPoint: CGPoint
-        switch accessibilityActivate(refreshedLiveTarget) {
+        let semanticDispatch: ActivationDispatchEvidence
+        switch accessibilityActivate(semanticLiveTarget) {
         case .success(let dispatch):
-            activateOutcome = dispatch.outcome
-            activationPoint = dispatch.activationPoint
+            semanticDispatch = dispatch
         case .failure(let staleness):
             return .failure(
                 .activate,
                 message: staleness.message,
+                subjectEvidence: semanticSubjectEvidence,
                 activationTrace: ActivationTrace(.refreshFailed),
                 failureKind: .targetUnavailable
             )
         }
-        switch activateOutcome {
+        switch semanticDispatch.outcome {
         case .success:
             return await accessibilityActivationResult(
-                treeElement: treeElement,
-                subjectEvidence: subjectEvidence,
-                activationPoint: activationPoint
+                treeElement: semanticTreeElement,
+                subjectEvidence: semanticSubjectEvidence,
+                activationPoint: semanticDispatch.activationPoint
             )
-        case .refused, .objectDeallocated:
-            break
+        case .refused:
+            return await activationPointFallback(
+                semanticSubjectEvidence: semanticSubjectEvidence,
+                implementsAccessibilityActivation: implementsAccessibilityActivation
+            )
         }
+    }
+
+    @MainActor
+    private func activationPointFallback(
+        semanticSubjectEvidence: ActionSubjectEvidence,
+        implementsAccessibilityActivation: Bool
+    ) async -> TheSafecracker.ActionDispatchResult {
+        let fallbackTarget: ElementInflation.InflatedElementTarget
+        switch await resolveOnscreenFallbackTarget() {
+        case .resolved(let target):
+            fallbackTarget = target
+        case .failure(let result):
+            return result
+                .withSubjectEvidence(semanticSubjectEvidence)
+                .withActivationTrace(ActivationTrace(.accessibilityActivate(
+                    axActivateReturned: false
+                )))
+        }
+        let treeElement = fallbackTarget.treeElement
+        let activationPoint = fallbackTarget.liveTarget.activationPoint
+        let subjectEvidence = fallbackTarget.subjectEvidence(source: .resolvedSemanticTarget)
 
         guard let activationX = try? FiniteCoordinate(validating: Double(activationPoint.x)),
               let activationY = try? FiniteCoordinate(validating: Double(activationPoint.y)) else {
             return .failure(
                 .activate,
-                message: "activate failed: the refreshed accessibility activation point was not finite",
-                subjectEvidence: subjectEvidence
+                message: "activate failed: the fresh fallback accessibility activation point was not finite",
+                subjectEvidence: subjectEvidence,
+                activationTrace: ActivationTrace(.accessibilityActivate(axActivateReturned: false))
             )
         }
         let admittedActivationPoint = ScreenPoint(x: activationX, y: activationY)
 
         let tapActivationSucceeded = await tapActivationPoint(activationPoint)
         let trace = ActivationTrace(.activationPointFallback(
-            axActivateReturned: activateOutcome.axActivateReturned,
+            axActivateReturned: false,
             tapActivationPoint: admittedActivationPoint,
             tapActivationSucceeded: tapActivationSucceeded
         ), implementsAccessibilityActivation: implementsAccessibilityActivation)
@@ -96,7 +121,6 @@ struct ActivationPolicy {
             .activate,
             message: activationFailureMessage(
                 treeElement: treeElement,
-                activateOutcome: activateOutcome,
                 implementsAccessibilityActivation: implementsAccessibilityActivation
             ),
             subjectEvidence: subjectEvidence,
@@ -127,37 +151,18 @@ struct ActivationPolicy {
     @MainActor
     private func activationFailureMessage(
         treeElement: InterfaceTree.Element,
-        activateOutcome: AccessibilityActionDispatcher.ActivateOutcome,
         implementsAccessibilityActivation: Bool
     ) -> String {
-        let observed: String
-        switch activateOutcome {
-        case .success:
-            observed = "unexpected success state"
-        case .objectDeallocated:
-            observed = "live target deallocated after semantic refresh"
-        case .refused:
-            observed = "accessibilityActivate() declined after semantic refresh"
-        }
         let implementationEvidence = implementsAccessibilityActivation
             ? "activationImplementation=present likelyConditionalState=true"
             : "activationImplementation=absent likelyInertTarget=true"
-        return "activate failed: \(observed); activation-point dispatch was attempted at the fresh " +
+        return "activate failed: accessibilityActivate() declined after semantic refresh; " +
+            "activation-point dispatch was attempted at the fresh " +
             "accessibility activation point and did not complete for " +
             "\(ActionCapabilityDiagnostic.elementObservation(treeElement)); \(implementationEvidence); " +
             "correction: target an element " +
             "with primary accessibility activation, or use an explicit mechanical gesture when the " +
             "test intent is viewport coordinate delivery"
-    }
-}
-
-private extension AccessibilityActionDispatcher.ActivateOutcome {
-    var axActivateReturned: Bool? {
-        switch self {
-        case .success: return true
-        case .refused: return false
-        case .objectDeallocated: return nil
-        }
     }
 }
 

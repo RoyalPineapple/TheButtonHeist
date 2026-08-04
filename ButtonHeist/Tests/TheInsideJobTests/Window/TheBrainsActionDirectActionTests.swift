@@ -322,6 +322,99 @@ extension TheBrainsActionTests {
         XCTAssertEqual(liveObject.activationCount, 1)
     }
 
+    func testExecuteActivateUsesSemanticActionBeforeRequiringUsableTapGeometry() async throws {
+        let liveObject = ActionActivationOverrideView()
+        let target = try await installActivationTargetWithUnusableTapGeometry(
+            heistId: "semantic_before_geometry",
+            label: "Semantic Before Geometry",
+            object: liveObject
+        )
+        var timing = ActionTiming()
+
+        let result = await brains.actions.executeActivate(
+            target,
+            deadline: actionDeadline(),
+            timing: &timing
+        )
+
+        XCTAssertTrue(result.success, result.message ?? "activate failed")
+        XCTAssertEqual(liveObject.activationCount, 1)
+        XCTAssertEqual(
+            result.activationTrace,
+            ActivationTrace(.accessibilityActivate(axActivateReturned: true))
+        )
+    }
+
+    func testExecuteActivateExplainsGeometryFailureAfterSemanticRefusal() async throws {
+        let liveObject = RefusingActivationView()
+        let target = try await installActivationTargetWithUnusableTapGeometry(
+            heistId: "refusal_before_geometry",
+            label: "Refusal Before Geometry",
+            object: liveObject
+        )
+        var timing = ActionTiming()
+
+        let result = await brains.actions.executeActivate(
+            target,
+            deadline: actionDeadline(),
+            timing: &timing
+        )
+
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(liveObject.activationCount, 1)
+        XCTAssertEqual(result.activationTrace?.axActivateReturned, false)
+        XCTAssertEqual(result.activationTrace?.tapActivationDispatched, false)
+        XCTAssertDiagnostic(result.message, contains: [
+            "element inflation failed [noRevealPath]",
+            "no live scrollable ancestor",
+            "liveFrame=",
+            "activationPoint=",
+            "screenBounds=",
+        ])
+    }
+
+    private func installActivationTargetWithUnusableTapGeometry(
+        heistId: HeistId,
+        label: String,
+        object: NSObject
+    ) async throws -> ResolvedAccessibilityTarget {
+        let frame = CGRect(
+            x: 24,
+            y: ScreenMetrics.current.bounds.maxY + 80,
+            width: 180,
+            height: 44
+        )
+        let activationPoint = CGPoint(x: frame.midX, y: frame.midY)
+        object.accessibilityLabel = label
+        object.accessibilityFrame = frame
+        object.accessibilityActivationPoint = activationPoint
+        let element = AccessibilityElement.make(
+            label: label,
+            traits: .button,
+            shape: .frame(AccessibilityRect(frame)),
+            activationPoint: activationPoint
+        )
+        let entry = InterfaceTree.Element(
+            heistId: heistId,
+            path: TreePath([0]),
+            scrollMembership: nil,
+            geometry: testGeometry(
+                for: element,
+                ownerPath: .root,
+                screen: TheVault.onscreenSpace(for: element)
+            ),
+            element: element
+        )
+        await installSyntheticObservation(InterfaceObservation.makeForTests(
+            elements: [heistId: entry],
+            hierarchy: [.element(element, traversalIndex: 0)],
+            heistIdsByPath: [TreePath([0]): heistId],
+            elementRefs: [heistId: .init(object: object, scrollView: nil)],
+            firstResponderHeistId: nil
+        ))
+        return try AccessibilityTarget.label(label).resolve(in: .empty)
+    }
+
     func testProductionActionDispatchReportsOwnedPhaseTiming() async throws {
         let rootView = UIView(frame: UIScreen.main.bounds)
         rootView.backgroundColor = .white
