@@ -246,6 +246,7 @@ internal final class ElementInflation {
     internal func refreshCommittedTarget(
         _ target: CommittedElementTarget,
         method: ActionMethod,
+        activationPointPolicy: ActivationPointPolicy,
         deadline: SemanticObservationDeadline
     ) async -> ElementInflationResult {
         guard !Task.isCancelled else {
@@ -285,7 +286,7 @@ internal final class ElementInflation {
         return await runInflation(
             for: target.target,
             method: method,
-            activationPointPolicy: .requireOnscreen,
+            activationPointPolicy: activationPointPolicy,
             deadline: deadline,
             initialState: initialState
         )

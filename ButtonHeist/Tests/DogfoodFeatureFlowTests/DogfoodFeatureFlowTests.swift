@@ -16,6 +16,16 @@ final class DogfoodFeatureFlowTests: XCTestCase {
         }
     }
 
+    func testSheetDismissActivationSurvivesRepeatedPresentationTransitions() async throws {
+        try await runHeist("DogfoodRepeatedSheetDismissActivation") {
+            try DogfoodHome.openScreen("Alerts & Sheets")
+            try AlertsSheetScreen.presentAndDismiss()
+            try AlertsSheetScreen.presentAndDismiss()
+            try AlertsSheetScreen.presentAndDismiss()
+            try DemoNavigation.backToRoot()
+        }
+    }
+
     func testActionExpectationUsesTransientLifecycleEvidenceOnlyFromItsOwnAction() async throws {
         let heist = try await runHeist("DogfoodTransientLifecycleEvidence") {
             try DemoNavigation.backToRoot()

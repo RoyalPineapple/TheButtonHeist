@@ -117,7 +117,8 @@ extension ElementInflation {
             )
         }
         return .noRevealPath(
-            "target \(description) has no live scrollable ancestor to make activation point actionable"
+            "target \(description) has no live scrollable ancestor to make activation point actionable; "
+                + Self.liveGeometrySummary(liveTarget)
         )
     }
 }

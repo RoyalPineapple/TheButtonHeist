@@ -165,6 +165,18 @@ package enum CalculatorScreen {
     }
 }
 
+package enum AlertsSheetScreen {
+    package static let presentAndDismiss = HeistDef<Void>("AlertsSheetScreen.presentAndDismiss") {
+        oneFingerTap(.label("Show Sheet"))
+            .expect(.exists(.label("Sheet Content")), timeout: 8)
+
+        Activate(.label("Dismiss"))
+            .expect(.exists(.label("Last action: Sheet dismissed")), timeout: 8)
+
+        WaitFor(.missing(.label("Sheet Content")), timeout: 8)
+    }
+}
+
 package enum TransientFlowScreen {
     package static let lifecycle = AccessibilityPredicate.elementsChanged([
         .appeared(.label("Processing")),

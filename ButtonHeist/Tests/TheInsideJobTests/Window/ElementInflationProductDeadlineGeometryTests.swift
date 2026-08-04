@@ -71,6 +71,7 @@ extension ElementInflationProductTests {
         let result = await refreshBrains.navigation.elementInflation.refreshCommittedTarget(
             completedInflation.committedTarget,
             method: .activate,
+            activationPointPolicy: .requireOnscreen,
             deadline: deadline
         )
 
