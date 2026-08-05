@@ -101,6 +101,7 @@ extension Actions {
             activationPointPolicy: .liveObjectOnly
         ) { context in
             return await ActivationPolicy(
+                semanticTarget: context,
                 accessibilityActivate: { liveTarget in
                     self.vault.dispatchOnFreshLiveActionTarget(
                         liveTarget,
@@ -110,13 +111,6 @@ extension Actions {
                             activationPoint: currentTarget.activationPoint
                         )
                     }
-                },
-                refreshSemanticTarget: {
-                    await self.resolveActivationTarget(
-                        context.committedTarget,
-                        activationPointPolicy: .liveObjectOnly,
-                        deadline: deadline
-                    )
                 },
                 resolveOnscreenFallbackTarget: {
                     await self.resolveActivationTarget(

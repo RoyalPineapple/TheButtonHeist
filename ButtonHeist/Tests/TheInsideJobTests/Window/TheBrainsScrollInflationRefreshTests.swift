@@ -194,8 +194,6 @@ extension TheBrainsScrollTests {
         }
         await waitForSettledSemanticWaiter()
         await installSyntheticObservation(recoveredScreen)
-        await waitForSettledSemanticWaiter()
-        await installSyntheticObservation(recoveredScreen)
 
         let resolution = await resolutionTask.value
         XCTAssertEqual(

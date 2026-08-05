@@ -17,10 +17,10 @@ enum ActivationRefreshResult {
 }
 
 struct ActivationPolicy {
+    let semanticTarget: ElementInflation.InflatedElementTarget
     var accessibilityActivate: @MainActor (
         TheVault.LiveActionTarget
     ) -> Result<ActivationDispatchEvidence, TheVault.LiveTargetStaleness<HeistId>>
-    var refreshSemanticTarget: @MainActor () async -> ActivationRefreshResult
     var resolveOnscreenFallbackTarget: @MainActor () async -> ActivationRefreshResult
     var tapActivationPoint: @MainActor (CGPoint) async -> Bool
     var showFingerprint: @MainActor (CGPoint) -> Void
@@ -28,13 +28,6 @@ struct ActivationPolicy {
 
     @MainActor
     func apply() async -> TheSafecracker.ActionDispatchResult {
-        let semanticTarget: ElementInflation.InflatedElementTarget
-        switch await refreshSemanticTarget() {
-        case .resolved(let target):
-            semanticTarget = target
-        case .failure(let result):
-            return result.withActivationTrace(ActivationTrace(.refreshFailed))
-        }
         let semanticTreeElement = semanticTarget.treeElement
         let semanticLiveTarget = semanticTarget.liveTarget
         let semanticSubjectEvidence = semanticTarget.subjectEvidence(source: .resolvedSemanticTarget)

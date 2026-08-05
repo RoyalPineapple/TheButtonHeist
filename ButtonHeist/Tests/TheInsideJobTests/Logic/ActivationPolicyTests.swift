@@ -69,13 +69,10 @@ final class ActivationPolicyTests: XCTestCase {
         )
 
         let result = await makePolicy(
+            semanticTarget: inflatedTarget,
             accessibilityActivate: { target in
                 events.append("activate:\(target.treeElement.heistId)")
                 return .success
-            },
-            refreshSemanticTarget: {
-                events.append("semantic-refresh")
-                return .resolved(inflatedTarget)
             },
             resolveOnscreenFallbackTarget: {
                 events.append("onscreen-fallback")
@@ -92,7 +89,7 @@ final class ActivationPolicyTests: XCTestCase {
 
         XCTAssertTrue(result.success)
         XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(events, ["semantic-refresh", "activate:refreshed"])
+        XCTAssertEqual(events, ["activate:refreshed"])
         XCTAssertTrue(dispatchedPoints.isEmpty)
         XCTAssertEqual(fingerprintPoints, [CGPoint(x: 30, y: 1_400)])
         XCTAssertEqual(
@@ -110,33 +107,6 @@ final class ActivationPolicyTests: XCTestCase {
             result.subjectEvidence?.element.semantics.assertable.label,
             "Refreshed Target"
         )
-    }
-
-    func testRefreshReresolveFailureReturnsWithoutActivationAttemptOrDispatch() async {
-        var activateCount = 0
-        var dispatchedPoints: [CGPoint] = []
-
-        let result = await makePolicy(
-            accessibilityActivate: { _ in
-                activateCount += 1
-                return .refused
-            },
-            refreshSemanticTarget: {
-                .failure(.failure(.activate, message: "activation refresh failed"))
-            },
-            tapActivationPoint: { point in
-                dispatchedPoints.append(point)
-                return true
-            }
-        ).apply()
-
-        XCTAssertFalse(result.success)
-        XCTAssertEqual(result.method, .activate)
-        XCTAssertEqual(result.message, "activation refresh failed")
-        XCTAssertEqual(activateCount, 0)
-        XCTAssertTrue(dispatchedPoints.isEmpty)
-        XCTAssertEqual(result.activationTrace, ActivationTrace(.refreshFailed))
-        XCTAssertNil(result.subjectEvidence)
     }
 
     func testRefusedActivationResolvesFreshOnscreenTargetBeforeOneFallbackTap() async throws {
@@ -158,14 +128,11 @@ final class ActivationPolicyTests: XCTestCase {
         let fallbackInflatedTarget = try makeInflatedTarget(fallbackTarget)
 
         let result = await makePolicy(
+            semanticTarget: semanticInflatedTarget,
             accessibilityActivate: { target in
                 activateCount += 1
                 events.append("activate:\(target.treeElement.heistId)")
                 return .refused
-            },
-            refreshSemanticTarget: {
-                events.append("semantic-refresh")
-                return .resolved(semanticInflatedTarget)
             },
             resolveOnscreenFallbackTarget: {
                 events.append("onscreen-fallback")
@@ -183,7 +150,7 @@ final class ActivationPolicyTests: XCTestCase {
         XCTAssertEqual(activateCount, 1)
         XCTAssertEqual(activationPointDispatches, 1)
         XCTAssertEqual(dispatchedPoints, [CGPoint(x: 30, y: 40)])
-        XCTAssertEqual(events, ["semantic-refresh", "activate:semantic", "onscreen-fallback"])
+        XCTAssertEqual(events, ["activate:semantic", "onscreen-fallback"])
         XCTAssertEqual(result.subjectEvidence?.element.semantics.assertable.label, "Fallback Target")
         XCTAssertEqual(result.activationTrace, ActivationTrace(.activationPointFallback(
             axActivateReturned: false,
@@ -203,13 +170,10 @@ final class ActivationPolicyTests: XCTestCase {
         var dispatchedPoints: [CGPoint] = []
 
         let result = await makePolicy(
+            semanticTarget: semanticInflatedTarget,
             accessibilityActivate: { _ in
                 events.append("activate")
                 return .refused
-            },
-            refreshSemanticTarget: {
-                events.append("semantic-refresh")
-                return .resolved(semanticInflatedTarget)
             },
             resolveOnscreenFallbackTarget: {
                 events.append("onscreen-fallback")
@@ -229,7 +193,7 @@ final class ActivationPolicyTests: XCTestCase {
             result.message,
             "element inflation failed [noRevealPath]: target has no reveal path"
         )
-        XCTAssertEqual(events, ["semantic-refresh", "activate", "onscreen-fallback"])
+        XCTAssertEqual(events, ["activate", "onscreen-fallback"])
         XCTAssertTrue(dispatchedPoints.isEmpty)
         XCTAssertEqual(
             result.subjectEvidence?.element.semantics.assertable.label,
@@ -252,10 +216,10 @@ final class ActivationPolicyTests: XCTestCase {
         var dispatchedPoints: [CGPoint] = []
 
         let result = await ActivationPolicy(
+            semanticTarget: semanticInflatedTarget,
             accessibilityActivate: { _ in
                 .failure(.objectUnavailable("semantic"))
             },
-            refreshSemanticTarget: { .resolved(semanticInflatedTarget) },
             resolveOnscreenFallbackTarget: {
                 fallbackResolutionCount += 1
                 return .resolved(semanticInflatedTarget)
@@ -293,10 +257,8 @@ final class ActivationPolicyTests: XCTestCase {
         let inflatedTarget = try makeInflatedTarget(refreshedTarget)
 
         let result = await makePolicy(
+            semanticTarget: inflatedTarget,
             accessibilityActivate: { _ in .refused },
-            refreshSemanticTarget: {
-                .resolved(inflatedTarget)
-            },
             tapActivationPoint: { _ in true },
             textEntryActivationFailure: { _, trace in
                 focusConfirmationTrace = trace
@@ -325,10 +287,8 @@ final class ActivationPolicyTests: XCTestCase {
         let inflatedTarget = try makeInflatedTarget(refreshedTarget)
 
         let result = await makePolicy(
+            semanticTarget: inflatedTarget,
             accessibilityActivate: { _ in .refused },
-            refreshSemanticTarget: {
-                .resolved(inflatedTarget)
-            },
             tapActivationPoint: { _ in true },
             textEntryActivationFailure: { _, _ in
                 focusConfirmationCount += 1
@@ -360,12 +320,10 @@ final class ActivationPolicyTests: XCTestCase {
         )
 
         let result = await makePolicy(
+            semanticTarget: inflatedTarget,
             accessibilityActivate: { _ in
                 activateCount += 1
                 return .refused
-            },
-            refreshSemanticTarget: {
-                .resolved(inflatedTarget)
             },
             tapActivationPoint: { point in
                 dispatchedPoints.append(point)
@@ -411,8 +369,8 @@ final class ActivationPolicyTests: XCTestCase {
     }
 
     private func makePolicy(
+        semanticTarget: ElementInflation.InflatedElementTarget,
         accessibilityActivate: @escaping @MainActor (TheVault.LiveActionTarget) -> AccessibilityActionDispatcher.ActivateOutcome,
-        refreshSemanticTarget: @escaping @MainActor () async -> ActivationRefreshResult,
         resolveOnscreenFallbackTarget: (@MainActor () async -> ActivationRefreshResult)? = nil,
         tapActivationPoint: @escaping @MainActor (CGPoint) async -> Bool,
         showFingerprint: @escaping @MainActor (CGPoint) -> Void = { _ in },
@@ -422,14 +380,16 @@ final class ActivationPolicyTests: XCTestCase {
         ) async -> TheSafecracker.ActionDispatchResult? = { _, _ in nil }
     ) -> ActivationPolicy {
         ActivationPolicy(
+            semanticTarget: semanticTarget,
             accessibilityActivate: { target in
                 .success(ActivationDispatchEvidence(
                     outcome: accessibilityActivate(target),
                     activationPoint: target.activationPoint
                 ))
             },
-            refreshSemanticTarget: refreshSemanticTarget,
-            resolveOnscreenFallbackTarget: resolveOnscreenFallbackTarget ?? refreshSemanticTarget,
+            resolveOnscreenFallbackTarget: resolveOnscreenFallbackTarget ?? {
+                .resolved(semanticTarget)
+            },
             tapActivationPoint: tapActivationPoint,
             showFingerprint: showFingerprint,
             textEntryActivationFailure: { treeElement, trace in
