@@ -218,7 +218,7 @@ final class TheBrainsScrollTests: XCTestCase {
         }
     }
 
-    func testGeometryCrossingDeadlineDuringFrameAwaitTimesOut() async throws {
+    func testOnscreenGeometryCrossingDeadlineDuringFrameAwaitTimesOut() async throws {
         let targetId: HeistId = "geometry_deadline_target"
         let element = makeElement(
             label: "Deadline Target",
@@ -244,9 +244,10 @@ final class TheBrainsScrollTests: XCTestCase {
             resolution: ActionSubjectResolution(origin: .visible)
         )
 
-        let state = await inflation.stateAfterResolvedFreshTarget(
+        let state = await inflation.stateAfterPlacement(
             inflatedTarget,
-            activationPointPolicy: .liveObjectOnly
+            method: .activate,
+            transaction: ElementInflation.RevealTransaction(vault: brains.vault)
         )
 
         guard case .failed(let failure) = state else {
@@ -260,6 +261,43 @@ final class TheBrainsScrollTests: XCTestCase {
         }
         XCTAssertEqual(failureKind, .timeout)
         XCTAssertEqual(TheBrains.actionFailureKind(for: failureKind), .timeout)
+    }
+
+    func testLiveObjectOnlyDoesNotAwaitGeometryAfterFreshResolution() async throws {
+        let targetId: HeistId = "semantic_dispatch_target"
+        let element = makeElement(
+            label: "Semantic Dispatch Target",
+            traits: .button,
+            shape: .frame(AccessibilityRect(CGRect(x: 40, y: 120, width: 200, height: 44)))
+        )
+        let object = retainedLiveObject()
+        await installSyntheticObservation(
+            InterfaceObservation.makeForTests([
+                .init(element, heistId: targetId, object: object),
+            ])
+        )
+        let treeElement = try XCTUnwrap(brains.vault.interfaceElement(heistId: targetId))
+        guard case .resolved(let liveTarget) = brains.vault.resolveLiveActionTarget(for: treeElement) else {
+            return XCTFail("Expected semantic dispatch fixture to resolve")
+        }
+        let inflatedTarget = ElementInflation.InflatedElementTarget(
+            target: try resolvedTarget(.label("Semantic Dispatch Target")),
+            treeElement: treeElement,
+            liveTarget: liveTarget,
+            deadline: SemanticObservationDeadline(start: RuntimeElapsed.now, timeoutSeconds: 0),
+            resolution: ActionSubjectResolution(origin: .visible)
+        )
+
+        let state = brains.navigation.elementInflation.stateAfterResolvedFreshTarget(
+            inflatedTarget,
+            activationPointPolicy: .liveObjectOnly
+        )
+
+        guard case .inflated(let resolvedTarget) = state else {
+            return XCTFail("Fresh semantic dispatch evidence must not wait for geometry, got \(state)")
+        }
+        XCTAssertEqual(resolvedTarget.treeElement.heistId, targetId)
+        XCTAssertTrue(resolvedTarget.liveTarget.object === object)
     }
 
     func testExploreScreenSkipsUIPageViewControllerQueuingScrollView() async throws {

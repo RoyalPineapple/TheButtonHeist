@@ -43,6 +43,23 @@ extension ElementInflation {
         activationPointPolicy: ActivationPointPolicy,
         deadline: SemanticObservationDeadline
     ) async -> State {
+        let admittedResolution: ActionSubjectResolution
+        if activationPointPolicy == .liveObjectOnly {
+            switch await captureFreshLiveObjectResolution(
+                identity: identity,
+                treeElement: treeElement,
+                resolution: resolution,
+                method: method,
+                deadline: deadline
+            ) {
+            case .success(let capturedResolution):
+                admittedResolution = capturedResolution
+            case .failure(let failure):
+                return .failed(failure)
+            }
+        } else {
+            admittedResolution = resolution
+        }
         let currentElement: InterfaceTree.Element
         switch resolveCurrentElement(for: identity, pinnedElement: treeElement) {
         case .success(let resolved):
@@ -55,92 +72,150 @@ extension ElementInflation {
             treeElement: currentElement,
             method: method,
             deadline: deadline,
-            resolution: resolution
+            resolution: admittedResolution
         ) {
         case .success(let inflatedTarget):
-            return await stateAfterResolvedFreshTarget(
+            return stateAfterResolvedFreshTarget(
                 inflatedTarget,
                 activationPointPolicy: activationPointPolicy
             )
         case .retry(let reason):
-            let refreshedResolution = resolution.adding(reason.adjustment)
-            let pendingRetry: (reason: RetryReason, resolution: ActionSubjectResolution)
-            if case .committed = await vault.semanticObservationStream
-                .refreshedVisibleObservation(boundary: .cancellation) {
-                let refreshedElement: InterfaceTree.Element
-                switch resolveCurrentElement(
-                    for: identity,
-                    pinnedElement: currentElement
-                ) {
-                case .success(let resolved):
-                    refreshedElement = resolved
-                case .failure(let failure):
-                    return .failed(failure)
-                }
-                let refreshed = resolveCurrentLiveElementTarget(
-                    treeElement: refreshedElement,
-                    identity: identity,
-                    method: method,
-                    deadline: deadline,
-                    resolution: refreshedResolution
-                )
-                switch refreshed {
-                case .success(let inflatedTarget):
-                    return await stateAfterResolvedFreshTarget(
-                        inflatedTarget,
-                        activationPointPolicy: activationPointPolicy
-                    )
-                case .failure(let failure):
-                    return .failed(failure)
-                case .retry(let refreshedReason):
-                    pendingRetry = (
-                        refreshedReason,
-                        refreshedResolution.adding(refreshedReason.adjustment)
-                    )
-                }
-            } else {
-                pendingRetry = (reason, refreshedResolution)
+            return await stateAfterLiveTargetRetry(
+                identity: identity,
+                currentElement: currentElement,
+                reason: reason,
+                resolution: admittedResolution,
+                method: method,
+                activationPointPolicy: activationPointPolicy,
+                deadline: deadline
+            )
+        case .failure(let failure):
+            return .failed(failure)
+        }
+    }
+
+    private func stateAfterLiveTargetRetry(
+        identity: CrossCaptureTarget,
+        currentElement: InterfaceTree.Element,
+        reason: RetryReason,
+        resolution: ActionSubjectResolution,
+        method: ActionMethod,
+        activationPointPolicy: ActivationPointPolicy,
+        deadline: SemanticObservationDeadline
+    ) async -> State {
+        let refreshedResolution = resolution.adding(reason.adjustment)
+        let pendingRetry: (reason: RetryReason, resolution: ActionSubjectResolution)
+        if case .committed = await vault.semanticObservationStream
+            .refreshedVisibleObservation(boundary: .cancellation) {
+            let refreshedElement: InterfaceTree.Element
+            switch resolveCurrentElement(for: identity, pinnedElement: currentElement) {
+            case .success(let resolved):
+                refreshedElement = resolved
+            case .failure(let failure):
+                return .failed(failure)
             }
-            let historyIndex = vault.state.history.endIndex
-            let refresh: TargetRefreshTerminal
-            switch identity {
-            case .captureLocal(let target):
-                refresh = await awaitLiveTargetRefresh(
-                    for: target,
-                    treeElement: currentElement,
-                    method: method,
-                    after: historyIndex,
-                    deadline: deadline,
-                    resolution: pendingRetry.resolution
-                )
-            case .admitted(let sourceTarget, let semanticTarget):
-                refresh = await awaitLiveTargetRefresh(
-                    for: semanticTarget,
-                    sourceTarget: sourceTarget,
-                    pinnedElement: currentElement,
-                    method: method,
-                    after: historyIndex,
-                    deadline: deadline,
-                    resolution: pendingRetry.resolution
-                )
-            }
-            switch refresh {
-            case .inflated(let inflatedTarget):
-                return await stateAfterResolvedFreshTarget(
+            switch resolveCurrentLiveElementTarget(
+                treeElement: refreshedElement,
+                identity: identity,
+                method: method,
+                deadline: deadline,
+                resolution: refreshedResolution
+            ) {
+            case .success(let inflatedTarget):
+                return stateAfterResolvedFreshTarget(
                     inflatedTarget,
                     activationPointPolicy: activationPointPolicy
                 )
             case .failure(let failure):
                 return .failed(failure)
-            case .treeElement, .timedOut:
-                return .failed(staleRefreshFailure(reason: pendingRetry.reason))
-            case .cancelled:
-                return .failed(.cancelled(
-                    "stale live target refresh was cancelled after \(pendingRetry.reason.failureDescription)"
-                ))
+            case .retry(let refreshedReason):
+                pendingRetry = (
+                    refreshedReason,
+                    refreshedResolution.adding(refreshedReason.adjustment)
+                )
             }
+        } else {
+            pendingRetry = (reason, refreshedResolution)
+        }
+        let historyIndex = vault.state.history.endIndex
+        let refresh: TargetRefreshTerminal
+        switch identity {
+        case .captureLocal(let target):
+            refresh = await awaitLiveTargetRefresh(
+                for: target,
+                treeElement: currentElement,
+                method: method,
+                after: historyIndex,
+                deadline: deadline,
+                resolution: pendingRetry.resolution
+            )
+        case .admitted(let sourceTarget, let semanticTarget):
+            refresh = await awaitLiveTargetRefresh(
+                for: semanticTarget,
+                sourceTarget: sourceTarget,
+                pinnedElement: currentElement,
+                method: method,
+                after: historyIndex,
+                deadline: deadline,
+                resolution: pendingRetry.resolution
+            )
+        }
+        switch refresh {
+        case .inflated(let inflatedTarget):
+            return stateAfterResolvedFreshTarget(
+                inflatedTarget,
+                activationPointPolicy: activationPointPolicy
+            )
         case .failure(let failure):
             return .failed(failure)
+        case .treeElement, .timedOut:
+            return .failed(staleRefreshFailure(reason: pendingRetry.reason))
+        case .cancelled:
+            return .failed(.cancelled(
+                "stale live target refresh was cancelled after \(pendingRetry.reason.failureDescription)"
+            ))
+        }
+    }
+
+    private func captureFreshLiveObjectResolution(
+        identity: CrossCaptureTarget,
+        treeElement: InterfaceTree.Element,
+        resolution: ActionSubjectResolution,
+        method: ActionMethod,
+        deadline: SemanticObservationDeadline
+    ) async -> Result<ActionSubjectResolution, ElementInflationFailure> {
+        let admittedResolution: ActionSubjectResolution
+        if case .retry(let reason) = resolveCurrentLiveElementTarget(
+            treeElement: treeElement,
+            identity: identity,
+            method: method,
+            deadline: deadline,
+            resolution: resolution
+        ) {
+            admittedResolution = resolution.adding(reason.adjustment)
+        } else {
+            admittedResolution = resolution
+        }
+        switch await vault.semanticObservationStream.refreshedVisibleObservation(
+            boundary: .externalDeadline(deadline)
+        ) {
+        case .committed:
+            return .success(admittedResolution)
+        case .unavailable(.cancelled):
+            return .failure(.cancelled(
+                "fresh live target capture was cancelled before \(method.rawValue) dispatch"
+            ))
+        case .unavailable:
+            let description = Navigation.ScrollTargetDescription(treeElement).description
+            if deadline.hasTimeRemaining(at: RuntimeElapsed.now) {
+                return .failure(.staleRefresh(
+                    "fresh visible accessibility evidence was unavailable for target \(description)",
+                    failureKind: .targetUnavailable
+                ))
+            }
+            return .failure(.timedOut(
+                "fresh live target capture reached the action deadline for target \(description)"
+            ))
         }
     }
 

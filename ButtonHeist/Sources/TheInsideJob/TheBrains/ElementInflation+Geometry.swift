@@ -14,14 +14,13 @@ extension ElementInflation {
     internal func stateAfterResolvedFreshTarget(
         _ inflatedTarget: InflatedElementTarget,
         activationPointPolicy: ActivationPointPolicy
-    ) async -> State {
-        if activationPointPolicy == .liveObjectOnly {
-            return await stateAfterStableLiveGeometry(
-                inflatedTarget,
-                requireOnscreenActivationPoint: false
-            )
+    ) -> State {
+        switch activationPointPolicy {
+        case .liveObjectOnly:
+            return .inflated(inflatedTarget)
+        case .requireOnscreen:
+            return .placing(inflatedTarget)
         }
-        return .placing(inflatedTarget)
     }
 
     internal func stateAfterPlacement(
