@@ -206,27 +206,47 @@ extension TheVault {
         )
     }
 
-    /// The snapshot parser emits geometry in its parsing root's local
-    /// coordinate space. Button Heist's interface tree and wire/element-inflation
-    /// surfaces need UIKit accessibility screen coordinates, so restore those by
-    /// applying each parse root's screen offset at the parser boundary.
+    /// The snapshot parser emits geometry and visibility in its parsing root's
+    /// local coordinate space. Restore screen coordinates, then reject elements
+    /// that are visible inside a presented root while that root is still outside
+    /// its screen.
     private static func screenCoordinateHierarchy(from result: CaptureResult) -> [AccessibilityHierarchy] {
-        func translated(_ hierarchy: AccessibilityHierarchy, at path: TreePath, inherited: CGPoint) -> AccessibilityHierarchy {
-            let offset = result.screenCoordinateOffsetsByPath[path] ?? inherited
+        func translated(
+            _ hierarchy: AccessibilityHierarchy,
+            at path: TreePath,
+            inheritedScreenSpace: CaptureResult.RootScreenSpace?
+        ) -> AccessibilityHierarchy {
+            let screenSpace = result.rootScreenSpacesByPath[path] ?? inheritedScreenSpace
+            let offset = screenSpace?.offset ?? .zero
             switch hierarchy {
             case .element(let element, let traversalIndex):
-                return .element(element.translatedBy(x: offset.x, y: offset.y), traversalIndex: traversalIndex)
+                return .element(
+                    element.translatedBy(
+                        x: offset.x,
+                        y: offset.y,
+                        screenBounds: screenSpace?.bounds
+                    ),
+                    traversalIndex: traversalIndex
+                )
             case .container(let container, let children):
                 return .container(
                     container.translatedBy(x: offset.x, y: offset.y),
                     children: children.enumerated().map { index, child in
-                        translated(child, at: path.appending(index), inherited: offset)
+                        translated(
+                            child,
+                            at: path.appending(index),
+                            inheritedScreenSpace: screenSpace
+                        )
                     }
                 )
             }
         }
         return result.hierarchy.enumerated().map { rootIndex, root in
-            translated(root, at: TreePath([rootIndex]), inherited: .zero)
+            translated(
+                root,
+                at: TreePath([rootIndex]),
+                inheritedScreenSpace: nil
+            )
         }
     }
 
@@ -463,8 +483,20 @@ extension TheVault {
 }
 
 private extension AccessibilityElement {
-    func translatedBy(x: CGFloat, y: CGFloat) -> AccessibilityElement {
-        AccessibilityElement(
+    func translatedBy(
+        x: CGFloat,
+        y: CGFloat,
+        screenBounds: CGRect?
+    ) -> AccessibilityElement {
+        let translatedShape = shape.translatedBy(x: x, y: y)
+        let translatedVisibility: AccessibilityVisibility = if visibility == .onscreen,
+                                                               let screenBounds,
+                                                               !screenBounds.intersects(translatedShape.frame) {
+            .offscreen
+        } else {
+            visibility
+        }
+        return AccessibilityElement(
             description: description,
             label: label,
             value: value,
@@ -472,7 +504,7 @@ private extension AccessibilityElement {
             identifier: identifier,
             hint: hint,
             userInputLabels: userInputLabels,
-            shape: shape.translatedBy(x: x, y: y),
+            shape: translatedShape,
             activationPoint: activationPoint.translatedBy(x: x, y: y),
             usesDefaultActivationPoint: usesDefaultActivationPoint,
             customActions: customActions,
@@ -480,7 +512,7 @@ private extension AccessibilityElement {
             customRotors: customRotors.map { $0.translatedBy(x: x, y: y) },
             accessibilityLanguage: accessibilityLanguage,
             respondsToUserInteraction: respondsToUserInteraction,
-            visibility: visibility
+            visibility: translatedVisibility
         )
     }
 }

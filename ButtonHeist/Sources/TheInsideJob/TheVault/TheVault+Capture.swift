@@ -38,11 +38,16 @@ extension TheVault {
 
     /// Capture-local UIKit evidence before identity assignment and durable projection.
     struct CaptureResult {
+        struct RootScreenSpace {
+            let offset: CGPoint
+            let bounds: CGRect
+        }
+
         let hierarchy: [AccessibilityHierarchy]
         let objectsByPath: [TreePath: NSObject]
         let containerObjectsByPath: [TreePath: NSObject]
         let scrollViewsByPath: [TreePath: UIScrollView]
-        let screenCoordinateOffsetsByPath: [TreePath: CGPoint]
+        let rootScreenSpacesByPath: [TreePath: RootScreenSpace]
         let inventoryEnumeration: InventoryEnumeration.Result
 
         init(
@@ -50,14 +55,14 @@ extension TheVault {
             objectsByPath: [TreePath: NSObject] = [:],
             containerObjectsByPath: [TreePath: NSObject] = [:],
             scrollViewsByPath: [TreePath: UIScrollView] = [:],
-            screenCoordinateOffsetsByPath: [TreePath: CGPoint] = [:],
+            rootScreenSpacesByPath: [TreePath: RootScreenSpace] = [:],
             inventoryEnumeration: InventoryEnumeration.Result = .init()
         ) {
             self.hierarchy = hierarchy
             self.objectsByPath = objectsByPath
             self.containerObjectsByPath = containerObjectsByPath
             self.scrollViewsByPath = scrollViewsByPath
-            self.screenCoordinateOffsetsByPath = screenCoordinateOffsetsByPath
+            self.rootScreenSpacesByPath = rootScreenSpacesByPath
             self.inventoryEnumeration = inventoryEnumeration
         }
     }
@@ -86,7 +91,7 @@ extension TheVault {
         var objectsByPath: [TreePath: NSObject] = [:]
         var containerObjectsByPath: [TreePath: NSObject] = [:]
         var scrollViewsByPath: [TreePath: UIScrollView] = [:]
-        var screenCoordinateOffsetsByPath: [TreePath: CGPoint] = [:]
+        var rootScreenSpacesByPath: [TreePath: CaptureResult.RootScreenSpace] = [:]
 
         let isMultiWindow = windows.count > 1
 
@@ -132,7 +137,10 @@ extension TheVault {
 
                 for (localIndex, root) in captured.enumerated() {
                     let rootPath = rootPathPrefix(localIndex)
-                    screenCoordinateOffsetsByPath[rootPath] = rootView.convert(.zero, to: nil)
+                    rootScreenSpacesByPath[rootPath] = CaptureResult.RootScreenSpace(
+                        offset: rootView.convert(.zero, to: nil),
+                        bounds: window.windowScene?.screen.bounds ?? ScreenMetrics.current.bounds
+                    )
                     Self.collect(
                         root,
                         at: rootPath,
@@ -164,7 +172,7 @@ extension TheVault {
             objectsByPath: objectsByPath,
             containerObjectsByPath: containerObjectsByPath,
             scrollViewsByPath: canonicalScrollViewsByPath,
-            screenCoordinateOffsetsByPath: screenCoordinateOffsetsByPath,
+            rootScreenSpacesByPath: rootScreenSpacesByPath,
             inventoryEnumeration: inventoryEnumeration
         )
     }

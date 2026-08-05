@@ -462,7 +462,10 @@ final class TheVaultObservationBuildingTests: XCTestCase {
 
         let result = TheVault.CaptureResult(
             hierarchy: [.element(parsedElement, traversalIndex: 0)],
-            screenCoordinateOffsetsByPath: [TreePath([0]): parseRootOffset]
+            rootScreenSpacesByPath: [TreePath([0]): .init(
+                offset: parseRootOffset,
+                bounds: CGRect(x: 0, y: 0, width: 1_000, height: 1_000)
+            )]
         )
 
         let observation = TheVault.buildObservation(from: result)
@@ -481,6 +484,56 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         XCTAssertEqual(frame.rect?.cgRect, screenFrame)
         XCTAssertEqual(activationPoint.point?.cgPoint, screenActivationPoint)
         XCTAssertEqual(projected.geometry, treeElement.geometry)
+    }
+
+    func testBuildObservationAdmitsPresentedRootElementOnlyAfterItEntersScreen() throws {
+        let rootPath = TreePath([0])
+        let screenBounds = CGRect(x: 0, y: 0, width: 400, height: 800)
+        let rootLocalFrame = CGRect(x: 120, y: 100, width: 160, height: 44)
+        let parsedElement = makeElement(
+            label: "Dismiss",
+            traits: .button,
+            frame: rootLocalFrame
+        )
+        let liveObject = NSObject()
+
+        let transitioning = TheVault.buildObservation(from: TheVault.CaptureResult(
+            hierarchy: [.element(parsedElement, traversalIndex: 0)],
+            objectsByPath: [rootPath: liveObject],
+            rootScreenSpacesByPath: [rootPath: .init(
+                offset: CGPoint(x: 0, y: 900),
+                bounds: screenBounds
+            )]
+        ))
+        let transitioningElement = try XCTUnwrap(
+            transitioning.tree.viewportCapture.hierarchy.sortedElements.first
+        )
+        let transitioningTreeElement = try XCTUnwrap(transitioning.tree.orderedElements.first)
+
+        XCTAssertEqual(transitioningElement.visibility, .offscreen)
+        XCTAssertEqual(transitioningTreeElement.geometry.screen, .offscreen)
+        XCTAssertFalse(transitioning.tree.viewportCapture.contains(
+            heistId: transitioningTreeElement.heistId
+        ))
+        XCTAssertNil(transitioning.liveCapture.object(for: transitioningTreeElement.heistId))
+
+        let settled = TheVault.buildObservation(from: TheVault.CaptureResult(
+            hierarchy: [.element(parsedElement, traversalIndex: 0)],
+            objectsByPath: [rootPath: liveObject],
+            rootScreenSpacesByPath: [rootPath: .init(
+                offset: CGPoint(x: 0, y: 500),
+                bounds: screenBounds
+            )]
+        ))
+        let settledElement = try XCTUnwrap(settled.tree.viewportCapture.hierarchy.sortedElements.first)
+        let settledTreeElement = try XCTUnwrap(settled.tree.orderedElements.first)
+
+        XCTAssertEqual(settledElement.visibility, .onscreen)
+        guard case .onscreen = settledTreeElement.geometry.screen else {
+            return XCTFail("Expected settled presentation geometry to be on screen")
+        }
+        XCTAssertTrue(settled.tree.viewportCapture.contains(heistId: settledTreeElement.heistId))
+        XCTAssertTrue(settled.liveCapture.object(for: settledTreeElement.heistId) === liveObject)
     }
 
     func testBuildObservationRestoresPathGeometryFromParseRootOffset() throws {
@@ -511,7 +564,10 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         )
         let result = TheVault.CaptureResult(
             hierarchy: [.element(pathElement, traversalIndex: 0)],
-            screenCoordinateOffsetsByPath: [TreePath([0]): parseRootOffset]
+            rootScreenSpacesByPath: [TreePath([0]): .init(
+                offset: parseRootOffset,
+                bounds: CGRect(x: 0, y: 0, width: 1_000, height: 1_000)
+            )]
         )
 
         let observation = TheVault.buildObservation(from: result)
@@ -546,7 +602,10 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         let result = TheVault.CaptureResult(
             hierarchy: [.container(container, children: [.element(child, traversalIndex: 0)])],
             scrollViewsByPath: [containerPath: scrollView],
-            screenCoordinateOffsetsByPath: [containerPath: parseRootOffset]
+            rootScreenSpacesByPath: [containerPath: .init(
+                offset: parseRootOffset,
+                bounds: CGRect(x: 0, y: 0, width: 1_000, height: 1_000)
+            )]
         )
 
         let observation = TheVault.buildObservation(from: result)
