@@ -356,6 +356,30 @@ run_cli_json() {
     done
 }
 
+run_json_lines_json() {
+    local request="$1"
+    local output
+    local status
+    set +e
+    output="$(
+        printf '%s\n' "$request" | \
+        BUTTONHEIST_DRIVER_ID="$TOKEN" \
+        "$BUTTONHEIST_BIN" json_lines \
+            --device "$DEVICE_ENDPOINT" \
+            --token "$TOKEN" \
+            --timeout "${BUTTONHEIST_CONNECT_TIMEOUT:-10}" \
+            --idle-timeout 0 \
+            --format json
+    )"
+    status=$?
+    set -e
+    if (( status != 0 )); then
+        printf '%s\n' "$output" >&2
+        return "$status"
+    fi
+    printf '%s\n' "$output"
+}
+
 if port_is_open "$PORT"; then
     fail "port $PORT is already in use; pass --port to choose a deterministic alternate"
 fi
@@ -428,13 +452,34 @@ printf '%s' "$SESSION_JSON" | json_expect_connected
 
 ROOT_READY_JSON="$(run_cli_json wait --exists --label "Controls Demo" --traits button --timeout 15)"
 printf '%s' "$ROOT_READY_JSON" | json_expect_ok "wait for demo root"
-ROOT_JSON="$(run_cli_json get_interface)"
+ROOT_JSON="$(run_json_lines_json '{"command":"get_interface"}')"
 printf '%s' "$ROOT_JSON" | json_expect_ok "root get_interface"
 printf '%s' "$ROOT_JSON" | expect_screen_title "ButtonHeist Demo"
 
-CONTROLS_ACTION_JSON="$(run_cli_json activate --label "Controls Demo" --traits button --timeout 15)"
+CONTROLS_TARGET_JSON="$(
+    printf '%s' "$ROOT_JSON" | jq -cer '
+        [
+            .interface.tree
+            | ..
+            | objects
+            | select(has("element"))
+            | .element
+            | select(.label == "Controls Demo")
+            | .target
+        ]
+        | if length == 1 and .[0] != null
+          then .[0]
+          else error("Controls Demo did not have one canonical target")
+          end
+    '
+)"
+CONTROLS_REQUEST_JSON="$(
+    jq -cn --argjson target "$CONTROLS_TARGET_JSON" \
+        '{command: "activate", target: $target}'
+)"
+CONTROLS_ACTION_JSON="$(run_json_lines_json "$CONTROLS_REQUEST_JSON")"
 printf '%s' "$CONTROLS_ACTION_JSON" | json_expect_ok "activate Controls Demo"
-CONTROLS_JSON="$(run_cli_json get_interface)"
+CONTROLS_JSON="$(run_json_lines_json '{"command":"get_interface"}')"
 printf '%s' "$CONTROLS_JSON" | json_expect_ok "Controls Demo get_interface"
 printf '%s' "$CONTROLS_JSON" | expect_screen_title "Controls Demo"
 

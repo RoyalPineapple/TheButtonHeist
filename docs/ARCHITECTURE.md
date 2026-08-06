@@ -373,6 +373,13 @@ including semantic content The Button Heist can discover in scrollable container
 geometry. Refresh, exploration, selection, and stale-state decisions live inside
 TheInsideJob; clients and adapters send typed observation intent.
 
+The client projects an optional canonical `AccessibilityTarget` for every
+eligible `get_interface` element. It runs `MinimumPredicateSelector` against all
+elements in the delivered `Interface` before response limits hide any nodes.
+The element encoder only carries that target; it does not run matching again.
+This keeps target selection atomic with observation and preserves ordinals when
+the public tree is truncated.
+
 Visible observation and discovery use the same Vault admission and commit
 boundary, and production callers cannot invoke raw live capture directly.
 `Navigation.performViewportTransition` owns the product-driven viewport

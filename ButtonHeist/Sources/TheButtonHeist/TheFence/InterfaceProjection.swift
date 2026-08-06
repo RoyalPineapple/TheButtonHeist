@@ -1,6 +1,7 @@
 import Foundation
 
 import AccessibilitySnapshotModel
+import ThePlans
 import TheScore
 
 enum ProjectionCompleteness: String, Sendable {
@@ -68,6 +69,7 @@ struct InterfaceElementProjection: Sendable {
     let element: HeistElement
     let detail: InterfaceDetail
     let order: Int?
+    let target: AccessibilityTarget?
 }
 
 struct InterfaceContainerProjection: Sendable {
@@ -120,11 +122,22 @@ struct InterfaceProjection: Sendable {
         let elementRecords = graph.elementsInTraversalOrder
         let projectedElements = elementRecords.map(\.interfaceProjectionElement)
         let screenTitle = InterfaceSummary.screenTitle(forProjectedElements: projectedElements)
+        let projectedScreenId = InterfaceSummary.screenId(forProjectedElements: projectedElements)
+        let targetContext = PredicateSelectionContext(
+            elements: projectedElements.enumerated().map { offset, element in
+                PredicateSelectionContext.Element(
+                    id: PredicateSelectionElementId(rawValue: String(offset)),
+                    element: element
+                )
+            },
+            screenId: projectedScreenId,
+            scope: .visible
+        )
 
         timestamp = interface.timestamp
         detail = profile.interfaceDetail
         screenDescription = InterfaceSummary.screenDescription(forProjectedElements: projectedElements)
-        screenId = InterfaceSummary.screenId(forProjectedElements: projectedElements)
+        screenId = projectedScreenId
         screenActions = interface.screenActions
         diagnostics = interface.diagnostics
         navigation = InterfaceNavigationProjection(screenTitle: screenTitle, elements: projectedElements)
@@ -133,6 +146,7 @@ struct InterfaceProjection: Sendable {
         var reducer = InterfaceProjectionReducer(
             graph: graph,
             detail: detail,
+            targetContext: targetContext,
             visibleElementBudget: profile.limits.visibleElementBudget,
             totalNodeBudget: profile.limits.totalNodeBudget
         )
@@ -148,6 +162,7 @@ struct InterfaceProjection: Sendable {
 private struct InterfaceProjectionReducer {
     private let graph: InterfaceGraph
     private let detail: InterfaceDetail
+    private let targetContext: PredicateSelectionContext
     private let visibleElementBudget: Int
     private let measurements: InterfaceProjectionMeasurements
     private let inventoryAdmissionDecisions: [TreePath: InventoryProjectionAdmission.Decision]
@@ -158,9 +173,16 @@ private struct InterfaceProjectionReducer {
     private var suppressedSubtreePath: TreePath?
     private var elementOrder = 0
 
-    init(graph: InterfaceGraph, detail: InterfaceDetail, visibleElementBudget: Int, totalNodeBudget: Int) {
+    init(
+        graph: InterfaceGraph,
+        detail: InterfaceDetail,
+        targetContext: PredicateSelectionContext,
+        visibleElementBudget: Int,
+        totalNodeBudget: Int
+    ) {
         self.graph = graph
         self.detail = detail
+        self.targetContext = targetContext
         self.visibleElementBudget = visibleElementBudget
         measurements = InterfaceProjectionMeasurements(nodes: graph.nodesInPathOrder)
         inventoryAdmissionDecisions = InventoryProjectionAdmission.decisions(
@@ -220,8 +242,16 @@ private struct InterfaceProjectionReducer {
         append(.element(InterfaceElementProjection(
             element: record.interfaceProjectionElement,
             detail: detail,
-            order: order
+            order: order,
+            target: minimumTarget(at: order)
         )))
+    }
+
+    private func minimumTarget(at order: Int) -> AccessibilityTarget? {
+        MinimumPredicateSelector.minimumUniquePredicate(
+            for: PredicateSelectionElementId(rawValue: String(order)),
+            in: targetContext
+        )?.target
     }
 
     private mutating func begin(_ record: InterfaceGraphContainerRecord) {

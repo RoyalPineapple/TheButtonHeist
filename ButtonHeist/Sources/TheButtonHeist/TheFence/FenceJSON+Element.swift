@@ -1,5 +1,6 @@
 import Foundation
 
+import ThePlans
 import TheScore
 
 struct PublicElement: Encodable {
@@ -13,8 +14,14 @@ struct PublicElement: Encodable {
     let customContent: PublicCustomContent?
     let geometry: HeistElement.Geometry?
     let order: Int?
+    let target: AccessibilityTarget?
 
-    init(element: HeistElement, detail: InterfaceDetail, order: Int? = nil) {
+    init(
+        element: HeistElement,
+        detail: InterfaceDetail,
+        order: Int? = nil,
+        target: AccessibilityTarget? = nil
+    ) {
         let assertable = element.semantics.assertable
         self.traits = assertable.orderedTraits.map(\.rawValue)
         let meaningfulActions = FenceResponse.meaningfulActions(element)
@@ -24,6 +31,7 @@ struct PublicElement: Encodable {
         self.value = assertable.value
         self.identifier = assertable.identifier
         self.order = order
+        self.target = target
         guard detail == .full else {
             self.hint = nil
             self.customContent = nil

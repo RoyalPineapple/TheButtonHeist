@@ -36,7 +36,12 @@ extension InterfaceNodeProjection: Encodable {
         switch self {
         case .element(let element):
             try container.encode(
-                PublicElement(element: element.element, detail: projectedDetail, order: element.order),
+                PublicElement(
+                    element: element.element,
+                    detail: projectedDetail,
+                    order: element.order,
+                    target: element.target
+                ),
                 forKey: .element
             )
         case .container(let node):

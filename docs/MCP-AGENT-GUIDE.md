@@ -19,7 +19,7 @@ MAY inspect or control the current live session, but they MUST NOT appear inside
 
 ## Core loop
 
-1. **Read** — `get_interface` returns the app accessibility state with labels, values, traits, actions, and capture-local diagnostic annotations.
+1. **Read** — `get_interface` returns the app accessibility state with labels, values, traits, actions, canonical element targets, and capture-local diagnostic annotations.
 2. **Act** — use `perform(step:)` with one durable ButtonHeist DSL step for ordinary app controls. Always attach `.expect(...)` when you know what should change.
 3. **Read the response** — tool text is the concise summary; `structuredContent` carries the full public JSON result. If the delta answers your question, skip `get_interface`.
 4. **Wait if needed** — when the delta shows a transient state, call `perform(step:)` with one `WaitFor(...)` statement. The server checks the current settled state first, then watches settled accessibility state until the predicate is true.
@@ -86,6 +86,12 @@ Ordinal belongs inside the target:
 ```swift
 Activate(.target(.label("Pay"), ordinal: 0))
 ```
+
+Machine clients should prefer the optional `target` returned with an eligible
+`get_interface` element. Keep that target unchanged and send it back to The
+Button Heist. It was selected against the complete captured interface, including
+matching elements hidden by response limits. Build a target from semantic fields
+only when the response does not provide one.
 
 Do not write action-level ordinals:
 
@@ -317,7 +323,7 @@ added, removed, updated, or destination-interface evidence.
 
 ## Efficiency
 
-Read the delta first — skip `get_interface` when the delta already told you what changed. Use semantic target fields from the current screen; after navigation, build targets from the new delta or interface evidence. Pass `subtree` when you only need one subtree or one leaf from the current hierarchy.
+Read the delta first — skip `get_interface` when the delta already told you what changed. Reuse a returned canonical target while the captured app state is still current. After navigation, use a target from the new delta or interface evidence. Pass `subtree` when you only need one subtree or one leaf from the current hierarchy.
 
 ## Local MCP development
 
