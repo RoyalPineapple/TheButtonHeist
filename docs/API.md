@@ -534,6 +534,16 @@ client derives only transport headroom around that app-owned deadline.
 shape carries a canonical tree plus ButtonHeist annotations. Flat element
 lists are projections for formatting and matching, not a second wire truth.
 
+Each eligible element in summary and full `get_interface` JSON has an optional
+`target`. This is the canonical `AccessibilityTarget` selected from the same
+captured interface. Clients should keep it as opaque JSON and send it back for
+actions, waits, assertions, or subtree queries. The target is valid for that
+captured app state; it is not a permanent element ID.
+
+The Fence selects targets before it applies public tree limits. An ordinal can
+therefore refer to a matching element that is absent from a truncated response.
+Elements without supported matcher facts omit `target`.
+
 ### HeistElement
 
 `HeistElement` is a public value projection of parser content. Use its semantic
