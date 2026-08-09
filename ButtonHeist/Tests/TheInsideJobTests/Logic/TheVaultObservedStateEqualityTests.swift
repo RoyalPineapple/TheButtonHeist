@@ -39,6 +39,20 @@ final class TheVaultObservedStateEqualityTests: XCTestCase {
         XCTAssertFalse(previous.hasSameObservedState(as: current, geometryTolerance: geometryTolerance))
     }
 
+    func testInvalidatedParentSpaceGeometryRemainsStable() {
+        let previous = snapshot(parentGeometryAvailable: false)
+        let current = snapshot(parentGeometryAvailable: false)
+
+        XCTAssertTrue(previous.hasSameObservedState(as: current, geometryTolerance: geometryTolerance))
+    }
+
+    func testParentSpaceGeometryInvalidationIsAnObservedStateChange() {
+        let previous = snapshot(parentGeometryAvailable: true)
+        let current = snapshot(parentGeometryAvailable: false)
+
+        XCTAssertFalse(previous.hasSameObservedState(as: current, geometryTolerance: geometryTolerance))
+    }
+
     func testActivationPointMovementIsNotTheSameObservedState() {
         let previous = snapshot(activationPoint: CGPoint(x: 100, y: 122))
         let current = snapshot(activationPoint: CGPoint(x: 109, y: 122))
@@ -108,6 +122,7 @@ final class TheVaultObservedStateEqualityTests: XCTestCase {
         context: Observation.Context? = nil,
         containerIdentifier: String = "library",
         screenFrameAvailable: Bool = true,
+        parentGeometryAvailable: Bool = true,
         includeElement: Bool = true,
         includeContainer: Bool = true
     ) -> Observation.Snapshot {
@@ -127,8 +142,8 @@ final class TheVaultObservedStateEqualityTests: XCTestCase {
             screen: screenSpace,
             view: HeistElement.Geometry.ViewSpace(
                 ownerPath: TreePath([0]),
-                frame: requireViewRect(viewFrame),
-                activationPoint: requireViewPoint(activationPoint)
+                frame: parentGeometryAvailable ? requireViewRect(viewFrame) : nil,
+                activationPoint: parentGeometryAvailable ? requireViewPoint(activationPoint) : nil
             )
         )
         let element = AccessibilityElement.make(

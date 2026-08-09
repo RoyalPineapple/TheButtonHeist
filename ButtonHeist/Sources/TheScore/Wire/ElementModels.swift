@@ -200,6 +200,8 @@ public extension HeistElement {
             )
         }
 
+        /// Live geometry for one settled viewport. A viewport move invalidates
+        /// this evidence. The next snapshot supplies new screen geometry.
         public enum ScreenSpace: Codable, Equatable, Hashable, Sendable {
             case onscreen(
                 frame: ScreenFrameEvidence,
@@ -260,6 +262,9 @@ public extension HeistElement {
             }
         }
 
+        /// Geometry in the coordinate space of the owning view. It stays valid
+        /// across viewport moves on the same layout. A layout change or screen
+        /// change invalidates its frame and activation point.
         public struct ViewSpace: Codable, Equatable, Hashable, Sendable {
             public let ownerPath: TreePath
             public let frame: ViewRect?

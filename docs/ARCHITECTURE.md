@@ -134,6 +134,15 @@ that semantic target and adopts the matching element's current `HeistId` for
 live UIKit handoff. Missing or ambiguous re-resolution fails safely; it never
 retains the previous id or substitutes a sibling duplicate.
 
+Screen-space geometry belongs to one settled viewport. A viewport move ends
+its lifetime, and the next committed capture supplies new screen-space
+geometry. Parent-space geometry has a longer but limited lifetime. It may cross
+viewport moves while the layout and screen stay the same. A layout or screen
+change clears retained parent-space frames and points. Before using a retained
+parent-space point, TheInsideJob must find exactly one matching semantic owner
+in the current capture. The owner's tree path may change. A missing or
+ambiguous owner makes the point unavailable.
+
 Completed steps project immutable `Observation.Evidence` from Vault truth and
 the events consumed by the reducer. Current-state predicates read the current
 snapshot through the same target resolver that actions and `get_interface` use.
@@ -389,15 +398,16 @@ discovery-scope publication from `Observation.Stream` and waits for the
 committed result. It does not capture, parse, or commit directly. Page, edge,
 swipe, known content-point reveal, and restore commands therefore produce
 freshness only through the canonical pulse cycle. A captured reveal content point
-and the semantic `TreePath` of the scroll container whose coordinate space
-produced it form one evidence value. Immediately before dispatch, inflation
-admits that point only when the live movement candidate has the exact owner
-path. This owner-qualified seed is an optional shortcut for a known target;
-blank intervening pages are irrelevant when it succeeds. A missing or
-mismatched owner skips the seed without donating its coordinate to an ancestor
-or sibling, and `ViewportExplorer` continues the established ancestor paging
-route. The explorer is also the fallback for unknown targets or missing reveal
-evidence. It dispatches exactly one viewport movement,
+and the semantic scroll container whose coordinate space produced it form one
+evidence value. Immediately before dispatch, inflation finds that semantic
+container in the current capture. It admits the point only when exactly one
+live container matches, even if its tree path has changed. This owner-qualified
+seed is an optional shortcut for a known target. Blank intervening pages do not
+matter when it succeeds. A missing or ambiguous owner skips the seed without
+donating its coordinate to an ancestor or sibling, and `ViewportExplorer`
+continues the established ancestor paging route. The explorer is also the
+fallback for unknown targets or missing reveal evidence. It dispatches exactly
+one viewport movement,
 waits for the requested observation publication and callback, and only then may
 request another movement.
 
@@ -468,9 +478,9 @@ The pipeline is:
 4. Reveal nested scroll ancestors outermost-first when viewport movement is
    required, using the initial capture's `HeistId` only to locate the live scroll
    owner and proving each graph path against current live containment. Each
-   captured content point remains paired with its producing container's semantic
-   path and is admitted only when that path exactly matches the current movement
-   candidate, immediately before dispatch.
+   captured content point remains paired with its producing semantic container.
+   The runtime uses it only after it finds exactly one matching live container
+   in the current capture. That container may now have a different tree path.
 5. After every committed capture, re-resolve the admitted semantic target and
    adopt that match's current capture-local `HeistId`. Missing or ambiguous
    resolution ends inflation without a live handoff.

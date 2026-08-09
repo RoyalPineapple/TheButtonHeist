@@ -182,22 +182,39 @@ private extension HeistElement.Geometry.ViewSpace {
         as other: HeistElement.Geometry.ViewSpace,
         geometryTolerance: CGFloat
     ) -> Bool {
-        guard ownerPath == other.ownerPath,
-              let frame,
-              let otherFrame = other.frame,
-              let activationPoint,
-              let otherActivationPoint = other.activationPoint
-        else { return false }
+        guard ownerPath == other.ownerPath else { return false }
 
-        return CoarseFrameComparison.isInSamePlace(
-            frame,
-            otherFrame,
-            geometryTolerance: geometryTolerance
-        ) && CoarseFrameComparison.isInSamePlace(
+        return hasSameAvailabilityAndValue(frame, other.frame) { previous, current in
+            CoarseFrameComparison.isInSamePlace(
+                previous,
+                current,
+                geometryTolerance: geometryTolerance
+            )
+        } && hasSameAvailabilityAndValue(
             activationPoint,
-            otherActivationPoint,
-            geometryTolerance: geometryTolerance
-        )
+            other.activationPoint
+        ) { previous, current in
+            CoarseFrameComparison.isInSamePlace(
+                previous,
+                current,
+                geometryTolerance: geometryTolerance
+            )
+        }
+    }
+}
+
+private func hasSameAvailabilityAndValue<Value>(
+    _ previous: Value?,
+    _ current: Value?,
+    compare: (Value, Value) -> Bool
+) -> Bool {
+    switch (previous, current) {
+    case (.none, .none):
+        true
+    case let (.some(previous), .some(current)):
+        compare(previous, current)
+    case (.none, .some), (.some, .none):
+        false
     }
 }
 #endif

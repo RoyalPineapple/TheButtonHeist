@@ -31,6 +31,13 @@ extension TheSafecracker {
 
         let overlap = CGFloat(ScrollContainerMetrics.pageOverlap)
         let size = scrollView.bounds.size
+        let insets = scrollView.adjustedContentInset
+        let pageSize = scrollView.isPagingEnabled
+            ? size
+            : CGSize(
+                width: max(1, size.width - insets.left - insets.right),
+                height: max(1, size.height - insets.top - insets.bottom)
+            )
         guard let offset = admittedContentOffset(
             scrollView.contentOffset,
             in: scrollView,
@@ -41,17 +48,17 @@ extension TheSafecracker {
 
         switch direction {
         case .up:
-            newOffset.y = offset.y - (size.height - overlap)
+            newOffset.y = offset.y - (pageSize.height - overlap)
         case .down:
-            newOffset.y = offset.y + size.height - overlap
+            newOffset.y = offset.y + pageSize.height - overlap
         case .left:
-            newOffset.x = offset.x - (size.width - overlap)
+            newOffset.x = offset.x - (pageSize.width - overlap)
         case .right:
-            newOffset.x = offset.x + size.width - overlap
+            newOffset.x = offset.x + pageSize.width - overlap
         case .next:
-            newOffset.y = offset.y + size.height - overlap
+            newOffset.y = offset.y + pageSize.height - overlap
         case .previous:
-            newOffset.y = offset.y - (size.height - overlap)
+            newOffset.y = offset.y - (pageSize.height - overlap)
         @unknown default:
             return .unavailable
         }

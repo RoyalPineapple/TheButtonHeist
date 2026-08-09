@@ -37,8 +37,9 @@ extension TheVault {
     }
 
     /// Path-distinct identity facts derived from one hierarchy traversal.
-    /// Container geometry and scroll membership are durable value evidence;
-    /// live UIKit conversion remains outside this context.
+    /// Parent-space geometry lasts until a layout or screen change. Scroll
+    /// membership is durable value evidence. Live UIKit conversion remains
+    /// outside this context.
     struct IdentityContext {
         let hierarchy: [AccessibilityHierarchy]
         let scrollableContainerPaths: Set<TreePath>

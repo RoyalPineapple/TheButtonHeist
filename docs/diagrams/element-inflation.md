@@ -31,10 +31,10 @@ flowchart TD
 
     IDENTITY --> BUDGET["receive the reducer-projected<br/>boundary deadline through the host"]
     BUDGET --> GRAPH["walk semantic ancestor graph<br/>outermost-first"]
-    GRAPH --> SEED["captured content point +<br/>semantic owner path"]
-    SEED --> OWNER{"candidate path exactly<br/>matches owner path?"}
-    OWNER -- "yes" --> POINT["dispatch point reveal<br/>through viewport transition"]
-    OWNER -- "no: missing or mismatch" --> PAGE["skip coordinate and page<br/>an available ancestor"]
+    GRAPH --> SEED["captured content point +<br/>semantic owner"]
+    SEED --> OWNER{"exactly one matching owner<br/>in current capture?"}
+    OWNER -- "yes, current path" --> POINT["dispatch point reveal<br/>through viewport transition"]
+    OWNER -- "no: missing or ambiguous" --> PAGE["skip coordinate and page<br/>an available ancestor"]
     POINT --> COMMIT["capture and commit<br/>the resulting viewport"]
     PAGE --> COMMIT
     COMMIT --> RERESOLVE{"resolve admitted semantic target<br/>in this committed InterfaceTree"}
@@ -70,13 +70,14 @@ Notes:
   outermost-first and never derives a second budget from that graph.
 - A known semantic target that later gains scroll membership earns at most one
   direct reveal attempt. Its captured content point and producing scroll
-  container's semantic path are one evidence value. Exact-owner admission occurs
-  immediately before point dispatch; a missing or mismatched owner cannot donate
-  its coordinate to an ancestor or sibling and instead selects the established
-  ancestor paging route. Point reveal and paging both use the canonical viewport
-  transition, observation, Vault commit, and target re-resolution pipelines.
-  Content absent from admitted semantic truth cannot be revealed, and exploration
-  never scans for an old `HeistId` as identity.
+  container are one evidence value. The runtime must find exactly one matching
+  live owner immediately before point dispatch. The owner's path may change. A
+  missing or ambiguous owner cannot donate its coordinate to an ancestor or
+  sibling and instead selects the established ancestor paging route. Point
+  reveal and paging both use the canonical viewport transition, observation,
+  Vault commit, and target re-resolution pipelines. Content absent from admitted
+  semantic truth cannot be revealed, and exploration never scans for an old
+  `HeistId` as identity.
 - The ordinal is a capture-local disambiguator over a semantic base selector,
   never durable identity. A target that becomes unique only through its terminal
   ordinal cannot be admitted across a capture boundary.

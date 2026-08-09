@@ -633,15 +633,13 @@ extension Navigation {
     ) async -> ElementInflation.SemanticTargetScanResult {
         var visibleTarget: InterfaceTree.Element?
         var resolutionFailure: ElementInflation.SemanticTargetResolutionFailure?
-        if request.viewSpace.activationPoint != nil {
-            switch await moveToStoredSeed(request.viewSpace, request: request) {
-            case .revealed(let current, let exploration):
-                return .revealed(current, exploration)
-            case .failed(let failure):
-                return .failed(failure)
-            case .continueExploration:
-                break
-            }
+        switch await moveToStoredSeed(request: request) {
+        case .revealed(let current, let exploration):
+            return .revealed(current, exploration)
+        case .failed(let failure):
+            return .failed(failure)
+        case .continueExploration:
+            break
         }
         let explorer = ViewportExplorer(
             navigation: self,
@@ -677,9 +675,11 @@ extension Navigation {
     /// spent in a single move and either puts the target on screen or does not.
     /// Sweeping every viewport is the slower answer the caller falls back on.
     private func moveToStoredSeed(
-        _ viewSpace: HeistElement.Geometry.ViewSpace,
         request: ElementInflation.SemanticTargetRevealRequest
     ) async -> StoredSeedOutcome {
+        guard storedSeedPoint(for: request.target) != nil else {
+            return .continueExploration
+        }
         guard case .committed =
             await vault.semanticObservationStream.refreshedVisibleObservation(
                 boundary: .cancellation
@@ -687,39 +687,28 @@ extension Navigation {
         else {
             return .continueExploration
         }
-        // The owner is looked up where the target sits now. `scrollContainerPath`
-        // names where it sat in the reading that admitted the target, and the
-        // seed is spent against whatever the app has reached since; admitting
-        // the seed against the current owner is what makes the two one screen.
-        guard case .resolved(.element(let currentElement)) = vault.resolveTarget(request.target.target) else {
+        guard let rememberedOwnerPath = request.target.scrollContainerPath else {
             return .continueExploration
         }
-        guard let ownerPath = currentElement.scrollContainerPath else {
+        guard let point = storedSeedPoint(for: request.target) else {
             return .continueExploration
         }
-        guard let point = viewSpace.activationPoint(ownedBy: ownerPath) else {
+        guard let semanticContainer = vault.interfaceTree.containers[rememberedOwnerPath] else {
             return .continueExploration
         }
-        guard let semanticContainer = vault.interfaceTree.viewportOnly.containers[ownerPath] else {
+        guard let liveTarget = vault.liveScrollTarget(reacquiring: semanticContainer) else {
             return .continueExploration
         }
-        let liveContainer: TheVault.LiveContainerTarget
-        switch vault.resolveLiveContainerTarget(for: semanticContainer) {
-        case .resolved(let resolved):
-            liveContainer = resolved
-        case .objectUnavailable, .geometryUnavailable:
-            return .continueExploration
-        }
-        guard let scrollView = vault.liveScrollableContainerView(forPath: ownerPath) else {
-            return .continueExploration
-        }
-        guard !scrollView.bhIsUnsafeForProgrammaticScrolling else {
+        guard !liveTarget.scrollView.bhIsUnsafeForProgrammaticScrolling else {
             return .continueExploration
         }
         let transition = await performViewportTransition(
             .revealViewPoint(
                 point,
-                in: .uiScrollView(container: liveContainer, scrollView: scrollView)
+                in: .uiScrollView(
+                    container: liveTarget.container,
+                    scrollView: liveTarget.scrollView
+                )
             ),
             deadline: request.deadline
         )
@@ -740,6 +729,15 @@ extension Navigation {
         case .offscreen:
             return .continueExploration
         }
+    }
+
+    private func storedSeedPoint(
+        for target: ElementInflation.AdmittedSemanticTarget
+    ) -> ViewPoint? {
+        guard case .resolved(.element(let currentElement)) = vault.resolveTarget(target.target),
+              let ownerPath = target.scrollContainerPath
+        else { return nil }
+        return currentElement.geometry.view.activationPoint(ownedBy: ownerPath)
     }
 
     private func semanticTargetScanMatch(
