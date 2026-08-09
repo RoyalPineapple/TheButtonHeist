@@ -80,7 +80,6 @@ extension ElementInflation {
         case .success(let admittedTarget):
             return await revealSemanticTarget(
                 admittedTarget,
-                initialElement: selectedElement,
                 deadline: deadline
             )
         case .failure(let failure):
@@ -91,14 +90,12 @@ extension ElementInflation {
     @discardableResult
     func revealSemanticTarget(
         _ target: AdmittedSemanticTarget,
-        initialElement: InterfaceTree.Element,
         deadline: SemanticObservationDeadline,
     ) async -> SemanticRevealResult {
         let transaction = RevealTransaction(vault: vault)
         transaction.captureScrollableHierarchy()
         let result = await revealSemanticTarget(
             target,
-            initialElement: initialElement,
             deadline: deadline,
             transaction: transaction
         )
@@ -116,7 +113,6 @@ extension ElementInflation {
 
     func revealSemanticTarget(
         _ target: AdmittedSemanticTarget,
-        initialElement: InterfaceTree.Element,
         deadline: SemanticObservationDeadline,
         transaction: RevealTransaction
     ) async -> SemanticRevealResult {
@@ -133,21 +129,20 @@ extension ElementInflation {
         if vault.visibleLiveElementAliasing(currentElement) != nil {
             return .alreadyVisible(currentElement)
         }
-        guard target.scrollContainerPath != nil else {
+        guard let rememberedScrollContainerPath = target.scrollContainerPath else {
             return .failed(.missingScrollMembership)
         }
-        let revealRootScrollViewID = vault.liveScrollViewIDForRevealing(
-            heistId: initialElement.heistId
-        )
+        let revealRootScrollViewID = vault.liveScrollViewIDForRevealing(heistId: currentElement.heistId)
         switch await revealScrollAncestors(
             for: target,
             deadline: deadline,
             transaction: transaction
         ) {
         case .resolved(let scrollView):
-            if initialElement.geometry.view.activationPoint != nil {
+            if currentElement.geometry.view.activationPoint != nil {
                 switch await moveToObservedContentPoint(
-                    initialElement.geometry.view,
+                    currentElement.geometry.view,
+                    rememberedOwnerPath: rememberedScrollContainerPath,
                     in: scrollView,
                     target: target,
                     deadline: deadline,
@@ -178,8 +173,7 @@ extension ElementInflation {
         guard let scan = await exploration.revealKnownTarget(.init(
             target: target,
             revealRootScrollViewID: revealRootScrollViewID,
-            deadline: deadline,
-            viewSpace: initialElement.geometry.view
+            deadline: deadline
         )) else {
             return semanticRevealInterruption(deadline: deadline)
                 ?? .failed(.noLiveScrollableAncestor)
@@ -270,7 +264,7 @@ extension ElementInflation {
               let container = vault.interfaceTree.containers[path]
         else { return .unavailable }
         guard let membership = container.scrollMembership else {
-            return vault.refreshedLiveScrollView(for: container).map(ScrollContainerRevealResult.resolved)
+            return vault.liveScrollView(reacquiring: container).map(ScrollContainerRevealResult.resolved)
                 ?? .unavailable
         }
         let parent: UIScrollView
@@ -293,6 +287,7 @@ extension ElementInflation {
         }
         switch await moveToObservedContentPoint(
             container.viewSpace,
+            rememberedOwnerPath: membership.containerPath,
             in: parent,
             target: target,
             deadline: deadline,
@@ -307,12 +302,13 @@ extension ElementInflation {
         }
 
         transaction.captureScrollableHierarchy()
-        return vault.refreshedLiveScrollView(for: container, directChildOf: parent)
+        return vault.liveScrollView(reacquiring: container, directChildOf: parent)
             .map(ScrollContainerRevealResult.resolved) ?? .unavailable
     }
 
     private func moveToObservedContentPoint(
         _ viewSpace: HeistElement.Geometry.ViewSpace,
+        rememberedOwnerPath: TreePath,
         in scrollView: UIScrollView,
         target: AdmittedSemanticTarget,
         deadline: SemanticObservationDeadline,
@@ -322,7 +318,10 @@ extension ElementInflation {
         guard let scrollTarget = Navigation.ScrollableTarget.programmatic(scrollView, in: vault) else {
             return .unavailable
         }
-        guard let point = viewSpace.activationPoint(ownedBy: scrollTarget.containerTarget.path) else {
+        // Parent-space geometry survives viewport movement, but its path does not.
+        // The caller reacquires the same semantic owner in the current viewport.
+        // This proof binds the point to the remembered owner.
+        guard let point = viewSpace.activationPoint(ownedBy: rememberedOwnerPath) else {
             return .unavailable
         }
         transaction.record(scrollView)

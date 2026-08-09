@@ -174,8 +174,7 @@ final class TheBrainsScrollTests: XCTestCase {
             await brains.navigation.scanForSemanticTarget(.init(
                 target: target,
                 revealRootScrollViewID: ObjectIdentifier(scrollView),
-                deadline: deadline,
-                viewSpace: selected.geometry.view
+                deadline: deadline
             ))
         }
         scanTask.cancel()
@@ -209,8 +208,7 @@ final class TheBrainsScrollTests: XCTestCase {
         let result = await brains.navigation.scanForSemanticTarget(.init(
             target: target,
             revealRootScrollViewID: ObjectIdentifier(UIScrollView()),
-            deadline: deadline,
-            viewSpace: selected.geometry.view
+            deadline: deadline
         ))
 
         guard case .unavailable = result else {

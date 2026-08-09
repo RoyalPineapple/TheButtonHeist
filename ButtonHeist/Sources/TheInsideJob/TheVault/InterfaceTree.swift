@@ -142,6 +142,17 @@ struct InterfaceTree: Sendable, Equatable {
         )
     }
 
+    /// A layout change ends the lifetime of parent-space geometry retained from
+    /// earlier viewports. Semantic identity and scroll membership remain useful.
+    /// The next viewport capture supplies fresh geometry for everything it sees.
+    func invalidatingParentSpaceGeometry() -> InterfaceTree {
+        Self(
+            elements: elements.mapValues { $0.invalidatingParentSpaceGeometry() },
+            containers: containers.mapValues { $0.invalidatingParentSpaceGeometry() },
+            viewportCapture: viewportCapture
+        )
+    }
+
     private static func viewportOrder(in capture: LiveCapture.Snapshot) -> [Topology.NodeIdentity] {
         let containers = capture.hierarchy.pathIndexedContainers.map { item in
             (item.path, Topology.NodeIdentity.container(item.path))
@@ -469,6 +480,23 @@ struct InterfaceTree: Sendable, Equatable {
                 element: element
             )
         }
+
+        func invalidatingParentSpaceGeometry() -> Self {
+            Self(
+                heistId: heistId,
+                path: path,
+                scrollMembership: scrollMembership,
+                geometry: HeistElement.Geometry(
+                    screen: geometry.screen,
+                    view: HeistElement.Geometry.ViewSpace(
+                        ownerPath: geometry.view.ownerPath,
+                        frame: nil,
+                        activationPoint: nil
+                    )
+                ),
+                element: element
+            )
+        }
     }
 
     // MARK: - Container Entry
@@ -499,6 +527,21 @@ struct InterfaceTree: Sendable, Equatable {
             self.viewSpace = viewSpace
             self.scrollMembership = scrollMembership
             self.scrollInventory = scrollInventory
+        }
+
+        func invalidatingParentSpaceGeometry() -> Self {
+            Self(
+                container: container,
+                path: path,
+                containerName: containerName,
+                viewSpace: HeistElement.Geometry.ViewSpace(
+                    ownerPath: viewSpace.ownerPath,
+                    frame: nil,
+                    activationPoint: nil
+                ),
+                scrollMembership: scrollMembership,
+                scrollInventory: scrollInventory
+            )
         }
     }
 

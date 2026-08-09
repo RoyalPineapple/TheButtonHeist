@@ -201,6 +201,78 @@ final class TheVaultStateTests: XCTestCase {
         XCTAssertEqual(snapshot, publication.current.snapshot)
     }
 
+    func testLayoutChangeInvalidatesRetainedParentSpaceGeometry() throws {
+        let scrollPath = TreePath([0])
+        let anchorId: HeistId = "visible_anchor"
+        let targetId: HeistId = "retained_target"
+        let frame = CGRect(x: 0, y: 0, width: 320, height: 400)
+        let container = AccessibilityContainer(
+            type: .none,
+            scrollableContentSize: AccessibilitySize(CGSize(width: 320, height: 1_600)),
+            frame: AccessibilityRect(frame)
+        )
+        let anchor = AccessibilityElement.make(label: "Visible Anchor")
+        let targetElement = AccessibilityElement.make(label: "Retained Target", traits: .button)
+        let target = InterfaceTree.Element(
+            heistId: targetId,
+            path: scrollPath.appending(1),
+            scrollMembership: .init(containerPath: scrollPath, index: nil),
+            geometry: HeistElement.Geometry(
+                screen: .offscreen,
+                view: HeistElement.Geometry.ViewSpace(
+                    ownerPath: scrollPath,
+                    frame: try ViewRect(validating: CGRect(x: 20, y: 900, width: 200, height: 44)),
+                    activationPoint: try ViewPoint(validating: CGPoint(x: 120, y: 922))
+                )
+            ),
+            element: targetElement
+        )
+        let baseline = InterfaceObservation.makeForTests(
+            elements: [targetId: target],
+            hierarchy: [
+                .container(container, children: [
+                    .element(anchor, traversalIndex: 0),
+                ]),
+            ],
+            heistIdsByPath: [scrollPath.appending(0): anchorId],
+            firstResponderHeistId: nil
+        )
+        let refreshed = InterfaceObservation.makeForTests(
+            elements: [:],
+            hierarchy: [
+                .container(container, children: [
+                    .element(anchor, traversalIndex: 0),
+                ]),
+            ],
+            heistIdsByPath: [scrollPath.appending(0): anchorId],
+            firstResponderHeistId: nil
+        )
+        var state = TheVault.State()
+        _ = requireCommitted(state.commitObservation(
+            admission(observation: baseline),
+            sourceObservation: baseline,
+            beginningNewBaseline: false
+        ))
+        let layoutChange = Observation.AdmittedNotification(
+            sequence: 1,
+            kind: .layoutChanged,
+            text: nil,
+            element: nil
+        )
+
+        _ = requireCommitted(state.commitObservation(
+            admission(notifications: [layoutChange], observation: refreshed),
+            sourceObservation: refreshed,
+            beginningNewBaseline: false
+        ))
+
+        let retained = try XCTUnwrap(state.interfaceTree.findElement(heistId: targetId))
+        XCTAssertEqual(retained.geometry.view.ownerPath, scrollPath)
+        XCTAssertNil(retained.geometry.view.frame)
+        XCTAssertNil(retained.geometry.view.activationPoint)
+        XCTAssertNotNil(state.interfaceTree.containers[scrollPath]?.viewSpace.frame)
+    }
+
     func testCurrentAfterBoundaryUsesHistoryAvailability() {
         var state = TheVault.State(retentionLimit: 1)
         _ = commit(&state, admission())

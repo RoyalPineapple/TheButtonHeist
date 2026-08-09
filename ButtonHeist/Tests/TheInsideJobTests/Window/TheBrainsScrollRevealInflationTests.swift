@@ -104,68 +104,197 @@ extension TheBrainsScrollTests {
         XCTAssertEqual(scrollView.contentOffset, .zero)
     }
 
-    func testSemanticRevealPassesObservedContentPointToFallbackScan() async throws {
+    func testSemanticRevealReacquiresLiveScrollAncestorAfterContainerPathMoves() async throws {
+        let rememberedPath = TreePath([9])
+        let livePath = TreePath([1])
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
         scrollView.contentSize = CGSize(width: 320, height: 1_600)
-        let observedPoint = CGPoint(x: 160, y: 1_200)
-        await installScreenWithOffViewport(
-            visible: .init(makeElement(label: "Visible"), heistId: "visible_element"),
-            offscreen: .init(
-                makeElement(label: "Settings", traits: .button),
-                heistId: "settings_button",
-                viewActivationPoint: observedPoint,
-                scrollView: scrollView
-            )
+        let container = makeScrollableContainer(
+            contentSize: scrollView.contentSize,
+            frame: scrollView.frame
         )
-        let entry = try XCTUnwrap(brains.vault.interfaceTree.findElement(heistId: "settings_button"))
-        let current = await brains.vault.semanticObservationStream
-            .commitDiscoveryObservationForTesting(brains.vault.currentInterfaceObservation)
-            .current
-        XCTAssertEqual(current.scope, .discovery)
-        XCTAssertEqual(
-            Set(
-                current.snapshot.interface.projectedElements
-                    .compactMap(\.semantics.assertable.label)
+        let rememberedPoint = CGPoint(x: 160, y: 1_200)
+        let anchor = makeElement(label: "Visible Anchor")
+        let targetElement = makeElement(label: "Moved Owner Target", traits: .button)
+        let target = InterfaceTree.Element(
+            heistId: "moved_owner_target",
+            path: rememberedPath.appending(0),
+            scrollMembership: .init(containerPath: rememberedPath, index: nil),
+            geometry: HeistElement.Geometry(
+                screen: .offscreen,
+                view: HeistElement.Geometry.ViewSpace(
+                    ownerPath: rememberedPath,
+                    frame: nil,
+                    activationPoint: try ViewPoint(validating: rememberedPoint)
+                )
             ),
-            ["Visible", "Settings"]
+            element: targetElement
         )
-        let originalMoveViewport = brains.navigation.elementInflation.exploration.moveViewport
-        var fallbackRequest: ElementInflation.SemanticTargetRevealRequest?
-        brains.navigation.elementInflation.exploration.moveViewport = { _, _ in
-            Navigation.ViewportTransition(
-                outcome: .moved,
-                previousVisibleIds: [],
-                current: current
+        let liveObservation = InterfaceObservation.makeForTests(
+            elements: [target.heistId: target],
+            hierarchy: [
+                .container(
+                    AccessibilityContainer(
+                        type: .none,
+                        frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 1, height: 1))
+                    ),
+                    children: []
+                ),
+                .container(container, children: [
+                    .element(anchor, traversalIndex: 1),
+                ]),
+            ],
+            heistIdsByPath: [livePath.appending(0): "visible_anchor"],
+            elementRefs: [
+                "visible_anchor": .init(object: retainedLiveObject(), scrollView: scrollView),
+            ],
+            containerRefsByPath: [livePath: .init(object: scrollView)],
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: [livePath: .init(view: scrollView)]
+        )
+        var containers = liveObservation.tree.containers
+        containers[rememberedPath] = InterfaceTree.Container(
+            container: container,
+            path: rememberedPath,
+            containerName: "remembered_scroll",
+            viewSpace: HeistElement.Geometry.ViewSpace(
+                ownerPath: .root,
+                frame: try ViewRect(validating: scrollView.frame),
+                activationPoint: nil
             )
+        )
+        let observation = InterfaceObservation.makeForTests(
+            tree: InterfaceTree(
+                elements: liveObservation.tree.elements,
+                containers: containers,
+                viewportCapture: liveObservation.tree.viewportCapture
+            ),
+            liveCapture: liveObservation.liveCapture
+        )
+        await installSyntheticObservation(observation)
+        let sourceTarget = try resolvedTarget(.label("Moved Owner Target").and(.traits([.button])))
+        guard case .admitted(let admittedTarget) = brains.navigation.elementInflation.admitSemanticTarget(
+            sourceTarget,
+            selectedElement: target
+        ) else {
+            return XCTFail("Expected target with a remembered scroll owner to admit")
         }
+        var dispatchedPoint: ViewPoint?
+        var dispatchedOwnerPath: TreePath?
+        brains.navigation.elementInflation.exploration.moveViewport = { intent, _ in
+            if case .revealViewPoint(let point, let target) = intent {
+                dispatchedPoint = point
+                dispatchedOwnerPath = target.containerTarget.path
+            }
+            return .unavailable()
+        }
+        var revealRootScrollViewID: ObjectIdentifier?
         brains.navigation.elementInflation.exploration.revealKnownTarget = { request in
-            fallbackRequest = request
-            return nil
-        }
-        defer {
-            brains.navigation.elementInflation.exploration.moveViewport = originalMoveViewport
-            brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in nil }
+            revealRootScrollViewID = request.revealRootScrollViewID
+            return .unavailable
         }
 
         let result = await brains.navigation.elementInflation.revealSemanticTarget(
-            entry,
+            admittedTarget,
+            deadline: semanticRevealDeadline()
+        )
+
+        guard case .failed(.scanDidNotRevealTarget) = result else {
+            return XCTFail("Expected the reacquired live container to admit a fallback scan, got \(result)")
+        }
+        XCTAssertEqual(revealRootScrollViewID, ObjectIdentifier(scrollView))
+        XCTAssertEqual(dispatchedPoint, try ViewPoint(validating: rememberedPoint))
+        XCTAssertEqual(dispatchedOwnerPath, livePath)
+        XCTAssertEqual(scrollView.setContentOffsetAnimations, [])
+    }
+
+    func testSemanticRevealDoesNotGuessWhenMovedContainerIdentityIsAmbiguous() async throws {
+        let rememberedPath = TreePath([9])
+        let firstPath = TreePath([0])
+        let secondPath = TreePath([1])
+        let firstScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
+        let secondScrollView = RecordingScrollView(frame: CGRect(x: 0, y: 420, width: 320, height: 400))
+        firstScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        secondScrollView.contentSize = firstScrollView.contentSize
+        let container = makeScrollableContainer(
+            contentSize: firstScrollView.contentSize,
+            frame: firstScrollView.frame
+        )
+        let targetElement = makeElement(label: "Ambiguous Owner Target", traits: .button)
+        let target = InterfaceTree.Element(
+            heistId: "ambiguous_owner_target",
+            path: rememberedPath.appending(0),
+            scrollMembership: .init(containerPath: rememberedPath, index: nil),
+            geometry: HeistElement.Geometry(
+                screen: .offscreen,
+                view: HeistElement.Geometry.ViewSpace(
+                    ownerPath: rememberedPath,
+                    frame: nil,
+                    activationPoint: nil
+                )
+            ),
+            element: targetElement
+        )
+        let liveObservation = InterfaceObservation.makeForTests(
+            elements: [target.heistId: target],
+            hierarchy: [
+                .container(container, children: []),
+                .container(container, children: []),
+            ],
+            containerRefsByPath: [
+                firstPath: .init(object: firstScrollView),
+                secondPath: .init(object: secondScrollView),
+            ],
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: [
+                firstPath: .init(view: firstScrollView),
+                secondPath: .init(view: secondScrollView),
+            ]
+        )
+        var containers = liveObservation.tree.containers
+        containers[rememberedPath] = InterfaceTree.Container(
+            container: container,
+            path: rememberedPath,
+            containerName: "remembered_scroll",
+            viewSpace: HeistElement.Geometry.ViewSpace(
+                ownerPath: .root,
+                frame: try ViewRect(validating: firstScrollView.frame),
+                activationPoint: nil
+            )
+        )
+        let observation = InterfaceObservation.makeForTests(
+            tree: InterfaceTree(
+                elements: liveObservation.tree.elements,
+                containers: containers,
+                viewportCapture: liveObservation.tree.viewportCapture
+            ),
+            liveCapture: liveObservation.liveCapture
+        )
+        await installSyntheticObservation(observation)
+        let sourceTarget = try resolvedTarget(.label("Ambiguous Owner Target").and(.traits([.button])))
+        guard case .admitted(let admittedTarget) = brains.navigation.elementInflation.admitSemanticTarget(
+            sourceTarget,
+            selectedElement: target
+        ) else {
+            return XCTFail("Expected target with a remembered scroll owner to admit")
+        }
+        var attemptedScan = false
+        brains.navigation.elementInflation.exploration.revealKnownTarget = { _ in
+            attemptedScan = true
+            return .unavailable
+        }
+
+        let result = await brains.navigation.elementInflation.revealSemanticTarget(
+            admittedTarget,
             deadline: semanticRevealDeadline()
         )
 
         guard case .failed(.noLiveScrollableAncestor) = result else {
-            return XCTFail("Expected fallback scan miss, got \(result)")
+            return XCTFail("Expected ambiguous live owners to remain unavailable, got \(result)")
         }
-        XCTAssertEqual(
-            fallbackRequest?.target.target,
-            try resolvedTarget(.label("Settings"))
-        )
-        XCTAssertEqual(
-            fallbackRequest?.viewSpace,
-            viewSpace(
-                try ViewPoint(validating: observedPoint),
-                ownerPath: TreePath([0])
-            )
-        )
+        XCTAssertFalse(attemptedScan)
+        XCTAssertEqual(firstScrollView.setContentOffsetAnimations, [])
+        XCTAssertEqual(secondScrollView.setContentOffsetAnimations, [])
     }
 
     func testSemanticRevealDispatchesPointOnlyToMatchingOwner() async throws {
@@ -229,7 +358,6 @@ extension TheBrainsScrollTests {
         }
         _ = await brains.navigation.elementInflation.revealSemanticTarget(
             mismatchedTarget,
-            initialElement: mismatchedElement,
             deadline: semanticRevealDeadline()
         )
 
@@ -245,7 +373,6 @@ extension TheBrainsScrollTests {
         }
         _ = await brains.navigation.elementInflation.revealSemanticTarget(
             matchingTarget,
-            initialElement: matchingElement,
             deadline: semanticRevealDeadline()
         )
 
@@ -340,8 +467,7 @@ extension TheBrainsScrollTests {
         let result = await brains.navigation.scanForSemanticTarget(.init(
             target: admittedTarget,
             revealRootScrollViewID: ObjectIdentifier(scrollView),
-            deadline: semanticRevealDeadline(),
-            viewSpace: knownEntry.geometry.view
+            deadline: semanticRevealDeadline()
         ))
 
         guard case .revealed(_, let exploration) = result else {
@@ -383,8 +509,7 @@ extension TheBrainsScrollTests {
         let result = await brains.navigation.scanForSemanticTarget(.init(
             target: admittedTarget,
             revealRootScrollViewID: ObjectIdentifier(fixture.ancestorScrollView),
-            deadline: semanticRevealDeadline(),
-            viewSpace: fixture.targetEntry.geometry.view
+            deadline: semanticRevealDeadline()
         ))
 
         guard case .revealed(_, let exploration) = result else {
@@ -419,8 +544,7 @@ extension TheBrainsScrollTests {
         let unavailableResult = await brains.navigation.scanForSemanticTarget(.init(
             target: admittedTarget,
             revealRootScrollViewID: ObjectIdentifier(fixture.ownerScrollView),
-            deadline: semanticRevealDeadline(),
-            viewSpace: fixture.viewSpace
+            deadline: semanticRevealDeadline()
         ))
 
         guard case .unavailable = unavailableResult else {
@@ -437,8 +561,7 @@ extension TheBrainsScrollTests {
         let result = await brains.navigation.scanForSemanticTarget(.init(
             target: admittedTarget,
             revealRootScrollViewID: ObjectIdentifier(fixture.ownerScrollView),
-            deadline: semanticRevealDeadline(),
-            viewSpace: fixture.viewSpace
+            deadline: semanticRevealDeadline()
         ))
 
         guard case .revealed(let currentElement, let exploration) = result else {
@@ -804,7 +927,6 @@ extension TheBrainsScrollTests {
     private struct LaterOwnerMatchFixture {
         let ownerScrollView: RecordingScrollView
         let decoyScrollView: RecordingScrollView
-        let viewSpace: HeistElement.Geometry.ViewSpace
         let targetEntry: InterfaceTree.Element
         let unavailableObservation: InterfaceObservation
         let matchingObservation: InterfaceObservation
@@ -897,7 +1019,6 @@ extension TheBrainsScrollTests {
         return LaterOwnerMatchFixture(
             ownerScrollView: ownerScrollView,
             decoyScrollView: decoyScrollView,
-            viewSpace: viewSpace,
             targetEntry: targetEntry,
             unavailableObservation: unavailableObservation,
             matchingObservation: matchingObservation,

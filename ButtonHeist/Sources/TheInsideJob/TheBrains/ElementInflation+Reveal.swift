@@ -96,7 +96,6 @@ extension ElementInflation {
         let historyIndex = vault.state.history.endIndex
         let reveal = await revealSemanticTarget(
             admittedTarget,
-            initialElement: treeElement,
             deadline: deadline,
             transaction: transaction
         )
@@ -247,7 +246,6 @@ extension ElementInflation {
             didAttemptKnownTargetReveal = true
             switch await revealSemanticTarget(
                 target,
-                initialElement: fresh,
                 deadline: deadline,
                 transaction: transaction
             ) {

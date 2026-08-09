@@ -212,32 +212,59 @@ extension TheVault {
         var visitedPaths = Set<TreePath>()
         var path: TreePath? = membership.containerPath
         while let currentPath = path, visitedPaths.insert(currentPath).inserted {
-            if case .success(let target) = liveScrollTarget(at: currentPath),
-               !target.scrollView.bhIsUnsafeForProgrammaticScrolling {
-                return target.scrollViewID
+            guard let semanticContainer = interfaceTree.containers[currentPath] else { return nil }
+            if let liveTarget = liveScrollTarget(reacquiring: semanticContainer),
+               !liveTarget.scrollView.bhIsUnsafeForProgrammaticScrolling {
+                return liveTarget.scrollViewID
             }
-            path = interfaceTree.containers[currentPath]?.scrollMembership?.containerPath
+            path = semanticContainer.scrollMembership?.containerPath
         }
         return nil
     }
 
-    func refreshedLiveScrollView(
-        for semanticContainer: InterfaceTree.Container,
+    func liveScrollView(
+        reacquiring semanticContainer: InterfaceTree.Container,
         directChildOf parent: UIScrollView? = nil
     ) -> UIScrollView? {
-        var matches = interfaceTree.orderedContainers.compactMap { candidate -> LiveCapture.ScrollEntry? in
+        liveScrollTarget(
+            reacquiring: semanticContainer,
+            directChildOf: parent
+        )?.scrollView
+    }
+
+    func liveScrollTarget(
+        reacquiring semanticContainer: InterfaceTree.Container,
+        directChildOf parent: UIScrollView? = nil
+    ) -> LiveScrollTarget? {
+        if let current = interfaceTree.containers[semanticContainer.path],
+           Self.container(current, matches: semanticContainer),
+           case .success(let exact) = liveScrollTarget(at: semanticContainer.path),
+           parent.map({ isDirectLiveScrollChild(at: semanticContainer.path, of: $0) }) ?? true {
+            return exact
+        }
+        return uniquelyMatchingLiveScrollTarget(
+            for: semanticContainer,
+            directChildOf: parent
+        )
+    }
+
+    private func uniquelyMatchingLiveScrollTarget(
+        for semanticContainer: InterfaceTree.Container,
+        directChildOf parent: UIScrollView? = nil
+    ) -> LiveScrollTarget? {
+        var matches = interfaceTree.orderedContainers.compactMap { candidate -> LiveScrollTarget? in
             guard Self.container(candidate, matches: semanticContainer),
                   case .success(let target) = liveScrollTarget(at: candidate.path)
             else { return nil }
-            return LiveCapture.ScrollEntry(path: candidate.path, view: target.scrollView)
+            return target
         }
         if let parent {
             matches = matches.filter { match in
-                isDirectLiveScrollChild(at: match.path, of: parent)
+                isDirectLiveScrollChild(at: match.container.containerTarget.path, of: parent)
             }
         }
         guard matches.count == 1 else { return nil }
-        return matches[0].view
+        return matches[0]
     }
 
     private func liveContainerEvidence(
@@ -278,9 +305,15 @@ extension TheVault {
         _ candidate: InterfaceTree.Container,
         matches semanticContainer: InterfaceTree.Container
     ) -> Bool {
-        candidate.container.containerPredicateFacts == semanticContainer.container.containerPredicateFacts
-            && candidate.container.scrollableContentSize == semanticContainer.container.scrollableContentSize
-            && viewportSize(of: candidate) == viewportSize(of: semanticContainer)
+        guard candidate.container.containerPredicateFacts == semanticContainer.container.containerPredicateFacts,
+              candidate.container.scrollableContentSize == semanticContainer.container.scrollableContentSize
+        else { return false }
+        // Parent-space size can tell similar owners apart while the layout is stable.
+        // After a layout change clears it, semantic facts must yield one match.
+        guard let candidateSize = candidate.viewSpace.frame?.cgRect.size,
+              let semanticSize = semanticContainer.viewSpace.frame?.cgRect.size
+        else { return true }
+        return candidateSize == semanticSize
     }
 
     private static func container(
@@ -289,10 +322,6 @@ extension TheVault {
     ) -> Bool {
         candidate.containerPredicateFacts == semanticContainer.container.containerPredicateFacts
             && candidate.scrollableContentSize == semanticContainer.container.scrollableContentSize
-    }
-
-    private static func viewportSize(of container: InterfaceTree.Container) -> CGSize {
-        container.viewSpace.frame?.cgRect.size ?? container.container.frame.cgRect.size
     }
 
     private static func isUsableFrame(_ frame: CGRect) -> Bool {
