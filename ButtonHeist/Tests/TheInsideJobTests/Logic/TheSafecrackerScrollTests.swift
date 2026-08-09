@@ -208,6 +208,27 @@ final class TheSafecrackerScrollTests: XCTestCase {
                        "Second page scroll should add another 756")
     }
 
+    func testScrollByPageUsesTheVisibleContentHeightBetweenAdjustedInsets() {
+        let scrollView = makeScrollView(
+            frame: CGRect(x: 0, y: 0, width: 400, height: 800),
+            contentSize: CGSize(width: 400, height: 5_000),
+            contentOffset: CGPoint(x: 0, y: -116)
+        )
+        scrollView.contentInset = UIEdgeInsets(top: 116, left: 0, bottom: 34, right: 0)
+
+        let result = safecracker.scrollByPage(
+            scrollView,
+            direction: .down,
+            animated: false
+        )
+
+        XCTAssertEqual(result, .moved)
+        XCTAssertEqual(scrollView.contentOffset.y, 490, accuracy: 0.01)
+        let firstVisibleRange = 0..<650
+        let nextVisibleRange = 606..<1_256
+        XCTAssertEqual(firstVisibleRange.upperBound - nextVisibleRange.lowerBound, 44)
+    }
+
     // MARK: - scrollToMakeScreenPointVisible
 
     func testScrollToMakeScreenPointVisibleReportsAlreadyInPositionWhenAlreadyInPreferredScreenRect() {

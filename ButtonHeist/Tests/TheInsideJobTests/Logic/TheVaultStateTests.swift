@@ -271,6 +271,13 @@ final class TheVaultStateTests: XCTestCase {
         XCTAssertNil(retained.geometry.view.frame)
         XCTAssertNil(retained.geometry.view.activationPoint)
         XCTAssertNotNil(state.interfaceTree.containers[scrollPath]?.viewSpace.frame)
+
+        let settled = requireCommitted(state.commitObservation(
+            admission(observation: refreshed),
+            sourceObservation: refreshed,
+            beginningNewBaseline: false
+        ))
+        XCTAssertEqual(settled.events, [.noChange])
     }
 
     func testCurrentAfterBoundaryUsesHistoryAvailability() {

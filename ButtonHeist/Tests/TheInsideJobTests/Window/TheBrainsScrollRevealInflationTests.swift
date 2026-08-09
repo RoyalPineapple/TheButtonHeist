@@ -473,8 +473,11 @@ extension TheBrainsScrollTests {
         guard case .revealed(_, let exploration) = result else {
             return XCTFail("Expected ancestor paging to reveal the target, got \(result)")
         }
-        let expectedPageOffset = scrollView.bounds.height
-            - CGFloat(ScrollContainerMetrics.pageOverlap) - scrollView.adjustedContentInset.top
+        let insets = scrollView.adjustedContentInset
+        let visibleHeight = scrollView.bounds.height - insets.top - insets.bottom
+        let expectedPageOffset = -insets.top
+            + visibleHeight
+            - CGFloat(ScrollContainerMetrics.pageOverlap)
         let innerSeedOffset = innerContentPoint.y - scrollView.bounds.height / 2
         XCTAssertEqual(exploration.progress.scrollCount, 1)
         XCTAssertEqual(movementTargets, [ObjectIdentifier(scrollView)])
@@ -515,8 +518,10 @@ extension TheBrainsScrollTests {
         guard case .revealed(_, let exploration) = result else {
             return XCTFail("Expected sibling paging to reveal the target, got \(result)")
         }
-        let expectedPageOffset = -fixture.siblingScrollView.adjustedContentInset.top
-            + fixture.siblingScrollView.bounds.height
+        let insets = fixture.siblingScrollView.adjustedContentInset
+        let visibleHeight = fixture.siblingScrollView.bounds.height - insets.top - insets.bottom
+        let expectedPageOffset = -insets.top
+            + visibleHeight
             - CGFloat(ScrollContainerMetrics.pageOverlap)
         let storedSeedOffset = fixture.storedInnerPoint.y
             - fixture.siblingScrollView.bounds.height / 2
