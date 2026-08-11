@@ -17,16 +17,18 @@ extension InterfaceTreeTests {
             (visibleTarget, "target"),
             (anchor, "anchor"),
         ])
+        let retainedParentGeometry = try XCTUnwrap(
+            initial.tree.findElement(heistId: "target")?.geometry.view
+        )
         let refreshed = InterfaceObservation.makeForTests(
             elements: [
                 "target": InterfaceTree.Element(
                     heistId: "target",
                     path: TreePath([0]),
                     scrollMembership: nil,
-                    geometry: testGeometry(
-                        for: offscreenTarget,
-                        ownerPath: .root,
-                        screen: .offscreen
+                    geometry: HeistElement.Geometry(
+                        screen: .offscreen,
+                        view: retainedParentGeometry
                     ),
                     element: offscreenTarget
                 ),
@@ -60,7 +62,11 @@ extension InterfaceTreeTests {
         XCTAssertEqual(updated.findElement(heistId: "target")?.geometry.screen, .offscreen)
         XCTAssertEqual(
             updated.findElement(heistId: "target")?.geometry.view,
-            refreshed.tree.findElement(heistId: "target")?.geometry.view
+            retainedParentGeometry
+        )
+        XCTAssertNotEqual(
+            initial.tree.findElement(heistId: "target")?.geometry.screen,
+            updated.findElement(heistId: "target")?.geometry.screen
         )
         XCTAssertNoThrow(try InterfaceObservation.build(tree: updated))
     }

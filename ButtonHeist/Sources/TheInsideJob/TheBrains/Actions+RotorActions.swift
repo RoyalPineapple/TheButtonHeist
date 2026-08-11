@@ -68,11 +68,11 @@ extension Actions {
         guard let treeElement = hit.treeElement else { return }
 
         if let ownerPath = treeElement.scrollContainerPath,
-           let point = treeElement.geometry.view.activationPoint(ownedBy: ownerPath),
+           case .available(let available) = treeElement.geometry.view.admitted(ownedBy: ownerPath),
            case .success(let target) = vault.liveScrollTarget(at: ownerPath) {
             let transition = await navigation.performViewportTransition(
                 .revealViewPoint(
-                    point,
+                    available.activationPoint,
                     in: .uiScrollView(
                         container: target.container,
                         scrollView: target.scrollView

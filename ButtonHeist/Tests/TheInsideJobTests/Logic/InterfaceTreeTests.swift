@@ -29,11 +29,7 @@ final class InterfaceTreeTests: XCTestCase {
             },
             geometry: HeistElement.Geometry(
                 screen: .offscreen,
-                view: .init(
-                    ownerPath: scrollContainerPath ?? .root,
-                    frame: nil,
-                    activationPoint: nil
-                )
+                view: .invalidated(ownerPath: scrollContainerPath ?? .root)
             ),
             element: makeElement(label: label ?? heistId.description)
         )

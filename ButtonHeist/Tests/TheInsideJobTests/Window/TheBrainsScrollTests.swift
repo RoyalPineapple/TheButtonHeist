@@ -97,11 +97,20 @@ final class TheBrainsScrollTests: XCTestCase {
         _ activationPoint: ViewPoint,
         ownerPath: TreePath
     ) -> HeistElement.Geometry.ViewSpace {
-        HeistElement.Geometry.ViewSpace(
+        let point = activationPoint.cgPoint
+        guard let frame = try? ViewRect(validating: CGRect(
+            x: point.x - 1,
+            y: point.y - 1,
+            width: 2,
+            height: 2
+        )) else {
+            preconditionFailure("Test parent-space frame must be finite")
+        }
+        return .available(.init(
             ownerPath: ownerPath,
-            frame: nil,
+            frame: frame,
             activationPoint: activationPoint
-        )
+        ))
     }
 
     func semanticRevealDeadline() -> SemanticObservationDeadline {

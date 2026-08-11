@@ -310,10 +310,10 @@ extension TheVault {
         else { return false }
         // Parent-space size can tell similar owners apart while the layout is stable.
         // After a layout change clears it, semantic facts must yield one match.
-        guard let candidateSize = candidate.viewSpace.frame?.cgRect.size,
-              let semanticSize = semanticContainer.viewSpace.frame?.cgRect.size
+        guard case .available(let candidateGeometry) = candidate.viewSpace,
+              case .available(let semanticGeometry) = semanticContainer.viewSpace
         else { return true }
-        return candidateSize == semanticSize
+        return candidateGeometry.frame.cgRect.size == semanticGeometry.frame.cgRect.size
     }
 
     private static func container(

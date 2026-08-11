@@ -382,11 +382,11 @@ struct RenderResponseTests {
                 frame: .available(ScreenRect(x: 0, y: 0, width: 100, height: 44)),
                 activationPoint: .defaultCenter(ScreenPoint(x: 50, y: 22))
             ),
-            view: HeistElement.Geometry.ViewSpace(
+            view: .available(.init(
                 ownerPath: ownerPath,
                 frame: ViewRect(x: 0, y: 0, width: 100, height: 44),
                 activationPoint: ViewPoint(x: 50, y: 22)
-            )
+            ))
         )
     }
 

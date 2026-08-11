@@ -737,7 +737,10 @@ extension Navigation {
         guard case .resolved(.element(let currentElement)) = vault.resolveTarget(target.target),
               let ownerPath = target.scrollContainerPath
         else { return nil }
-        return currentElement.geometry.view.activationPoint(ownedBy: ownerPath)
+        guard case .available(let available) = currentElement.geometry.view.admitted(ownedBy: ownerPath) else {
+            return nil
+        }
+        return available.activationPoint
     }
 
     private func semanticTargetScanMatch(

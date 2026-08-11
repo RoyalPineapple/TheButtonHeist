@@ -219,11 +219,11 @@ final class TheVaultStateTests: XCTestCase {
             scrollMembership: .init(containerPath: scrollPath, index: nil),
             geometry: HeistElement.Geometry(
                 screen: .offscreen,
-                view: HeistElement.Geometry.ViewSpace(
+                view: .available(.init(
                     ownerPath: scrollPath,
                     frame: try ViewRect(validating: CGRect(x: 20, y: 900, width: 200, height: 44)),
                     activationPoint: try ViewPoint(validating: CGPoint(x: 120, y: 922))
-                )
+                ))
             ),
             element: targetElement
         )
@@ -247,6 +247,15 @@ final class TheVaultStateTests: XCTestCase {
             heistIdsByPath: [scrollPath.appending(0): anchorId],
             firstResponderHeistId: nil
         )
+        let fixture = ParentGeometryTransitionFixture(
+            scrollPath: scrollPath,
+            anchorId: anchorId,
+            targetId: targetId,
+            container: container,
+            anchor: anchor,
+            targetElement: targetElement,
+            refreshed: refreshed
+        )
         var state = TheVault.State()
         _ = requireCommitted(state.commitObservation(
             admission(observation: baseline),
@@ -267,10 +276,11 @@ final class TheVaultStateTests: XCTestCase {
         ))
 
         let retained = try XCTUnwrap(state.interfaceTree.findElement(heistId: targetId))
-        XCTAssertEqual(retained.geometry.view.ownerPath, scrollPath)
-        XCTAssertNil(retained.geometry.view.frame)
-        XCTAssertNil(retained.geometry.view.activationPoint)
-        XCTAssertNotNil(state.interfaceTree.containers[scrollPath]?.viewSpace.frame)
+        XCTAssertEqual(retained.geometry.view, .invalidated(ownerPath: scrollPath))
+        XCTAssertEqual(retained.geometry.screen, .offscreen)
+        guard case .available? = state.interfaceTree.containers[scrollPath]?.viewSpace else {
+            return XCTFail("Fresh container geometry must remain a complete available value")
+        }
 
         let settled = requireCommitted(state.commitObservation(
             admission(observation: refreshed),
@@ -278,6 +288,10 @@ final class TheVaultStateTests: XCTestCase {
             beginningNewBaseline: false
         ))
         XCTAssertEqual(settled.events, [.noChange])
+        try assertParentGeometryRecoveryAndRepeatedInvalidation(
+            in: &state,
+            fixture: fixture
+        )
     }
 
     func testCurrentAfterBoundaryUsesHistoryAvailability() {
@@ -332,6 +346,94 @@ final class TheVaultStateTests: XCTestCase {
         XCTAssertEqual(state.current, priorCurrent)
         XCTAssertEqual(state.interfaceObservation?.tree, priorObservation?.tree)
         XCTAssertEqual(initial.current, priorCurrent)
+    }
+
+    private struct ParentGeometryTransitionFixture {
+        let scrollPath: TreePath
+        let anchorId: HeistId
+        let targetId: HeistId
+        let container: AccessibilityContainer
+        let anchor: AccessibilityElement
+        let targetElement: AccessibilityElement
+        let refreshed: InterfaceObservation
+    }
+
+    private func assertParentGeometryRecoveryAndRepeatedInvalidation(
+        in state: inout TheVault.State,
+        fixture: ParentGeometryTransitionFixture
+    ) throws {
+        let restoredFrame = try ViewRect(
+            validating: CGRect(x: 24, y: 880, width: 220, height: 48)
+        )
+        let restoredPoint = try ViewPoint(validating: CGPoint(x: 134, y: 904))
+        let restoredTarget = InterfaceTree.Element(
+            heistId: fixture.targetId,
+            path: fixture.scrollPath.appending(1),
+            scrollMembership: .init(containerPath: fixture.scrollPath, index: nil),
+            geometry: HeistElement.Geometry(
+                screen: .offscreen,
+                view: .available(.init(
+                    ownerPath: fixture.scrollPath,
+                    frame: restoredFrame,
+                    activationPoint: restoredPoint
+                ))
+            ),
+            element: fixture.targetElement
+        )
+        let restored = InterfaceObservation.makeForTests(
+            elements: [fixture.targetId: restoredTarget],
+            hierarchy: [
+                .container(fixture.container, children: [
+                    .element(fixture.anchor, traversalIndex: 0),
+                    .element(fixture.targetElement, traversalIndex: 1),
+                ]),
+            ],
+            heistIdsByPath: [
+                fixture.scrollPath.appending(0): fixture.anchorId,
+                fixture.scrollPath.appending(1): fixture.targetId,
+            ],
+            firstResponderHeistId: nil
+        )
+
+        _ = requireCommitted(state.commitObservation(
+            admission(observation: restored),
+            sourceObservation: restored,
+            beginningNewBaseline: false
+        ))
+
+        XCTAssertEqual(
+            state.interfaceTree.findElement(heistId: fixture.targetId)?.geometry.view,
+            .available(.init(
+                ownerPath: fixture.scrollPath,
+                frame: restoredFrame,
+                activationPoint: restoredPoint
+            ))
+        )
+        XCTAssertEqual(
+            state.interfaceTree.findElement(heistId: fixture.targetId)?.geometry.screen,
+            .offscreen
+        )
+
+        let repeatedLayoutChange = Observation.AdmittedNotification(
+            sequence: 2,
+            kind: .layoutChanged,
+            text: nil,
+            element: nil
+        )
+        _ = requireCommitted(state.commitObservation(
+            admission(notifications: [repeatedLayoutChange], observation: fixture.refreshed),
+            sourceObservation: fixture.refreshed,
+            beginningNewBaseline: false
+        ))
+
+        XCTAssertEqual(
+            state.interfaceTree.findElement(heistId: fixture.targetId)?.geometry.view,
+            .invalidated(ownerPath: fixture.scrollPath)
+        )
+        XCTAssertEqual(
+            state.interfaceTree.findElement(heistId: fixture.targetId)?.geometry.screen,
+            .offscreen
+        )
     }
 
     private func admission(

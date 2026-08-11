@@ -26,14 +26,18 @@ final class InterfaceExplorationProgressTests: XCTestCase {
         path: TreePath,
         containerName: ContainerName? = nil
     ) -> InterfaceTree.Container {
-        InterfaceTree.Container(
+        let frame = container.frame.cgRect
+        return InterfaceTree.Container(
             container: container,
             path: path,
             containerName: containerName,
-            viewSpace: HeistElement.Geometry.ViewSpace(
+            viewSpace: .admit(
                 ownerPath: path,
-                frame: try? ViewRect(validating: container.frame.cgRect),
-                activationPoint: nil
+                frame: try? ViewRect(validating: frame),
+                activationPoint: try? ViewPoint(validating: CGPoint(
+                    x: frame.midX,
+                    y: frame.midY
+                ))
             )
         )
     }

@@ -11,11 +11,7 @@ extension TheVaultResolutionTests {
     func testContainerTargetResolutionUsesCommittedSemanticContainers() async throws {
         let path = TreePath([0, 1])
         let frame = CGRect(x: 0, y: 900, width: 240, height: 80)
-        let viewSpace = HeistElement.Geometry.ViewSpace(
-            ownerPath: .root,
-            frame: try ViewRect(validating: frame),
-            activationPoint: nil
-        )
+        let viewSpace = try availableViewSpace(frame: frame)
         let container = AccessibilityContainer(
             type: .semanticGroup(label: "Actions", value: nil), identifier: "actions",
             frame: AccessibilityRect(frame),
@@ -65,11 +61,7 @@ extension TheVaultResolutionTests {
                         ),
                         path: primaryPath,
                         containerName: "actions_primary",
-                        viewSpace: HeistElement.Geometry.ViewSpace(
-                            ownerPath: .root,
-                            frame: try ViewRect(validating: primaryFrame),
-                            activationPoint: nil
-                        )
+                        viewSpace: try availableViewSpace(frame: primaryFrame)
                     ),
                     secondaryPath: .init(
                         container: AccessibilityContainer(
@@ -78,11 +70,7 @@ extension TheVaultResolutionTests {
                         ),
                         path: secondaryPath,
                         containerName: "actions_secondary",
-                        viewSpace: HeistElement.Geometry.ViewSpace(
-                            ownerPath: .root,
-                            frame: try ViewRect(validating: secondaryFrame),
-                            activationPoint: nil
-                        )
+                        viewSpace: try availableViewSpace(frame: secondaryFrame)
                     ),
                 ]
             ),
@@ -183,9 +171,12 @@ extension TheVaultResolutionTests {
         }
         XCTAssertEqual(resolved.heistId, "quantity_1")
         XCTAssertEqual(resolved.geometry.screen, TheVault.onscreenSpace(for: currentElement))
-        XCTAssertEqual(resolved.geometry.view.ownerPath, .root)
-        XCTAssertEqual(resolved.geometry.view.frame?.cgRect, freshFrame)
-        XCTAssertEqual(resolved.geometry.view.activationPoint?.cgPoint, freshPoint)
+        guard case .available(let resolvedViewSpace) = resolved.geometry.view else {
+            return XCTFail("Expected fresh parent-space geometry")
+        }
+        XCTAssertEqual(resolvedViewSpace.ownerPath, .root)
+        XCTAssertEqual(resolvedViewSpace.frame.cgRect, freshFrame)
+        XCTAssertEqual(resolvedViewSpace.activationPoint.cgPoint, freshPoint)
 
         guard case .resolved(let liveTarget) = vault.resolveLiveActionTarget(for: resolved) else {
             XCTFail("Expected current accessibility capture to provide action geometry")
@@ -236,9 +227,12 @@ extension TheVaultResolutionTests {
         let target = literalTarget(ResolvedElementPredicate.identifier("rotor_host"))
         let committed = try XCTUnwrap(vault.resolveTarget(target).resolvedElement)
         XCTAssertEqual(committed.geometry.screen, TheVault.onscreenSpace(for: freshElement))
-        XCTAssertEqual(committed.geometry.view.ownerPath, .root)
-        XCTAssertEqual(committed.geometry.view.frame?.cgRect, freshFrame)
-        XCTAssertEqual(committed.geometry.view.activationPoint?.cgPoint, freshPoint)
+        guard case .available(let committedViewSpace) = committed.geometry.view else {
+            return XCTFail("Expected committed parent-space geometry")
+        }
+        XCTAssertEqual(committedViewSpace.ownerPath, .root)
+        XCTAssertEqual(committedViewSpace.frame.cgRect, freshFrame)
+        XCTAssertEqual(committedViewSpace.activationPoint.cgPoint, freshPoint)
 
         let visible = try XCTUnwrap(vault.resolveVisibleTarget(target).resolvedElement)
         XCTAssertEqual(visible.geometry, committed.geometry)
@@ -333,16 +327,8 @@ extension TheVaultResolutionTests {
             type: .semanticGroup(label: "Actions", value: nil), identifier: "actions",
             frame: AccessibilityRect(freshFrame)
         )
-        let staleViewSpace = HeistElement.Geometry.ViewSpace(
-            ownerPath: .root,
-            frame: try ViewRect(validating: staleFrame),
-            activationPoint: nil
-        )
-        let freshViewSpace = HeistElement.Geometry.ViewSpace(
-            ownerPath: .root,
-            frame: try ViewRect(validating: freshFrame),
-            activationPoint: nil
-        )
+        let staleViewSpace = try availableViewSpace(frame: staleFrame)
+        let freshViewSpace = try availableViewSpace(frame: freshFrame)
         let liveObject = NSObject()
         let settledObservationScreen = InterfaceObservation.makeForTests(
             elements: [:],
@@ -500,6 +486,19 @@ private func requireCommittedObservation(
     case .failure(let failure):
         preconditionFailure("Test observation was rejected: \(failure.diagnostic)")
     }
+}
+
+private func availableViewSpace(
+    ownerPath: TreePath = .root,
+    frame: CGRect
+) throws -> HeistElement.Geometry.ViewSpace {
+    .available(.init(
+        ownerPath: ownerPath,
+        frame: try ViewRect(validating: frame),
+        activationPoint: try ViewPoint(
+            validating: CGPoint(x: frame.midX, y: frame.midY)
+        )
+    ))
 }
 
 #endif

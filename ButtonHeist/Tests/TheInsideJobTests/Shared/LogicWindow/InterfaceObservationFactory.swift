@@ -18,11 +18,40 @@ private func testViewSpace(
     for element: AccessibilityElement,
     ownerPath: TreePath
 ) -> HeistElement.Geometry.ViewSpace {
-    HeistElement.Geometry.ViewSpace(
+    testViewSpace(
         ownerPath: ownerPath,
         frame: try? ViewRect(validating: element.bhFrame),
         activationPoint: try? ViewPoint(validating: element.bhResolvedActivationPoint)
     )
+}
+
+private func testViewSpace(
+    for container: AccessibilityContainer,
+    ownerPath: TreePath
+) -> HeistElement.Geometry.ViewSpace {
+    let frame = container.frame.cgRect
+    return testViewSpace(
+        ownerPath: ownerPath,
+        frame: try? ViewRect(validating: frame),
+        activationPoint: try? ViewPoint(
+            validating: CGPoint(x: frame.midX, y: frame.midY)
+        )
+    )
+}
+
+private func testViewSpace(
+    ownerPath: TreePath,
+    frame: ViewRect?,
+    activationPoint: ViewPoint?
+) -> HeistElement.Geometry.ViewSpace {
+    guard let frame, let activationPoint else {
+        return .invalidated(ownerPath: ownerPath)
+    }
+    return .available(.init(
+        ownerPath: ownerPath,
+        frame: frame,
+        activationPoint: activationPoint
+    ))
 }
 
 func testGeometry(
@@ -74,6 +103,7 @@ private func makeTestTree(
             )
         }
         let suppliedGeometry = supplied?.geometry
+        let ownerPath = scrollMembership?.containerPath ?? .root
         result[heistId] = InterfaceTree.Element(
             heistId: heistId,
             path: item.path,
@@ -81,13 +111,8 @@ private func makeTestTree(
             geometry: HeistElement.Geometry(
                 screen: suppliedGeometry?.screen
                     ?? TheVault.onscreenSpace(for: item.element),
-                view: HeistElement.Geometry.ViewSpace(
-                    ownerPath: scrollMembership?.containerPath ?? .root,
-                    frame: suppliedGeometry?.view.frame
-                        ?? (try? ViewRect(validating: item.element.bhFrame)),
-                    activationPoint: suppliedGeometry?.view.activationPoint
-                        ?? (try? ViewPoint(validating: item.element.bhResolvedActivationPoint))
-                )
+                view: suppliedGeometry?.view
+                    ?? testViewSpace(for: item.element, ownerPath: ownerPath)
             ),
             element: item.element
         )
@@ -104,16 +129,13 @@ private func makeTestTree(
                 index: supplied?.scrollMembership?.index
             )
         }
+        let ownerPath = scrollMembership?.containerPath ?? .root
         result[item.path] = InterfaceTree.Container(
             container: item.container,
             path: item.path,
             containerName: supplied?.containerName,
-            viewSpace: HeistElement.Geometry.ViewSpace(
-                ownerPath: scrollMembership?.containerPath ?? .root,
-                frame: supplied?.viewSpace.frame
-                    ?? (try? ViewRect(validating: item.container.frame.cgRect)),
-                activationPoint: supplied?.viewSpace.activationPoint
-            ),
+            viewSpace: supplied?.viewSpace
+                ?? testViewSpace(for: item.container, ownerPath: ownerPath),
             scrollMembership: scrollMembership,
             scrollInventory: supplied?.scrollInventory
         )
@@ -185,10 +207,9 @@ extension InterfaceObservation {
                         path: item.path,
                         containerName: containerNamesByPath[item.path],
                         viewSpace: containerViewSpacesByPath[item.path]
-                            ?? HeistElement.Geometry.ViewSpace(
-                                ownerPath: containerScrollMembershipsByPath[item.path]?.containerPath ?? .root,
-                                frame: try? ViewRect(validating: item.container.frame.cgRect),
-                                activationPoint: nil
+                            ?? testViewSpace(
+                                for: item.container,
+                                ownerPath: containerScrollMembershipsByPath[item.path]?.containerPath ?? .root
                             ),
                         scrollMembership: containerScrollMembershipsByPath[item.path],
                         scrollInventory: scrollInventoriesByPath[item.path]

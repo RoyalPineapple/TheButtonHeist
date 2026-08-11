@@ -140,11 +140,13 @@ final class TheVaultObservedStateEqualityTests: XCTestCase {
 
         let geometry = HeistElement.Geometry(
             screen: screenSpace,
-            view: HeistElement.Geometry.ViewSpace(
-                ownerPath: TreePath([0]),
-                frame: parentGeometryAvailable ? requireViewRect(viewFrame) : nil,
-                activationPoint: parentGeometryAvailable ? requireViewPoint(activationPoint) : nil
-            )
+            view: parentGeometryAvailable
+                ? .available(.init(
+                    ownerPath: TreePath([0]),
+                    frame: requireViewRect(viewFrame),
+                    activationPoint: requireViewPoint(activationPoint)
+                ))
+                : .invalidated(ownerPath: TreePath([0]))
         )
         let element = AccessibilityElement.make(
             label: label,

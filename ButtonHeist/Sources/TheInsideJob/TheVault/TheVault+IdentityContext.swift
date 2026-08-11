@@ -145,7 +145,7 @@ extension TheVault {
     private static func rootViewSpace(
         for element: AccessibilityElement
     ) -> HeistElement.Geometry.ViewSpace {
-        HeistElement.Geometry.ViewSpace(
+        HeistElement.Geometry.ViewSpace.admit(
             ownerPath: .root,
             frame: try? ViewRect(validating: element.bhFrame),
             activationPoint: try? ViewPoint(validating: element.bhResolvedActivationPoint)
@@ -156,7 +156,7 @@ extension TheVault {
         for container: AccessibilityContainer
     ) -> HeistElement.Geometry.ViewSpace {
         let frame = container.frame.cgRect
-        return HeistElement.Geometry.ViewSpace(
+        return HeistElement.Geometry.ViewSpace.admit(
             ownerPath: .root,
             frame: try? ViewRect(validating: frame),
             activationPoint: try? ViewPoint(validating: CGPoint(x: frame.midX, y: frame.midY))

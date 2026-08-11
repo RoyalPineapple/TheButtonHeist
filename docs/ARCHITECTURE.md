@@ -136,12 +136,15 @@ retains the previous id or substitutes a sibling duplicate.
 
 Screen-space geometry belongs to one settled viewport. A viewport move ends
 its lifetime, and the next committed capture supplies new screen-space
-geometry. Parent-space geometry has a longer but limited lifetime. It may cross
-viewport moves while the layout and screen stay the same. A layout or screen
-change clears retained parent-space frames and points. Before using a retained
-parent-space point, TheInsideJob must find exactly one matching semantic owner
-in the current capture. The owner's tree path may change. A missing or
-ambiguous owner makes the point unavailable.
+geometry. Parent-space geometry has a longer but limited lifetime and is one
+atomic state: available with an owner path, frame, and activation point from
+the same parent-layout snapshot, or invalidated with neither geometry value.
+It may cross viewport moves while the layout and screen stay the same. A layout
+or screen change invalidates the complete parent-space state. Before using
+retained parent-space geometry, TheInsideJob must find exactly one matching
+semantic owner in the current capture. The owner's tree path may change, and a
+matching reacquisition restores only a fresh complete value for that owner. A
+missing, ambiguous, or nonmatching owner keeps the state invalidated.
 
 Completed steps project immutable `Observation.Evidence` from Vault truth and
 the events consumed by the reducer. Current-state predicates read the current

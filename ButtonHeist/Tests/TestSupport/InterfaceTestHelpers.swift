@@ -189,7 +189,7 @@ private func testGeometry(
     )
     return HeistElement.Geometry(
         screen: .onscreen(frame: screenFrame, activationPoint: screenActivationPoint),
-        view: HeistElement.Geometry.ViewSpace(
+        view: testViewSpace(
             ownerPath: ownerPath,
             frame: screenFrame.rect.flatMap { try? ViewRect(validating: $0.cgRect) },
             activationPoint: viewActivationPoint
@@ -266,13 +266,28 @@ package func makeTestHeistElement(
                 frame: frame.map(ScreenFrameEvidence.available) ?? .unavailable,
                 activationPoint: screenActivationPoint
             ),
-            view: HeistElement.Geometry.ViewSpace(
+            view: testViewSpace(
                 ownerPath: .root,
                 frame: frame.flatMap { try? ViewRect(validating: $0.cgRect) },
                 activationPoint: viewActivationPoint
             )
         )
     )
+}
+
+private func testViewSpace(
+    ownerPath: TreePath,
+    frame: ViewRect?,
+    activationPoint: ViewPoint?
+) -> HeistElement.Geometry.ViewSpace {
+    guard let frame, let activationPoint else {
+        return .invalidated(ownerPath: ownerPath)
+    }
+    return .available(.init(
+        ownerPath: ownerPath,
+        frame: frame,
+        activationPoint: activationPoint
+    ))
 }
 
 package func makeTestAccessibilityElement(_ element: HeistElement) -> AccessibilityElement {

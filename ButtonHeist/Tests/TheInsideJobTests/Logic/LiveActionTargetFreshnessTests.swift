@@ -225,11 +225,14 @@ final class LiveActionTargetFreshnessTests: XCTestCase {
             scrollableContentSize: AccessibilitySize(width: 320, height: 1_200),
             frame: AccessibilityRect(frame)
         )
-        let viewSpace = HeistElement.Geometry.ViewSpace(
+        let viewSpace = HeistElement.Geometry.ViewSpace.available(.init(
             ownerPath: .root,
             frame: try ViewRect(validating: frame),
-            activationPoint: nil
-        )
+            activationPoint: try ViewPoint(validating: CGPoint(
+                x: frame.midX,
+                y: frame.midY
+            ))
+        ))
         let semanticContainer = InterfaceTree.Container(
             container: container,
             path: path,
@@ -279,14 +282,14 @@ private struct TargetGeometryFixture {
         self.element = element
         self.geometry = HeistElement.Geometry(
             screen: TheVault.onscreenSpace(for: element),
-            view: HeistElement.Geometry.ViewSpace(
+            view: .available(.init(
                 ownerPath: .root,
                 frame: try ViewRect(validating: viewFrame),
                 activationPoint: try ViewPoint(validating: CGPoint(
                     x: viewFrame.midX,
                     y: viewFrame.midY
                 ))
-            )
+            ))
         )
     }
 }

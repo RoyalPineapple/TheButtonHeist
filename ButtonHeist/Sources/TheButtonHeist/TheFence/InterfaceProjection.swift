@@ -341,11 +341,7 @@ private extension InterfaceGraphElementRecord {
     var interfaceProjectionElement: HeistElement {
         let geometry = annotation?.geometry ?? HeistElement.Geometry(
             screen: .offscreen,
-            view: HeistElement.Geometry.ViewSpace(
-                ownerPath: path.parent ?? .root,
-                frame: nil,
-                activationPoint: nil
-            )
+            view: .invalidated(ownerPath: path.parent ?? .root)
         )
         return HeistElement(
             accessibilityElement: accessibilityElement,

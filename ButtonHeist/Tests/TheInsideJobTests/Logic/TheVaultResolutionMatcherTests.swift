@@ -136,11 +136,14 @@ extension TheVaultResolutionTests {
                         container: container,
                         path: containerPath,
                         containerName: "order_entry_container",
-                        viewSpace: HeistElement.Geometry.ViewSpace(
+                        viewSpace: .available(.init(
                             ownerPath: .root,
                             frame: try ViewRect(validating: container.frame.cgRect),
-                            activationPoint: nil
-                        )
+                            activationPoint: try ViewPoint(validating: CGPoint(
+                                x: container.frame.cgRect.midX,
+                                y: container.frame.cgRect.midY
+                            ))
+                        ))
                     ),
                 ]
             ),

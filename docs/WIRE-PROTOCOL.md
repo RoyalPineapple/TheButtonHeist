@@ -320,6 +320,7 @@ seconds since 2001-01-01 00:00:00 UTC.
               }
             },
             "view": {
+              "availability": "available",
               "ownerPath": { "indices": [] },
               "frame": { "x": 16, "y": 140, "width": 361, "height": 44 },
               "activationPoint": { "x": 196.5, "y": 162 }
@@ -332,6 +333,12 @@ seconds since 2001-01-01 00:00:00 UTC.
   }
 }
 ```
+
+`geometry.view.availability` is required. An `"available"` value carries exactly
+`ownerPath`, `frame`, and `activationPoint`; an `"invalidated"` value carries
+only `ownerPath` and exposes no usable parent-space geometry. Decoding rejects
+missing discriminators, partial available values, geometry fields on an
+invalidated value, and the historical undiscriminated object.
 
 The raw interface tree carries parser values plus path-indexed Button Heist
 annotations. Capture-local `HeistId` values remain inside TheInsideJob and are

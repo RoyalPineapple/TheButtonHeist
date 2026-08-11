@@ -88,12 +88,20 @@ final class TheBrainsPipelineTests: XCTestCase {
             frame: CGRect(x: 20, y: 180, width: 280, height: 240),
             contentSize: CGSize(width: 280, height: 900)
         )
+        let outerPath = TreePath([0])
+        let nestedPath = TreePath([0, 0])
         let page = InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [
                 .container(outer, children: [
                     .container(nested, children: [])
                 ])
+            ],
+            containerScrollMembershipsByPath: [
+                nestedPath: .init(containerPath: outerPath, index: nil)
+            ],
+            containerViewSpacesByPath: [
+                nestedPath: viewSpace(for: nested, ownerPath: outerPath)
             ],
             firstResponderHeistId: nil,
         )
@@ -104,8 +112,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             scrollableContainers: page.tree.orderedContainers.filter { $0.container.isScrollable }
         )
 
-        XCTAssertTrue(exploration.progress.pendingScrollPaths.contains(TreePath([0])))
-        XCTAssertTrue(exploration.progress.pendingScrollPaths.contains(TreePath([0, 0])))
+        XCTAssertTrue(exploration.progress.pendingScrollPaths.contains(outerPath))
+        XCTAssertTrue(exploration.progress.pendingScrollPaths.contains(nestedPath))
     }
 
     func testSemanticExplorationAbsorbQueuesNestedContainerWithoutRequeuingExploredOuter() async {
@@ -117,6 +125,8 @@ final class TheBrainsPipelineTests: XCTestCase {
             frame: CGRect(x: 20, y: 520, width: 280, height: 240),
             contentSize: CGSize(width: 280, height: 900)
         )
+        let outerPath = TreePath([0])
+        let nestedPath = TreePath([0, 0])
         let page = InterfaceObservation.makeForTests(
             elements: [:],
             hierarchy: [
@@ -124,10 +134,14 @@ final class TheBrainsPipelineTests: XCTestCase {
                     .container(nested, children: [])
                 ])
             ],
+            containerScrollMembershipsByPath: [
+                nestedPath: .init(containerPath: outerPath, index: nil)
+            ],
+            containerViewSpacesByPath: [
+                nestedPath: viewSpace(for: nested, ownerPath: outerPath)
+            ],
             firstResponderHeistId: nil,
         )
-        let outerPath = TreePath([0])
-        let nestedPath = TreePath([0, 0])
         let outerEntry = semanticContainer(outer, path: outerPath)
         var exploration = Navigation.SemanticExploration(startingFresh: false)
         exploration.progress.addPendingContainers([outerEntry])
@@ -244,21 +258,13 @@ final class TheBrainsPipelineTests: XCTestCase {
                         container: rootContainer,
                         path: rootPath,
                         containerName: "root",
-                        viewSpace: HeistElement.Geometry.ViewSpace(
-                            ownerPath: .root,
-                            frame: try? ViewRect(validating: rootContainer.frame.cgRect),
-                            activationPoint: nil
-                        )
+                        viewSpace: viewSpace(for: rootContainer, ownerPath: .root)
                     ),
                     offscreenContainerPath: InterfaceTree.Container(
                         container: offscreenContainer,
                         path: offscreenContainerPath,
                         containerName: "offscreen_group",
-                        viewSpace: HeistElement.Geometry.ViewSpace(
-                            ownerPath: rootPath,
-                            frame: try? ViewRect(validating: offscreenContainer.frame.cgRect),
-                            activationPoint: nil
-                        ),
+                        viewSpace: viewSpace(for: offscreenContainer, ownerPath: rootPath),
                         scrollMembership: InterfaceTree.ScrollMembership(
                             containerPath: rootPath,
                             index: 1
@@ -328,11 +334,22 @@ final class TheBrainsPipelineTests: XCTestCase {
             container: container,
             path: path,
             containerName: nil,
-            viewSpace: HeistElement.Geometry.ViewSpace(
-                ownerPath: path.parent ?? .root,
-                frame: try? ViewRect(validating: container.frame.cgRect),
-                activationPoint: nil
-            )
+            viewSpace: viewSpace(for: container, ownerPath: path.parent ?? .root)
+        )
+    }
+
+    private func viewSpace(
+        for container: AccessibilityContainer,
+        ownerPath: TreePath
+    ) -> HeistElement.Geometry.ViewSpace {
+        let frame = container.frame.cgRect
+        return .admit(
+            ownerPath: ownerPath,
+            frame: try? ViewRect(validating: frame),
+            activationPoint: try? ViewPoint(validating: CGPoint(
+                x: frame.midX,
+                y: frame.midY
+            ))
         )
     }
 }

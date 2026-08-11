@@ -182,39 +182,23 @@ private extension HeistElement.Geometry.ViewSpace {
         as other: HeistElement.Geometry.ViewSpace,
         geometryTolerance: CGFloat
     ) -> Bool {
-        guard ownerPath == other.ownerPath else { return false }
-
-        return hasSameAvailabilityAndValue(frame, other.frame) { previous, current in
-            CoarseFrameComparison.isInSamePlace(
-                previous,
-                current,
+        switch (self, other) {
+        case let (.available(previous), .available(current)):
+            guard previous.ownerPath == current.ownerPath else { return false }
+            return CoarseFrameComparison.isInSamePlace(
+                previous.frame,
+                current.frame,
+                geometryTolerance: geometryTolerance
+            ) && CoarseFrameComparison.isInSamePlace(
+                previous.activationPoint,
+                current.activationPoint,
                 geometryTolerance: geometryTolerance
             )
-        } && hasSameAvailabilityAndValue(
-            activationPoint,
-            other.activationPoint
-        ) { previous, current in
-            CoarseFrameComparison.isInSamePlace(
-                previous,
-                current,
-                geometryTolerance: geometryTolerance
-            )
+        case let (.invalidated(previousOwner), .invalidated(currentOwner)):
+            return previousOwner == currentOwner
+        case (.available, .invalidated), (.invalidated, .available):
+            return false
         }
-    }
-}
-
-private func hasSameAvailabilityAndValue<Value>(
-    _ previous: Value?,
-    _ current: Value?,
-    compare: (Value, Value) -> Bool
-) -> Bool {
-    switch (previous, current) {
-    case (.none, .none):
-        true
-    case let (.some(previous), .some(current)):
-        compare(previous, current)
-    case (.none, .some), (.some, .none):
-        false
     }
 }
 #endif

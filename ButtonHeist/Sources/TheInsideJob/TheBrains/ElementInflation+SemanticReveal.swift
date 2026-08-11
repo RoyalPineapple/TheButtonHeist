@@ -139,24 +139,22 @@ extension ElementInflation {
             transaction: transaction
         ) {
         case .resolved(let scrollView):
-            if currentElement.geometry.view.activationPoint != nil {
-                switch await moveToObservedContentPoint(
-                    currentElement.geometry.view,
-                    rememberedOwnerPath: rememberedScrollContainerPath,
-                    in: scrollView,
-                    target: target,
-                    deadline: deadline,
-                    transaction: transaction
-                ) {
-                case .resolved(let resolved):
-                    if vault.visibleLiveElementAliasing(resolved) != nil {
-                        return .revealed(resolved)
-                    }
-                case .targetResolutionFailed(let failure):
-                    return .targetResolutionFailed(failure)
-                case .unavailable:
-                    break
+            switch await moveToObservedContentPoint(
+                currentElement.geometry.view,
+                rememberedOwnerPath: rememberedScrollContainerPath,
+                in: scrollView,
+                target: target,
+                deadline: deadline,
+                transaction: transaction
+            ) {
+            case .resolved(let resolved):
+                if vault.visibleLiveElementAliasing(resolved) != nil {
+                    return .revealed(resolved)
                 }
+            case .targetResolutionFailed(let failure):
+                return .targetResolutionFailed(failure)
+            case .unavailable:
+                break
             }
         case .targetResolutionFailed(let failure):
             return .targetResolutionFailed(failure)
@@ -282,9 +280,6 @@ extension ElementInflation {
         case .unavailable:
             return .unavailable
         }
-        guard container.viewSpace.activationPoint != nil else {
-            return .unavailable
-        }
         switch await moveToObservedContentPoint(
             container.viewSpace,
             rememberedOwnerPath: membership.containerPath,
@@ -315,18 +310,18 @@ extension ElementInflation {
         transaction: RevealTransaction
     ) async -> SemanticViewportMoveResult {
         guard semanticRevealInterruption(deadline: deadline) == nil else { return .unavailable }
+        guard case .available(let available) = viewSpace.admitted(ownedBy: rememberedOwnerPath) else {
+            return .unavailable
+        }
         guard let scrollTarget = Navigation.ScrollableTarget.programmatic(scrollView, in: vault) else {
             return .unavailable
         }
         // Parent-space geometry survives viewport movement, but its path does not.
         // The caller reacquires the same semantic owner in the current viewport.
         // This proof binds the point to the remembered owner.
-        guard let point = viewSpace.activationPoint(ownedBy: rememberedOwnerPath) else {
-            return .unavailable
-        }
         transaction.record(scrollView)
         let transition = await exploration.moveViewport(
-            .revealViewPoint(point, in: scrollTarget),
+            .revealViewPoint(available.activationPoint, in: scrollTarget),
             deadline
         )
         guard semanticRevealInterruption(deadline: deadline) == nil else { return .unavailable }
