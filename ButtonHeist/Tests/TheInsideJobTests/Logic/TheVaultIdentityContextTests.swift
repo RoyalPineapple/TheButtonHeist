@@ -15,7 +15,7 @@ final class TheVaultIdentityContextTests: XCTestCase {
         .make(label: label, respondsToUserInteraction: false)
     }
 
-    func testTopLevelContainerKeepsScreenSpaceFrame() {
+    func testTopLevelContainerKeepsScreenSpaceFrame() throws {
         let container = AccessibilityContainer(
             type: .list,
             frame: AccessibilityRect(x: 0, y: 100, width: 320, height: 400)
@@ -29,14 +29,12 @@ final class TheVaultIdentityContextTests: XCTestCase {
             hierarchy: hierarchy,
         )
 
-        XCTAssertEqual(
-            result.viewSpacesByPath[TreePath([0])]?.frame?.cgRect,
-            container.frame.cgRect
-        )
+        let available = try requireAvailableViewSpace(result.viewSpacesByPath[TreePath([0])])
+        XCTAssertEqual(available.frame.cgRect, container.frame.cgRect)
         XCTAssertFalse(result.nestedInScrollViewPaths.contains(TreePath([0])))
     }
 
-    func testIdentityContextKeepsParserViewGeometryAndScrollMembershipSeparate() {
+    func testIdentityContextKeepsParserViewGeometryAndScrollMembershipSeparate() throws {
         let scrollContainerPath = TreePath([0])
         let outer = AccessibilityContainer(
             type: .none, scrollableContentSize: AccessibilitySize(width: 320, height: 5000),
@@ -58,19 +56,19 @@ final class TheVaultIdentityContextTests: XCTestCase {
             scrollableContainerPaths: [scrollContainerPath]
         )
 
-        XCTAssertEqual(
-            result.viewSpacesByPath[TreePath([0])]?.frame?.cgRect,
-            outer.frame.cgRect
-        )
+        let outerAvailable = try requireAvailableViewSpace(result.viewSpacesByPath[TreePath([0])])
+        XCTAssertEqual(outerAvailable.frame.cgRect, outer.frame.cgRect)
         XCTAssertFalse(result.nestedInScrollViewPaths.contains(TreePath([0])))
 
-        let innerViewSpace = result.viewSpacesByPath[TreePath([0, 0])]
-        XCTAssertEqual(innerViewSpace?.ownerPath, .root)
-        XCTAssertEqual(innerViewSpace?.frame?.cgRect, inner.frame.cgRect)
+        let innerAvailable = try requireAvailableViewSpace(
+            result.viewSpacesByPath[TreePath([0, 0])]
+        )
+        XCTAssertEqual(innerAvailable.ownerPath, .root)
+        XCTAssertEqual(innerAvailable.frame.cgRect, inner.frame.cgRect)
         XCTAssertTrue(result.nestedInScrollViewPaths.contains(TreePath([0, 0])))
     }
 
-    func testViewHierarchyOwnsViewGeometryWhenScreenCaptureMoves() {
+    func testViewHierarchyOwnsViewGeometryWhenScreenCaptureMoves() throws {
         let scrollContainerPath = TreePath([0])
 
         let outer = AccessibilityContainer(
@@ -111,15 +109,13 @@ final class TheVaultIdentityContextTests: XCTestCase {
             result1.viewSpacesByPath[TreePath([0, 0])],
             result2.viewSpacesByPath[TreePath([0, 0])]
         )
-        XCTAssertEqual(
-            result2.viewSpacesByPath[TreePath([0, 0])]?.frame?.cgRect,
-            innerParse1.frame.cgRect
-        )
+        let available = try requireAvailableViewSpace(result2.viewSpacesByPath[TreePath([0, 0])])
+        XCTAssertEqual(available.frame.cgRect, innerParse1.frame.cgRect)
         XCTAssertTrue(result1.nestedInScrollViewPaths.contains(TreePath([0, 0])))
         XCTAssertTrue(result2.nestedInScrollViewPaths.contains(TreePath([0, 0])))
     }
 
-    func testOneFoldKeepsNestedScrollAndDuplicateElementContextsPathDistinct() {
+    func testOneFoldKeepsNestedScrollAndDuplicateElementContextsPathDistinct() throws {
         let outerPath = TreePath([0])
         let groupPath = TreePath([0, 0])
         let outerElementPath = TreePath([0, 0, 0])
@@ -177,8 +173,10 @@ final class TheVaultIdentityContextTests: XCTestCase {
         )
         XCTAssertEqual(elementsByPath[outerElementPath]?.element, repeated)
         XCTAssertEqual(elementsByPath[innerElementPath]?.element, repeated)
-        XCTAssertEqual(result.viewSpacesByPath[groupPath]?.frame?.cgRect, group.frame.cgRect)
-        XCTAssertEqual(result.viewSpacesByPath[innerPath]?.frame?.cgRect, inner.frame.cgRect)
+        let groupAvailable = try requireAvailableViewSpace(result.viewSpacesByPath[groupPath])
+        let innerAvailable = try requireAvailableViewSpace(result.viewSpacesByPath[innerPath])
+        XCTAssertEqual(groupAvailable.frame.cgRect, group.frame.cgRect)
+        XCTAssertEqual(innerAvailable.frame.cgRect, inner.frame.cgRect)
     }
 
     /// The regression this naming scheme exists for: a container that moves —
@@ -457,6 +455,22 @@ final class TheVaultIdentityContextTests: XCTestCase {
                 ContainerName(stringLiteral: "tabBar"),
             ]
         )
+    }
+
+    private func requireAvailableViewSpace(
+        _ viewSpace: HeistElement.Geometry.ViewSpace?,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws -> HeistElement.Geometry.ViewSpace.Available {
+        guard case .available(let available) = viewSpace else {
+            return try XCTUnwrap(
+                Optional<HeistElement.Geometry.ViewSpace.Available>.none,
+                "Expected available parent-space geometry",
+                file: file,
+                line: line
+            )
+        }
+        return available
     }
 }
 

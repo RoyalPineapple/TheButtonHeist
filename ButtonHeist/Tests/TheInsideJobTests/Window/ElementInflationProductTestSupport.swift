@@ -171,14 +171,14 @@ final class ElementInflationProductTests: ButtonHeistRuntimeTestCase {
         size: CGSize,
         ownerPath: TreePath
     ) throws -> HeistElement.Geometry.ViewSpace {
-        HeistElement.Geometry.ViewSpace(
+        .available(.init(
             ownerPath: ownerPath,
             frame: try ViewRect(validating: CGRect(origin: origin, size: size)),
             activationPoint: try ViewPoint(validating: CGPoint(
                 x: origin.x + size.width / 2,
                 y: origin.y + size.height / 2
             ))
-        )
+        ))
     }
     func firstLiveScrollableContainerPath(in observation: InterfaceObservation) -> TreePath? {
         for item in observation.tree.viewportCapture.hierarchy.scrollablePathIndexedContainers {

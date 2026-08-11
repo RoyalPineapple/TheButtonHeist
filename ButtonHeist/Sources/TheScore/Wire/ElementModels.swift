@@ -264,23 +264,87 @@ public extension HeistElement {
 
         /// Geometry in the coordinate space of the owning view. It stays valid
         /// across viewport moves on the same layout. A layout change or screen
-        /// change invalidates its frame and activation point.
-        public struct ViewSpace: Codable, Equatable, Hashable, Sendable {
-            public let ownerPath: TreePath
-            public let frame: ViewRect?
-            public let activationPoint: ViewPoint?
+        /// change invalidates the complete parent-space value.
+        public enum ViewSpace: Codable, Equatable, Hashable, Sendable {
+            case available(Available)
+            case invalidated(ownerPath: TreePath)
 
-            public init(
+            public struct Available: Equatable, Hashable, Sendable {
+                public let ownerPath: TreePath
+                public let frame: ViewRect
+                public let activationPoint: ViewPoint
+
+                public init(
+                    ownerPath: TreePath,
+                    frame: ViewRect,
+                    activationPoint: ViewPoint
+                ) {
+                    self.ownerPath = ownerPath
+                    self.frame = frame
+                    self.activationPoint = activationPoint
+                }
+            }
+
+            package var ownerPath: TreePath {
+                switch self {
+                case .available(let available):
+                    available.ownerPath
+                case .invalidated(let ownerPath):
+                    ownerPath
+                }
+            }
+
+            package static func admit(
                 ownerPath: TreePath,
                 frame: ViewRect?,
                 activationPoint: ViewPoint?
-            ) {
-                self.ownerPath = ownerPath
-                self.frame = frame
-                self.activationPoint = activationPoint
+            ) -> Self {
+                guard let frame, let activationPoint else {
+                    return .invalidated(ownerPath: ownerPath)
+                }
+                return .available(Available(
+                    ownerPath: ownerPath,
+                    frame: frame,
+                    activationPoint: activationPoint
+                ))
+            }
+
+            package func admitted(ownedBy ownerPath: TreePath) -> Self {
+                guard case .available(let available) = self,
+                      available.ownerPath == ownerPath
+                else {
+                    return .invalidated(ownerPath: ownerPath)
+                }
+                return self
+            }
+
+            package func rebased(
+                fromSubtreeRoot originalRoot: TreePath,
+                to projectedRoot: TreePath
+            ) -> Self {
+                guard let relativeOwnerPath = ownerPath.removingPrefix(originalRoot) else {
+                    return .invalidated(ownerPath: .root)
+                }
+                let projectedOwnerPath = projectedRoot.appending(contentsOf: relativeOwnerPath)
+                switch self {
+                case .available(let available):
+                    return .available(Available(
+                        ownerPath: projectedOwnerPath,
+                        frame: available.frame,
+                        activationPoint: available.activationPoint
+                    ))
+                case .invalidated:
+                    return .invalidated(ownerPath: projectedOwnerPath)
+                }
+            }
+
+            private enum Availability: String, Codable {
+                case available
+                case invalidated
             }
 
             private enum CodingKeys: String, CodingKey, CaseIterable {
+                case availability
                 case ownerPath
                 case frame
                 case activationPoint
@@ -292,32 +356,40 @@ public extension HeistElement {
                     typeName: "HeistElement.Geometry.ViewSpace"
                 )
                 let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.init(
-                    ownerPath: try container.decode(TreePath.self, forKey: .ownerPath),
-                    frame: try container.decodeIfPresent(ViewRect.self, forKey: .frame),
-                    activationPoint: try container.decodeIfPresent(
-                        ViewPoint.self,
-                        forKey: .activationPoint
+                switch try container.decode(Availability.self, forKey: .availability) {
+                case .available:
+                    try container.rejectIncompatibleFields(
+                        allowing: [.availability, .ownerPath, .frame, .activationPoint],
+                        typeName: "available view-space geometry"
                     )
-                )
-            }
-
-            package func activationPoint(ownedBy path: TreePath) -> ViewPoint? {
-                ownerPath == path ? activationPoint : nil
-            }
-
-            package func rebased(
-                fromSubtreeRoot originalRoot: TreePath,
-                to projectedRoot: TreePath
-            ) -> Self {
-                guard let relativeOwner = ownerPath.removingPrefix(originalRoot) else {
-                    return Self(ownerPath: .root, frame: nil, activationPoint: nil)
+                    self = .available(Available(
+                        ownerPath: try container.decode(TreePath.self, forKey: .ownerPath),
+                        frame: try container.decode(ViewRect.self, forKey: .frame),
+                        activationPoint: try container.decode(ViewPoint.self, forKey: .activationPoint)
+                    ))
+                case .invalidated:
+                    try container.rejectIncompatibleFields(
+                        allowing: [.availability, .ownerPath],
+                        typeName: "invalidated view-space geometry"
+                    )
+                    self = .invalidated(
+                        ownerPath: try container.decode(TreePath.self, forKey: .ownerPath)
+                    )
                 }
-                return Self(
-                    ownerPath: projectedRoot.appending(contentsOf: relativeOwner),
-                    frame: frame,
-                    activationPoint: activationPoint
-                )
+            }
+
+            public func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                switch self {
+                case .available(let available):
+                    try container.encode(Availability.available, forKey: .availability)
+                    try container.encode(available.ownerPath, forKey: .ownerPath)
+                    try container.encode(available.frame, forKey: .frame)
+                    try container.encode(available.activationPoint, forKey: .activationPoint)
+                case .invalidated(let ownerPath):
+                    try container.encode(Availability.invalidated, forKey: .availability)
+                    try container.encode(ownerPath, forKey: .ownerPath)
+                }
             }
         }
     }

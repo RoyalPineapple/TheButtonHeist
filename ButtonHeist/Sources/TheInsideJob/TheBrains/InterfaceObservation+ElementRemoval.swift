@@ -61,10 +61,11 @@ private extension InterfaceTree {
         using pathMap: [TreePath: TreePath],
         viewportCapture: LiveCapture.Snapshot
     ) -> InterfaceTree {
+        let capturedElementIDs = Set(self.viewportCapture.heistIdsByPath.values)
         var remappedElements: [HeistId: Element] = [:]
         remappedElements.reserveCapacity(elements.count)
         for (heistId, entry) in elements where !removedIds.contains(heistId) {
-            let remappedPath = viewportElementIDs.contains(heistId)
+            let remappedPath = capturedElementIDs.contains(heistId)
                 ? pathMap[entry.path] ?? entry.path
                 : entry.path
             remappedElements[heistId] = Element(
@@ -114,11 +115,17 @@ private extension InterfaceTree {
         _ viewSpace: HeistElement.Geometry.ViewSpace,
         using pathMap: [TreePath: TreePath]
     ) -> HeistElement.Geometry.ViewSpace {
-        HeistElement.Geometry.ViewSpace(
-            ownerPath: pathMap[viewSpace.ownerPath] ?? viewSpace.ownerPath,
-            frame: viewSpace.frame,
-            activationPoint: viewSpace.activationPoint
-        )
+        let ownerPath = pathMap[viewSpace.ownerPath] ?? viewSpace.ownerPath
+        switch viewSpace {
+        case .available(let available):
+            return .available(.init(
+                ownerPath: ownerPath,
+                frame: available.frame,
+                activationPoint: available.activationPoint
+            ))
+        case .invalidated:
+            return .invalidated(ownerPath: ownerPath)
+        }
     }
 }
 

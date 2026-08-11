@@ -269,7 +269,7 @@ extension TheVault {
         in scrollView: UIScrollView,
         ownerPath: TreePath
     ) -> HeistElement.Geometry.ViewSpace {
-        HeistElement.Geometry.ViewSpace(
+        HeistElement.Geometry.ViewSpace.admit(
             ownerPath: ownerPath,
             frame: try? ViewRect(validating: scrollView.convert(element.bhFrame, from: nil)),
             activationPoint: try? ViewPoint(validating: scrollView.convert(

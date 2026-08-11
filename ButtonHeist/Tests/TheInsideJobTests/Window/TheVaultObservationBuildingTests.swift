@@ -134,11 +134,11 @@ final class TheVaultObservationBuildingTests: XCTestCase {
             activationPoint: CGPoint(x: 150, y: 1_142),
             visibility: .offscreen
         )
-        let viewSpace = HeistElement.Geometry.ViewSpace(
+        let viewSpace = HeistElement.Geometry.ViewSpace.available(.init(
             ownerPath: scrollContainerPath,
-            frame: try? ViewRect(validating: CGRect(x: 40, y: 1_120, width: 220, height: 44)),
-            activationPoint: try? ViewPoint(validating: CGPoint(x: 150, y: 1_142))
-        )
+            frame: try ViewRect(validating: CGRect(x: 40, y: 1_120, width: 220, height: 44)),
+            activationPoint: try ViewPoint(validating: CGPoint(x: 150, y: 1_142))
+        ))
         let result = TheVault.CaptureResult(
             hierarchy: [
                 .container(makeScrollableContainer(), children: [
@@ -202,11 +202,11 @@ final class TheVaultObservationBuildingTests: XCTestCase {
             frame: CGRect(x: 20, y: 900, width: 120, height: 44),
             visibility: .offscreen
         )
-        let viewSpace = HeistElement.Geometry.ViewSpace(
+        let viewSpace = HeistElement.Geometry.ViewSpace.available(.init(
             ownerPath: containerPath,
             frame: try ViewRect(validating: CGRect(x: 20, y: 900, width: 120, height: 44)),
             activationPoint: try ViewPoint(validating: CGPoint(x: 80, y: 922))
-        )
+        ))
         let retained = TheVault.buildObservation(from: TheVault.CaptureResult(
             hierarchy: [.container(makeScrollableContainer(), children: [])],
             containerObjectsByPath: [containerPath: scrollView],
@@ -243,6 +243,139 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         guard case .onscreen = refreshedElement.geometry.screen else {
             return XCTFail("A later viewport capture must replace offscreen screen geometry")
         }
+    }
+
+    func testCaptureInvalidatesIncompleteParentGeometry() throws {
+        let ownerPath = TreePath([0])
+        let element = makeElement(
+            label: "Boundary Target",
+            traits: .button,
+            frame: CGRect(x: 20, y: 120, width: 120, height: 44),
+            activationPoint: CGPoint(x: 80, y: 142)
+        )
+
+        for invalidComponent in ParentGeometryConversionScrollView.InvalidComponent.allCases {
+            let scrollView = ParentGeometryConversionScrollView(
+                frame: CGRect(x: 0, y: 0, width: 320, height: 400),
+                parentFrame: CGRect(x: 20, y: 900, width: 120, height: 44),
+                parentActivationPoint: CGPoint(x: 80, y: 922),
+                invalidComponent: invalidComponent
+            )
+            let observation = buildScrollObservation(
+                element: element,
+                scrollView: scrollView,
+                ownerPath: ownerPath
+            )
+            let captured = try XCTUnwrap(observation.tree.orderedElements.first)
+
+            XCTAssertEqual(
+                captured.geometry.view,
+                .invalidated(ownerPath: ownerPath),
+                "A failed \(invalidComponent) conversion must invalidate the complete parent geometry"
+            )
+        }
+    }
+
+    func testViewportMovementPreservesParentSpaceGeometry() throws {
+        let ownerPath = TreePath([0])
+        let parentFrame = CGRect(x: 24, y: 900, width: 160, height: 44)
+        let parentActivationPoint = CGPoint(x: 104, y: 922)
+        let scrollView = ParentGeometryConversionScrollView(
+            frame: CGRect(x: 0, y: 0, width: 320, height: 400),
+            parentFrame: parentFrame,
+            parentActivationPoint: parentActivationPoint
+        )
+        let before = buildScrollObservation(
+            element: makeElement(
+                label: "Moving Target",
+                traits: .button,
+                frame: CGRect(x: 24, y: 260, width: 160, height: 44),
+                activationPoint: CGPoint(x: 104, y: 282)
+            ),
+            scrollView: scrollView,
+            ownerPath: ownerPath
+        )
+        let after = buildScrollObservation(
+            element: makeElement(
+                label: "Moving Target",
+                traits: .button,
+                frame: CGRect(x: 24, y: 80, width: 160, height: 44),
+                activationPoint: CGPoint(x: 104, y: 102)
+            ),
+            scrollView: scrollView,
+            ownerPath: ownerPath
+        )
+        let heistId = try XCTUnwrap(before.tree.orderedElements.first?.heistId)
+        let beforeGeometry = try XCTUnwrap(before.tree.elements[heistId]?.geometry)
+        let updated = before.tree.updatingViewport(with: after.tree)
+        let afterGeometry = try XCTUnwrap(updated.elements[heistId]?.geometry)
+
+        XCTAssertNotEqual(beforeGeometry.screen, afterGeometry.screen)
+        XCTAssertEqual(beforeGeometry.view, afterGeometry.view)
+        XCTAssertEqual(
+            afterGeometry.view,
+            .available(.init(
+                ownerPath: ownerPath,
+                frame: try ViewRect(validating: parentFrame),
+                activationPoint: try ViewPoint(validating: parentActivationPoint)
+            ))
+        )
+    }
+
+    func testLayoutRefreshReplacesParentGeometryAtomically() throws {
+        let ownerPath = TreePath([0])
+        let initialParentFrame = CGRect(x: 24, y: 900, width: 160, height: 44)
+        let initialParentPoint = CGPoint(x: 104, y: 922)
+        let refreshedParentFrame = CGRect(x: 40, y: 1_040, width: 220, height: 60)
+        let refreshedParentPoint = CGPoint(x: 150, y: 1_070)
+        let scrollView = ParentGeometryConversionScrollView(
+            frame: CGRect(x: 0, y: 0, width: 320, height: 400),
+            parentFrame: initialParentFrame,
+            parentActivationPoint: initialParentPoint
+        )
+        let element = makeElement(
+            label: "Layout Target",
+            traits: .button,
+            frame: CGRect(x: 24, y: 120, width: 160, height: 44),
+            activationPoint: CGPoint(x: 104, y: 142)
+        )
+        let initial = buildScrollObservation(
+            element: element,
+            scrollView: scrollView,
+            ownerPath: ownerPath
+        )
+        let heistId = try XCTUnwrap(initial.tree.orderedElements.first?.heistId)
+        let invalidated = initial.tree.invalidatingParentSpaceGeometry()
+
+        scrollView.parentFrame = refreshedParentFrame
+        scrollView.parentActivationPoint = refreshedParentPoint
+        let refresh = buildScrollObservation(
+            element: element,
+            scrollView: scrollView,
+            ownerPath: ownerPath
+        )
+        let restored = invalidated.updatingViewport(with: refresh.tree)
+
+        XCTAssertEqual(
+            initial.tree.elements[heistId]?.geometry.view,
+            .available(.init(
+                ownerPath: ownerPath,
+                frame: try ViewRect(validating: initialParentFrame),
+                activationPoint: try ViewPoint(validating: initialParentPoint)
+            ))
+        )
+        XCTAssertEqual(
+            invalidated.elements[heistId]?.geometry.view,
+            .invalidated(ownerPath: ownerPath)
+        )
+        XCTAssertEqual(
+            restored.elements[heistId]?.geometry.view,
+            .available(.init(
+                ownerPath: ownerPath,
+                frame: try ViewRect(validating: refreshedParentFrame),
+                activationPoint: try ViewPoint(validating: refreshedParentPoint)
+            ))
+        )
     }
 
     func testScrollInventoryDuplicateIdsFollowScrollMembershipAcrossViewportReordering() throws {
@@ -625,18 +758,25 @@ final class TheVaultObservationBuildingTests: XCTestCase {
 
     // MARK: - Scroll membership
 
-    func testViewSpaceActivationPointAdmitsOnlyMatchingOwner() throws {
+    func testViewSpaceAdmitsOnlyMatchingOwner() throws {
         let ownerPath = TreePath([0, 1])
+        let frame = try ViewRect(validating: CGRect(x: 60, y: 618, width: 120, height: 44))
         let point = try ViewPoint(validating: CGPoint(x: 120, y: 640))
-        let viewSpace = HeistElement.Geometry.ViewSpace(
+        let viewSpace = HeistElement.Geometry.ViewSpace.available(.init(
             ownerPath: ownerPath,
-            frame: nil,
+            frame: frame,
             activationPoint: point
-        )
+        ))
 
-        XCTAssertEqual(viewSpace.activationPoint(ownedBy: ownerPath), point)
-        XCTAssertNil(viewSpace.activationPoint(ownedBy: TreePath([0])))
-        XCTAssertNil(viewSpace.activationPoint(ownedBy: TreePath([0, 2])))
+        XCTAssertEqual(viewSpace.admitted(ownedBy: ownerPath), viewSpace)
+        XCTAssertEqual(
+            viewSpace.admitted(ownedBy: TreePath([0])),
+            .invalidated(ownerPath: TreePath([0]))
+        )
+        XCTAssertEqual(
+            viewSpace.admitted(ownedBy: TreePath([0, 2])),
+            .invalidated(ownerPath: TreePath([0, 2]))
+        )
     }
 
     func testObservedContentPointsCarryProducingContainerPath() throws {
@@ -757,16 +897,16 @@ final class TheVaultObservationBuildingTests: XCTestCase {
             traits: .button,
             frame: CGRect(x: 10, y: 160, width: 120, height: 44)
         )
-        let elementViewSpace = HeistElement.Geometry.ViewSpace(
+        let elementViewSpace = HeistElement.Geometry.ViewSpace.available(.init(
             ownerPath: scrollPath,
             frame: try ViewRect(validating: child.bhFrame),
             activationPoint: try ViewPoint(validating: CGPoint(x: 70, y: 180))
-        )
-        let containerViewSpace = HeistElement.Geometry.ViewSpace(
+        ))
+        let containerViewSpace = HeistElement.Geometry.ViewSpace.available(.init(
             ownerPath: scrollPath,
             frame: try ViewRect(validating: nestedContainer.frame.cgRect),
             activationPoint: try ViewPoint(validating: CGPoint(x: 160, y: 200))
-        )
+        ))
         let inventory = try XCTUnwrap(
             ScrollInventory(totalElementCount: 20)
         )
@@ -841,6 +981,22 @@ final class TheVaultObservationBuildingTests: XCTestCase {
         )
     }
 
+    private func buildScrollObservation(
+        element: AccessibilityElement,
+        scrollView: UIScrollView,
+        ownerPath: TreePath
+    ) -> InterfaceObservation {
+        scrollView.contentSize = CGSize(width: 320, height: 1_600)
+        return TheVault.buildObservation(from: TheVault.CaptureResult(
+            hierarchy: [
+                .container(makeScrollableContainer(), children: [
+                    .element(element, traversalIndex: 0),
+                ]),
+            ],
+            scrollViewsByPath: [ownerPath: scrollView]
+        ))
+    }
+
     private func duplicateReviewElement(
         category: String,
         priority: String,
@@ -870,7 +1026,7 @@ final class TheVaultObservationBuildingTests: XCTestCase {
             scrollContainerPath: containerPath,
             scrollIndex: index,
             element: element,
-            viewSpace: HeistElement.Geometry.ViewSpace(
+            viewSpace: HeistElement.Geometry.ViewSpace.admit(
                 ownerPath: containerPath,
                 frame: try? ViewRect(validating: element.bhFrame),
                 activationPoint: try? ViewPoint(validating: element.bhResolvedActivationPoint)
@@ -935,6 +1091,54 @@ private final class ObservationInventoryScrollView: UIScrollView {
     override func index(ofAccessibilityElement element: Any) -> Int {
         guard let object = element as? NSObject else { return NSNotFound }
         return elements.firstIndex { $0 === object } ?? NSNotFound
+    }
+}
+
+@MainActor
+private final class ParentGeometryConversionScrollView: UIScrollView {
+    enum InvalidComponent: String, CaseIterable {
+        case frame
+        case activationPoint
+    }
+
+    var parentFrame: CGRect
+    var parentActivationPoint: CGPoint
+    let invalidComponent: InvalidComponent?
+
+    init(
+        frame: CGRect,
+        parentFrame: CGRect,
+        parentActivationPoint: CGPoint,
+        invalidComponent: InvalidComponent? = nil
+    ) {
+        self.parentFrame = parentFrame
+        self.parentActivationPoint = parentActivationPoint
+        self.invalidComponent = invalidComponent
+        super.init(frame: frame)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override func convert(_ rect: CGRect, from view: UIView?) -> CGRect {
+        guard invalidComponent != .frame else {
+            return CGRect(
+                x: CGFloat.nan,
+                y: parentFrame.minY,
+                width: parentFrame.width,
+                height: parentFrame.height
+            )
+        }
+        return parentFrame
+    }
+
+    override func convert(_ point: CGPoint, from view: UIView?) -> CGPoint {
+        guard invalidComponent != .activationPoint else {
+            return CGPoint(x: CGFloat.nan, y: parentActivationPoint.y)
+        }
+        return parentActivationPoint
     }
 }
 

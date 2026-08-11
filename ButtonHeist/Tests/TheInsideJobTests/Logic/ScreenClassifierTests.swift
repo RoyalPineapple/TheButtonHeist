@@ -630,25 +630,7 @@ final class ScreenClassifierTests: XCTestCase {
             }
         )
         return InterfaceObservation.makeForTests(
-            elements: Dictionary(uniqueKeysWithValues: hierarchy.pathIndexedElements.map { item in
-                guard let heistId = heistIdsByPath[item.path] else {
-                    preconditionFailure("Missing heistId for test hierarchy path \(item.path.indices)")
-                }
-                return (
-                    heistId,
-                    InterfaceTree.Element(
-                        heistId: heistId,
-                        path: item.path,
-                        scrollMembership: nil,
-                        geometry: testGeometry(
-                            for: item.element,
-                            ownerPath: .root,
-                            screen: TheVault.onscreenSpace(for: item.element)
-                        ),
-                        element: item.element
-                    )
-                )
-            }),
+            elements: [:],
             hierarchy: hierarchy,
             heistIdsByPath: heistIdsByPath,
             firstResponderHeistId: nil,

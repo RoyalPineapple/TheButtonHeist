@@ -193,7 +193,7 @@ extension TheVault.BuildFacts {
         in scrollView: UIScrollView,
         ownerPath: TreePath
     ) -> HeistElement.Geometry.ViewSpace {
-        HeistElement.Geometry.ViewSpace(
+        HeistElement.Geometry.ViewSpace.admit(
             ownerPath: ownerPath,
             frame: try? ViewRect(validating: scrollView.convert(element.bhFrame, from: nil)),
             activationPoint: try? ViewPoint(validating: scrollView.convert(
@@ -216,7 +216,7 @@ extension TheVault.BuildFacts {
                 let activationPoint = CGPoint(x: frame.midX, y: frame.midY)
                 return (
                     identity.path,
-                    HeistElement.Geometry.ViewSpace(
+                    HeistElement.Geometry.ViewSpace.admit(
                         ownerPath: membership.containerPath,
                         frame: try? ViewRect(validating: scrollView.convert(frame, from: nil)),
                         activationPoint: try? ViewPoint(validating: scrollView.convert(

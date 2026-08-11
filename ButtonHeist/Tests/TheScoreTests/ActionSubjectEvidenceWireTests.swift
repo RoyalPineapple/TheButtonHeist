@@ -25,11 +25,7 @@ final class ActionSubjectEvidenceWireTests: XCTestCase {
                     frame: .available(ScreenRect(x: 10, y: 20, width: 100, height: 44)),
                     activationPoint: .unavailable
                 ),
-                view: HeistElement.Geometry.ViewSpace(
-                    ownerPath: .root,
-                    frame: ViewRect(x: 10, y: 20, width: 100, height: 44),
-                    activationPoint: nil
-                )
+                view: .invalidated(ownerPath: .root)
             )
         )
         let evidence = ActionSubjectEvidence(
@@ -72,7 +68,11 @@ final class ActionSubjectEvidenceWireTests: XCTestCase {
         let semantics = try encodedElement.object("semantics")
         let assertable = try semantics.object("assertable")
         XCTAssertEqual(try assertable.string("identifier"), "delete_button")
-        _ = try encodedElement.object("geometry")
+        let geometry = try encodedElement.object("geometry")
+        let view = try geometry.object("view")
+        XCTAssertEqual(try view.string("availability"), "invalidated")
+        XCTAssertNoThrow(try view.assertMissing("frame"))
+        XCTAssertNoThrow(try view.assertMissing("activationPoint"))
         XCTAssertNoThrow(try encodedElement.assertMissing("heistId"), "subject evidence must not expose runtime ids")
 
         let decoded = try JSONDecoder().decode(ActionResult.self, from: data)
@@ -125,7 +125,7 @@ final class ActionSubjectEvidenceWireTests: XCTestCase {
             },
             "geometry": {
               "screen": {"visibility": "offscreen"},
-              "view": {"ownerPath": {"indices": []}}
+              "view": {"availability":"invalidated","ownerPath":{"indices":[]}}
             }
           }
         }
@@ -170,7 +170,7 @@ final class ActionSubjectEvidenceWireTests: XCTestCase {
             },
             "geometry": {
               "screen": {"visibility": "offscreen"},
-              "view": {"ownerPath": {"indices": []}}
+              "view": {"availability":"invalidated","ownerPath":{"indices":[]}}
             }
           },
           "resolution": {"origin": "visible", "adjustments": []},

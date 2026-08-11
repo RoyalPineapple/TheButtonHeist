@@ -104,7 +104,7 @@ extension TheBrainsScrollTests {
         XCTAssertEqual(scrollView.contentOffset, .zero)
     }
 
-    func testSemanticRevealReacquiresLiveScrollAncestorAfterContainerPathMoves() async throws {
+    func testSemanticOwnerReacquisitionRestoresOnlyMatchingGeometry() async throws {
         let rememberedPath = TreePath([9])
         let livePath = TreePath([1])
         let scrollView = RecordingScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 400))
@@ -122,56 +122,30 @@ extension TheBrainsScrollTests {
             scrollMembership: .init(containerPath: rememberedPath, index: nil),
             geometry: HeistElement.Geometry(
                 screen: .offscreen,
-                view: HeistElement.Geometry.ViewSpace(
+                view: .available(.init(
                     ownerPath: rememberedPath,
-                    frame: nil,
+                    frame: try ViewRect(validating: CGRect(
+                        x: rememberedPoint.x - 110,
+                        y: rememberedPoint.y - 22,
+                        width: 220,
+                        height: 44
+                    )),
                     activationPoint: try ViewPoint(validating: rememberedPoint)
-                )
+                ))
             ),
             element: targetElement
         )
-        let liveObservation = InterfaceObservation.makeForTests(
-            elements: [target.heistId: target],
-            hierarchy: [
-                .container(
-                    AccessibilityContainer(
-                        type: .none,
-                        frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 1, height: 1))
-                    ),
-                    children: []
-                ),
-                .container(container, children: [
-                    .element(anchor, traversalIndex: 1),
-                ]),
-            ],
-            heistIdsByPath: [livePath.appending(0): "visible_anchor"],
-            elementRefs: [
-                "visible_anchor": .init(object: retainedLiveObject(), scrollView: scrollView),
-            ],
-            containerRefsByPath: [livePath: .init(object: scrollView)],
-            firstResponderHeistId: nil,
-            scrollableContainerViewsByPath: [livePath: .init(view: scrollView)]
-        )
-        var containers = liveObservation.tree.containers
-        containers[rememberedPath] = InterfaceTree.Container(
+        let fixture = SemanticOwnerReacquisitionFixture(
+            rememberedPath: rememberedPath,
             container: container,
-            path: rememberedPath,
-            containerName: "remembered_scroll",
-            viewSpace: HeistElement.Geometry.ViewSpace(
-                ownerPath: .root,
-                frame: try ViewRect(validating: scrollView.frame),
-                activationPoint: nil
-            )
+            anchor: anchor,
+            target: target
         )
-        let observation = InterfaceObservation.makeForTests(
-            tree: InterfaceTree(
-                elements: liveObservation.tree.elements,
-                containers: containers,
-                viewportCapture: liveObservation.tree.viewportCapture
-            ),
-            liveCapture: liveObservation.liveCapture
-        )
-        await installSyntheticObservation(observation)
+        await installSyntheticObservation(try semanticOwnerReacquisitionObservation(
+            fixture: fixture,
+            livePath: livePath,
+            scrollView: scrollView
+        ))
         let sourceTarget = try resolvedTarget(.label("Moved Owner Target").and(.traits([.button])))
         guard case .admitted(let admittedTarget) = brains.navigation.elementInflation.admitSemanticTarget(
             sourceTarget,
@@ -206,6 +180,33 @@ extension TheBrainsScrollTests {
         XCTAssertEqual(dispatchedPoint, try ViewPoint(validating: rememberedPoint))
         XCTAssertEqual(dispatchedOwnerPath, livePath)
         XCTAssertEqual(scrollView.setContentOffsetAnimations, [])
+
+        let replacementPath = TreePath([2])
+        let replacementScrollView = RecordingScrollView(
+            frame: CGRect(x: 0, y: 0, width: 320, height: 400)
+        )
+        replacementScrollView.contentSize = CGSize(width: 320, height: 1_600)
+        await installSyntheticObservation(try semanticOwnerReacquisitionObservation(
+            fixture: fixture,
+            livePath: replacementPath,
+            scrollView: replacementScrollView
+        ))
+        dispatchedPoint = nil
+        dispatchedOwnerPath = nil
+        revealRootScrollViewID = nil
+
+        let repeatedResult = await brains.navigation.elementInflation.revealSemanticTarget(
+            admittedTarget,
+            deadline: semanticRevealDeadline()
+        )
+
+        guard case .failed(.scanDidNotRevealTarget) = repeatedResult else {
+            return XCTFail("Expected repeated matching-owner replacement to admit a scan, got \(repeatedResult)")
+        }
+        XCTAssertEqual(revealRootScrollViewID, ObjectIdentifier(replacementScrollView))
+        XCTAssertEqual(dispatchedPoint, try ViewPoint(validating: rememberedPoint))
+        XCTAssertEqual(dispatchedOwnerPath, replacementPath)
+        XCTAssertEqual(replacementScrollView.setContentOffsetAnimations, [])
     }
 
     func testSemanticRevealDoesNotGuessWhenMovedContainerIdentityIsAmbiguous() async throws {
@@ -227,11 +228,7 @@ extension TheBrainsScrollTests {
             scrollMembership: .init(containerPath: rememberedPath, index: nil),
             geometry: HeistElement.Geometry(
                 screen: .offscreen,
-                view: HeistElement.Geometry.ViewSpace(
-                    ownerPath: rememberedPath,
-                    frame: nil,
-                    activationPoint: nil
-                )
+                view: .invalidated(ownerPath: rememberedPath)
             ),
             element: targetElement
         )
@@ -256,11 +253,14 @@ extension TheBrainsScrollTests {
             container: container,
             path: rememberedPath,
             containerName: "remembered_scroll",
-            viewSpace: HeistElement.Geometry.ViewSpace(
+            viewSpace: .available(.init(
                 ownerPath: .root,
                 frame: try ViewRect(validating: firstScrollView.frame),
-                activationPoint: nil
-            )
+                activationPoint: try ViewPoint(validating: CGPoint(
+                    x: firstScrollView.frame.midX,
+                    y: firstScrollView.frame.midY
+                ))
+            ))
         )
         let observation = InterfaceObservation.makeForTests(
             tree: InterfaceTree(
@@ -781,6 +781,68 @@ extension TheBrainsScrollTests {
         )
         XCTAssertEqual(failure.failureKind, .timeout)
         XCTAssertTrue(failure.message.contains("element inflation failed [timedOut]"))
+    }
+
+    private struct SemanticOwnerReacquisitionFixture {
+        let rememberedPath: TreePath
+        let container: AccessibilityContainer
+        let anchor: AccessibilityElement
+        let target: InterfaceTree.Element
+    }
+
+    private func semanticOwnerReacquisitionObservation(
+        fixture: SemanticOwnerReacquisitionFixture,
+        livePath: TreePath,
+        scrollView: RecordingScrollView
+    ) throws -> InterfaceObservation {
+        precondition(livePath.indices.count == 1)
+        let liveIndex = livePath.indices[0]
+        precondition(liveIndex >= 0)
+        let placeholder = AccessibilityContainer(
+            type: .none,
+            frame: AccessibilityRect(CGRect(x: 0, y: 0, width: 1, height: 1))
+        )
+        let hierarchy: [AccessibilityHierarchy] = Array(
+            repeating: .container(placeholder, children: []),
+            count: liveIndex
+        ) + [
+            .container(fixture.container, children: [
+                .element(fixture.anchor, traversalIndex: 1),
+            ]),
+        ]
+        let liveObservation = InterfaceObservation.makeForTests(
+            elements: [fixture.target.heistId: fixture.target],
+            hierarchy: hierarchy,
+            heistIdsByPath: [livePath.appending(0): "visible_anchor"],
+            elementRefs: [
+                "visible_anchor": .init(object: retainedLiveObject(), scrollView: scrollView),
+            ],
+            containerRefsByPath: [livePath: .init(object: scrollView)],
+            firstResponderHeistId: nil,
+            scrollableContainerViewsByPath: [livePath: .init(view: scrollView)]
+        )
+        var containers = liveObservation.tree.containers
+        containers[fixture.rememberedPath] = InterfaceTree.Container(
+            container: fixture.container,
+            path: fixture.rememberedPath,
+            containerName: "remembered_scroll",
+            viewSpace: .available(.init(
+                ownerPath: .root,
+                frame: try ViewRect(validating: scrollView.frame),
+                activationPoint: try ViewPoint(validating: CGPoint(
+                    x: scrollView.frame.midX,
+                    y: scrollView.frame.midY
+                ))
+            ))
+        )
+        return InterfaceObservation.makeForTests(
+            tree: InterfaceTree(
+                elements: liveObservation.tree.elements,
+                containers: containers,
+                viewportCapture: liveObservation.tree.viewportCapture
+            ),
+            liveCapture: liveObservation.liveCapture
+        )
     }
 
     private struct SiblingOwnerMismatchFixture {

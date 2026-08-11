@@ -106,11 +106,7 @@ struct LiveCaptureTests {
                     container: makeTestAccessibilityContainer(identifier: "different"),
                     path: path,
                     containerName: nil,
-                    viewSpace: HeistElement.Geometry.ViewSpace(
-                        ownerPath: .root,
-                        frame: nil,
-                        activationPoint: nil
-                    )
+                    viewSpace: .invalidated(ownerPath: .root)
                 )
             ],
             viewportCapture: snapshot
@@ -628,16 +624,20 @@ struct LiveCaptureTests {
         let containers = Dictionary(
             uniqueKeysWithValues: snapshot.hierarchy.pathIndexedContainers.map { item in
                 let scrollMembership = containerScrollMembershipsByPath[item.path]
+                let frame = item.container.frame.cgRect
                 return (
                     item.path,
                     InterfaceTree.Container(
                         container: item.container,
                         path: item.path,
                         containerName: nil,
-                        viewSpace: HeistElement.Geometry.ViewSpace(
+                        viewSpace: .admit(
                             ownerPath: scrollMembership?.containerPath ?? .root,
-                            frame: try? ViewRect(validating: item.container.frame.cgRect),
-                            activationPoint: nil
+                            frame: try? ViewRect(validating: frame),
+                            activationPoint: try? ViewPoint(validating: CGPoint(
+                                x: frame.midX,
+                                y: frame.midY
+                            ))
                         ),
                         scrollMembership: scrollMembership
                     )

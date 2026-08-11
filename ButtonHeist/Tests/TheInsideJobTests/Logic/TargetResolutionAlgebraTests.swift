@@ -243,11 +243,7 @@ final class TargetResolutionAlgebraTests: XCTestCase {
             ),
             path: path,
             containerName: nil,
-            viewSpace: HeistElement.Geometry.ViewSpace(
-                ownerPath: .root,
-                frame: nil,
-                activationPoint: nil
-            )
+            viewSpace: .invalidated(ownerPath: .root)
         )
     }
 

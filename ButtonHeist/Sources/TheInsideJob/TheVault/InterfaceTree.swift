@@ -357,6 +357,22 @@ struct InterfaceTree: Sendable, Equatable {
         var traversalIndex = 0
         var index = 0
 
+        func project(
+            _ viewSpace: HeistElement.Geometry.ViewSpace,
+            ownerPath: TreePath
+        ) -> HeistElement.Geometry.ViewSpace {
+            switch viewSpace {
+            case .available(let available):
+                return .available(.init(
+                    ownerPath: ownerPath,
+                    frame: available.frame,
+                    activationPoint: available.activationPoint
+                ))
+            case .invalidated:
+                return .invalidated(ownerPath: ownerPath)
+            }
+        }
+
         func project(parent: TreePath) -> [AccessibilityHierarchy] {
             var result: [AccessibilityHierarchy] = []
             while index < topology.nodes.count, topology.nodes[index].path.parent == parent {
@@ -384,11 +400,7 @@ struct InterfaceTree: Sendable, Equatable {
                         actions: entry.element.projectedActionSet.orderedActions,
                         geometry: HeistElement.Geometry(
                             screen: entry.geometry.screen,
-                            view: .init(
-                                ownerPath: projectedOwnerPath,
-                                frame: entry.geometry.view.frame,
-                                activationPoint: entry.geometry.view.activationPoint
-                            )
+                            view: project(entry.geometry.view, ownerPath: projectedOwnerPath)
                         )
                     ))
                     identities[node.path] = entry.heistId.observationElementIdentity
@@ -488,11 +500,7 @@ struct InterfaceTree: Sendable, Equatable {
                 scrollMembership: scrollMembership,
                 geometry: HeistElement.Geometry(
                     screen: geometry.screen,
-                    view: HeistElement.Geometry.ViewSpace(
-                        ownerPath: geometry.view.ownerPath,
-                        frame: nil,
-                        activationPoint: nil
-                    )
+                    view: .invalidated(ownerPath: geometry.view.ownerPath)
                 ),
                 element: element
             )
@@ -534,11 +542,7 @@ struct InterfaceTree: Sendable, Equatable {
                 container: container,
                 path: path,
                 containerName: containerName,
-                viewSpace: HeistElement.Geometry.ViewSpace(
-                    ownerPath: viewSpace.ownerPath,
-                    frame: nil,
-                    activationPoint: nil
-                ),
+                viewSpace: .invalidated(ownerPath: viewSpace.ownerPath),
                 scrollMembership: scrollMembership,
                 scrollInventory: scrollInventory
             )

@@ -12,11 +12,18 @@ extension WireConverterTests {
         for container: AccessibilityContainer,
         ownerPath: TreePath = .root
     ) -> HeistElement.Geometry.ViewSpace {
-        HeistElement.Geometry.ViewSpace(
+        let frame = container.frame.cgRect
+        guard let viewFrame = try? ViewRect(validating: frame),
+              let activationPoint = try? ViewPoint(
+                  validating: CGPoint(x: frame.midX, y: frame.midY)
+              ) else {
+            return .invalidated(ownerPath: ownerPath)
+        }
+        return .available(.init(
             ownerPath: ownerPath,
-            frame: try? ViewRect(validating: container.frame.cgRect),
-            activationPoint: nil
-        )
+            frame: viewFrame,
+            activationPoint: activationPoint
+        ))
     }
 
     // MARK: - Tree Conversion
@@ -307,11 +314,7 @@ extension WireConverterTests {
         XCTAssertEqual(record.element.geometry.screen, second.geometry.screen)
         XCTAssertEqual(
             record.element.geometry.view,
-            HeistElement.Geometry.ViewSpace(
-                ownerPath: .root,
-                frame: nil,
-                activationPoint: nil
-            )
+            .invalidated(ownerPath: .root)
         )
         XCTAssertEqual(record.observationIdentity, HeistId(rawValue: "second_button").observationElementIdentity)
     }
@@ -387,6 +390,89 @@ extension WireConverterTests {
             HeistId(rawValue: "first_button").observationElementIdentity,
             HeistId(rawValue: "second_button").observationElementIdentity,
         ])
+    }
+
+    func testElementRemovalRemapsOwnerPathsWithoutChangingViewSpaceCases() throws {
+        let originalOwner = TreePath([1])
+        let remappedOwner = TreePath([0])
+        let frame = try ViewRect(validating: CGRect(x: 16, y: 600, width: 200, height: 44))
+        let activationPoint = try ViewPoint(validating: CGPoint(x: 116, y: 622))
+        let removed = makeElement(label: "Removed", traits: [.staticText])
+        let availableElement = makeElement(label: "Available", traits: [.button])
+        let invalidatedElement = makeElement(label: "Invalidated", traits: [.button])
+        let container = AccessibilityContainer(
+            type: .none,
+            scrollableContentSize: AccessibilitySize(width: 320, height: 1_200),
+            frame: AccessibilityRect(x: 0, y: 0, width: 320, height: 480)
+        )
+        let available = HeistElement.Geometry.ViewSpace.available(.init(
+            ownerPath: originalOwner,
+            frame: frame,
+            activationPoint: activationPoint
+        ))
+        let screen = InterfaceObservation.makeForTests(
+            elements: [
+                "removed": InterfaceTree.Element(
+                    heistId: "removed",
+                    path: TreePath([0]),
+                    scrollMembership: nil,
+                    geometry: testGeometry(
+                        for: removed,
+                        ownerPath: .root,
+                        screen: TheVault.onscreenSpace(for: removed)
+                    ),
+                    element: removed
+                ),
+                "available": InterfaceTree.Element(
+                    heistId: "available",
+                    path: TreePath([1, 0]),
+                    scrollMembership: .init(containerPath: originalOwner, index: 0),
+                    geometry: .init(screen: .offscreen, view: available),
+                    element: availableElement
+                ),
+                "invalidated": InterfaceTree.Element(
+                    heistId: "invalidated",
+                    path: TreePath([1, 1]),
+                    scrollMembership: .init(containerPath: originalOwner, index: 1),
+                    geometry: .init(
+                        screen: .offscreen,
+                        view: .invalidated(ownerPath: originalOwner)
+                    ),
+                    element: invalidatedElement
+                ),
+            ],
+            hierarchy: [
+                .element(removed, traversalIndex: 0),
+                .container(container, children: [
+                    .element(availableElement, traversalIndex: 1),
+                    .element(invalidatedElement, traversalIndex: 2),
+                ]),
+            ],
+            heistIdsByPath: [
+                TreePath([0]): "removed",
+                TreePath([1, 0]): "available",
+                TreePath([1, 1]): "invalidated",
+            ],
+            firstResponderHeistId: nil
+        )
+
+        let filtered = screen.removingElements(withIds: ["removed"])
+
+        XCTAssertEqual(filtered.tree.findElement(heistId: "available")?.path, TreePath([0, 0]))
+        XCTAssertEqual(
+            filtered.tree.findElement(heistId: "available")?.geometry.view,
+            .available(.init(
+                ownerPath: remappedOwner,
+                frame: frame,
+                activationPoint: activationPoint
+            ))
+        )
+        XCTAssertEqual(
+            filtered.tree.findElement(heistId: "invalidated")?.geometry.view,
+            .invalidated(ownerPath: remappedOwner)
+        )
+        XCTAssertEqual(filtered.tree.findElement(heistId: "available")?.geometry.screen, .offscreen)
+        XCTAssertEqual(filtered.tree.findElement(heistId: "invalidated")?.geometry.screen, .offscreen)
     }
 
     func testDiscoveryInterfaceGraftsKnownOffViewportElementsUnderScrollContainer() async throws {
@@ -481,11 +567,7 @@ extension WireConverterTests {
         XCTAssertEqual(selectedProjection.geometry.screen, .offscreen)
         XCTAssertEqual(
             selectedProjection.geometry.view,
-            HeistElement.Geometry.ViewSpace(
-                ownerPath: .root,
-                frame: nil,
-                activationPoint: nil
-            ),
+            .invalidated(ownerPath: .root),
             "Detaching the element subtree must not retain geometry owned by its omitted scroll container"
         )
     }

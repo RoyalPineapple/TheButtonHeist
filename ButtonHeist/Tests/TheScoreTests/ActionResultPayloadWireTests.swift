@@ -64,11 +64,11 @@ final class ActionResultPayloadWireTests: XCTestCase {
                         frame: .available(ScreenRect(x: 0, y: 0, width: 0, height: 0)),
                         activationPoint: .unavailable
                     ),
-                    view: HeistElement.Geometry.ViewSpace(
+                    view: .available(.init(
                         ownerPath: .root,
                         frame: ViewRect(x: 0, y: 0, width: 0, height: 0),
-                        activationPoint: nil
-                    )
+                        activationPoint: ViewPoint(x: 0, y: 0)
+                    ))
                 )
             ),
             textRange: RotorTextRange(text: "@maria", startOffset: 10, endOffset: 16, rangeDescription: "[10..<16]")
@@ -83,7 +83,11 @@ final class ActionResultPayloadWireTests: XCTestCase {
         let semantics = try foundElement.object("semantics")
         let assertable = try semantics.object("assertable")
         XCTAssertEqual(try assertable.string("label"), "Email")
-        _ = try foundElement.object("geometry")
+        let geometry = try foundElement.object("geometry")
+        let view = try geometry.object("view")
+        XCTAssertEqual(try view.string("availability"), "available")
+        _ = try view.object("frame")
+        _ = try view.object("activationPoint")
         XCTAssertNoThrow(try foundElement.assertMissing("heistId"), "heistId must never appear on the wire")
         let textRange = try payload.object("textRange")
         XCTAssertEqual(try textRange.string("text"), "@maria")
