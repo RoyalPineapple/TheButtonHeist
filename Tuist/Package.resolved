@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/RoyalPineapple/AccessibilitySnapshotBH",
       "state" : {
-        "revision" : "49134232eea6374117cb3ee885003a4695978d40",
-        "version" : "0.25.0"
+        "revision" : "10f07e0df74002c20a4207c2fc3307968c7bcab3",
+        "version" : "0.25.1"
       }
     },
     {
