@@ -1,6 +1,7 @@
 #if canImport(UIKit) && canImport(SwiftUI)
 #if DEBUG
 import AccessibilitySnapshotCore
+import AccessibilitySnapshotModel
 import AccessibilitySnapshotPreviews
 import SwiftUI
 import UIKit
@@ -17,7 +18,7 @@ extension TheBrains {
 
         let view = PreParsedAccessibilitySnapshotView(
             snapshotImage: image,
-            markers: interface.tree.pathIndexedElements.map(\.element),
+            markers: Self.accessibilitySnapshotMarkers(in: interface),
             configuration: AccessibilitySnapshotConfiguration(
                 viewRenderingMode: .drawHierarchyInRect,
                 colorRenderingMode: .fullColor,
@@ -46,6 +47,12 @@ extension TheBrains {
             height: fittingSize.height,
             interface: interface
         )
+    }
+
+    nonisolated static func accessibilitySnapshotMarkers(in interface: Interface) -> [AccessibilityElement] {
+        interface.tree.pathIndexedElements.compactMap { entry in
+            entry.element.visibility == .onscreen ? entry.element : nil
+        }
     }
 }
 
