@@ -264,6 +264,22 @@ struct ToolSyncTests {
         #expect(Set(secondNestedTargetProperties.keys) == ["checks", "ref", "ordinal", "container", "target"])
     }
 
+    @Test("AccessibilityTarget schema recursion uses one local definition")
+    func accessibilityTargetSchemaRecursionUsesOneLocalDefinition() throws {
+        let activate = try inputSchemaValue(for: .activate)
+        let reference = Value.object(["$ref": .string("#/$defs/AccessibilityTarget")])
+
+        #expect(schemaValue(at: ["properties", "target"], in: activate, resolvingFinalReference: false) == reference)
+        #expect(
+            schemaValue(
+                at: ["$defs", "AccessibilityTarget", "properties", "target"],
+                in: activate,
+                resolvingFinalReference: false
+            ) == reference
+        )
+        #expect(schemaValue(at: ["$defs", "AccessibilityTarget", "properties", "checks"], in: activate) != nil)
+    }
+
     @Test("get_interface subtree container is an object-only predicate")
     func getInterfaceSubtreeContainerSchemaIsObjectOnly() throws {
         let tool = try #require(ToolDefinitions.all.first { $0.name == "get_interface" })
@@ -430,9 +446,25 @@ private func temporaryContractFixtureURL() -> URL {
         .appending(path: "public-command-contract-\(UUID().uuidString).json")
 }
 
-private func schemaValue(at path: [String], in root: Value) -> Value? {
-    path.reduce(Optional(root)) { value, key in
-        value?.objectValue?[key]
+private func schemaValue(
+    at path: [String],
+    in root: Value,
+    resolvingFinalReference: Bool = true
+) -> Value? {
+    let value = path.reduce(Optional(root)) { value, key in
+        resolvedLocalReference(value, in: root)?.objectValue?[key]
+    }
+    return resolvingFinalReference ? resolvedLocalReference(value, in: root) : value
+}
+
+private func resolvedLocalReference(_ value: Value?, in root: Value) -> Value? {
+    guard let value,
+          let reference = value.objectValue?["$ref"]?.stringValue,
+          reference.hasPrefix("#/") else {
+        return value
+    }
+    return reference.dropFirst(2).split(separator: "/").reduce(Optional(root)) { resolved, component in
+        resolved?.objectValue?[String(component)]
     }
 }
 
@@ -484,6 +516,7 @@ private extension Value {
 
 private enum ToolSchemaLint {
     private static let bannedCombinatorKeywords = ["oneOf", "anyOf", "allOf"]
+    private static let maximumNestingDepth = 64
 
     static func violations(in tools: [Tool]) -> [String] {
         tools.flatMap { tool in
@@ -517,6 +550,10 @@ private enum ToolSchemaLint {
         }
 
         var violations: [String] = []
+        let depth = nestingDepth(schema)
+        if depth > maximumNestingDepth {
+            violations.append("\(path) nesting depth \(depth) exceeds \(maximumNestingDepth)")
+        }
         if object["additionalProperties"] != .bool(false) {
             violations.append("\(path) root schema must set additionalProperties: false")
         }
@@ -590,6 +627,17 @@ private enum ToolSchemaLint {
     private static func lintNestedValues(in object: [String: Value], path: String) -> [String] {
         object.flatMap { key, nestedValue in
             lint(nestedValue, path: "\(path).\(key)")
+        }
+    }
+
+    private static func nestingDepth(_ value: Value, depth: Int = 0) -> Int {
+        switch value {
+        case .object(let object):
+            return object.values.map { nestingDepth($0, depth: depth + 1) }.max() ?? depth
+        case .array(let values):
+            return values.map { nestingDepth($0, depth: depth + 1) }.max() ?? depth
+        default:
+            return depth
         }
     }
 }

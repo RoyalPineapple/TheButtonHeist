@@ -23,6 +23,8 @@ a typed heist plan through the same semantic action/wait runtime used by direct
 commands.
 
 The live MCP `tools/list` response is the current tool and schema reference.
+Recursive `AccessibilityTarget` inputs are declared once under `$defs` and use
+local `$ref` edges so every advertised tool schema stays shallow and bounded.
 This README stays at the adapter behavior layer.
 
 ## Runtime behavior

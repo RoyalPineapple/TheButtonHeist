@@ -17,17 +17,20 @@ import TheScore
     internal let schema: FenceParameterSchema
     public let required: Bool
     internal let validation: FenceParameterValidation
+    internal let schemaProjection: FenceParameterSchemaProjection
 
     internal init(
         key: String,
         schema: FenceParameterSchema,
         required: Bool,
-        validation: FenceParameterValidation = .schema
+        validation: FenceParameterValidation = .schema,
+        schemaProjection: FenceParameterSchemaProjection = .inline
     ) {
         self.key = key
         self.schema = schema
         self.required = required
         self.validation = validation
+        self.schemaProjection = schemaProjection
     }
 
     public var type: ParamType {
@@ -91,6 +94,11 @@ import TheScore
         return properties
     }
 
+}
+
+internal enum FenceParameterSchemaProjection: Sendable, Equatable {
+    case inline
+    case accessibilityTargetReference
 }
 
 internal enum FenceParameterValidation: Sendable, Equatable {
@@ -234,7 +242,7 @@ internal struct FenceParameterObjectSpec: Sendable, Equatable {
     private static func heistValueProperties(from properties: [FenceParameterSpec]) -> [String: HeistValue] {
         var projectedProperties: [String: HeistValue] = [:]
         for property in properties where projectedProperties[property.key] == nil {
-            projectedProperties[property.key] = property.schema.heistValue
+            projectedProperties[property.key] = property.projectedSchemaHeistValue
         }
         return projectedProperties
     }
@@ -414,9 +422,44 @@ private extension FenceParameterSpec.ParamType {
     static func jsonInputSchema(
         parameters: [FenceParameterSpec]
     ) -> HeistValue {
-        FenceParameterSchema.object(
+        var root = FenceParameterSchema.object(
             properties: parameters,
             additionalProperties: false
         ).heistValue
+        guard parameters.contains(where: \.containsAccessibilityTargetReference),
+              case .object(var fields) = root else {
+            return root
+        }
+        fields["$defs"] = .object([
+            AccessibilityTargetSchemaDefinition.name: AccessibilityTargetSchemaDefinition.schema,
+        ])
+        root = .object(fields)
+        return root
     }
+}
+
+private extension FenceParameterSpec {
+    var projectedSchemaHeistValue: HeistValue {
+        switch schemaProjection {
+        case .inline:
+            return schema.heistValue
+        case .accessibilityTargetReference:
+            return .object(["$ref": .string(AccessibilityTargetSchemaDefinition.reference)])
+        }
+    }
+
+    var containsAccessibilityTargetReference: Bool {
+        if schemaProjection == .accessibilityTargetReference { return true }
+        return objectProperties.contains(where: \.containsAccessibilityTargetReference)
+            || arrayItemProperties.contains(where: \.containsAccessibilityTargetReference)
+    }
+}
+
+private enum AccessibilityTargetSchemaDefinition {
+    static let name = "AccessibilityTarget"
+    static let reference = "#/$defs/\(name)"
+    static let schema = FenceParameterSchema.object(
+        properties: accessibilityTargetProperties(),
+        additionalProperties: false
+    ).heistValue
 }
