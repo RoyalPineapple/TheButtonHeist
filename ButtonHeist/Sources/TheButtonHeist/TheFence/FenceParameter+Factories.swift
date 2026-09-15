@@ -105,13 +105,15 @@ internal func objectParam(
     required: Bool = false,
     properties: [FenceParameterSpec],
     additionalProperties: Bool = false,
-    validation: FenceParameterValidation = .schema
+    validation: FenceParameterValidation = .schema,
+    schemaProjection: FenceParameterSchemaProjection = .inline
 ) -> FenceParameterSpec {
     FenceParameterSpec(
         key: key.rawValue,
         schema: .object(properties: properties, additionalProperties: additionalProperties),
         required: required,
-        validation: validation
+        validation: validation,
+        schemaProjection: schemaProjection
     )
 }
 
@@ -142,6 +144,19 @@ internal func unconstrainedParam(
         schema: .unconstrained,
         required: required,
         validation: validation
+    )
+}
+
+internal func accessibilityTargetParam(
+    _ key: FenceParameterKey,
+    required: Bool = false
+) -> FenceParameterSpec {
+    objectParam(
+        key,
+        required: required,
+        properties: FenceParameterBlocks.inlineAccessibilityTargetFields,
+        validation: .customPayload,
+        schemaProjection: .accessibilityTargetReference
     )
 }
 
@@ -182,8 +197,9 @@ internal func containerPredicateParam(_ key: FenceParameterKey) -> FenceParamete
     )
 }
 
-/// The schema model has no reference node, so expand to the public JSON input
-/// depth. `PublicJSONInputLimits` remains the single adjustable boundary.
+/// Runtime descriptor inspection retains the public JSON input depth. The JSON
+/// Schema projection marks every recursive edge as a reference to the canonical
+/// accessibility target definition.
 internal let accessibilityTargetSchemaMaximumNestingDepth = PublicJSONInputLimits.maxNestingDepth
 
 internal func accessibilityTargetProperties(
@@ -202,7 +218,8 @@ internal func accessibilityTargetProperties(
             .target,
             properties: accessibilityTargetProperties(remainingNestingDepth: remainingNestingDepth - 1),
             additionalProperties: false,
-            validation: .customPayload
+            validation: .customPayload,
+            schemaProjection: .accessibilityTargetReference
         ),
     ]
 }

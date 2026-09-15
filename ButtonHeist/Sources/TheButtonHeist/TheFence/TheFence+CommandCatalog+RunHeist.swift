@@ -79,10 +79,7 @@ extension TheFence.Command {
                 ),
                 param(.value, .string),
                 param(.valueRef, .string),
-                objectParam(
-                    .target,
-                    properties: FenceParameterBlocks.inlineAccessibilityTargetFields
-                ),
+                accessibilityTargetParam(.target),
             ],
             additionalProperties: false
         )

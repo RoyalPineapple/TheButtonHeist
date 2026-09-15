@@ -5,9 +5,9 @@ internal enum FenceParameterBlocks: Sendable {
     internal static let inlineAccessibilityTargetFields = accessibilityTargetProperties()
 
     internal static let target: [FenceParameterSpec] = [
-        objectParam(.target, properties: inlineAccessibilityTargetFields, validation: .customPayload),
+        accessibilityTargetParam(.target),
     ]
-    internal static let gestureElement = objectParam(.element, properties: inlineAccessibilityTargetFields, validation: .customPayload)
+    internal static let gestureElement = accessibilityTargetParam(.element)
     internal static let gestureUnitPoint = objectParam(.unitPoint, properties: unitPoint)
     internal static let gesturePoint = objectParam(.point, properties: screenPoint)
 
@@ -79,15 +79,11 @@ internal enum FenceParameterBlocks: Sendable {
         dragPointToPoint,
     ]
 
-    internal static let interfaceSubtree: FenceParameterSpec = objectParam(
-        .subtree,
-        properties: inlineAccessibilityTargetFields,
-        validation: .customPayload
-    )
+    internal static let interfaceSubtree: FenceParameterSpec = accessibilityTargetParam(.subtree)
 
     private static let assertionProperties: [FenceParameterSpec] = [
         param(.type, .string, required: true, enumValues: PredicateAssertionType.allCases.map(\.rawValue)),
-        objectParam(.target, properties: inlineAccessibilityTargetFields, validation: .customPayload),
+        accessibilityTargetParam(.target),
         FenceParameters.elementProperty.spec,
         unconstrainedParam(.before, validation: .customPayload),
         unconstrainedParam(.after, validation: .customPayload),
@@ -101,7 +97,7 @@ internal enum FenceParameterBlocks: Sendable {
             required: true,
             enumValues: AccessibilityPredicate.wireTypeValues
         ),
-        objectParam(.target, properties: inlineAccessibilityTargetFields, validation: .customPayload),
+        accessibilityTargetParam(.target),
         stringMatchParam(.text),
         objectParam(
             .element,
